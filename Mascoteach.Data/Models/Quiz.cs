@@ -15,6 +15,8 @@ public partial class Quiz
 
     public DateTime? CreatedAt { get; set; }
 
+    public bool IsDeleted { get; set; }
+
     public virtual Document Document { get; set; } = null!;
 
     public virtual ICollection<LiveSession> LiveSessions { get; set; } = new List<LiveSession>();

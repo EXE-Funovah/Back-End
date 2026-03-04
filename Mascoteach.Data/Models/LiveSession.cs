@@ -19,6 +19,8 @@ public partial class LiveSession
 
     public DateTime? CreatedAt { get; set; }
 
+    public bool IsDeleted { get; set; }
+
     public virtual Quiz Quiz { get; set; } = null!;
 
     public virtual ICollection<SessionParticipant> SessionParticipants { get; set; } = new List<SessionParticipant>();

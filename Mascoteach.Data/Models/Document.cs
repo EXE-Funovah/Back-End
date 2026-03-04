@@ -13,6 +13,8 @@ public partial class Document
 
     public DateTime? UploadedAt { get; set; }
 
+    public bool IsDeleted { get; set; }
+
     public virtual ICollection<Quiz> Quizzes { get; set; } = new List<Quiz>();
 
     public virtual User Teacher { get; set; } = null!;

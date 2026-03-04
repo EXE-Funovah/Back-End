@@ -38,11 +38,13 @@ namespace Mascoteach.Service.Implementations
 
             var newUser = new User
             {
+                FullName = request.FullName,
                 Email = request.Email,
                 PasswordHash = hashedPassword, // Lưu chuỗi đã mã hóa
                 Role = request.Role,           // 'Teacher', 'Parent', 'Student', 'Admin'
                 SubscriptionTier = "Freemium",
-                CreatedAt = DateTime.Now
+                CreatedAt = DateTime.Now,
+                IsDeleted = false
             };
 
             await _userRepository.AddAsync(newUser);
@@ -58,8 +60,8 @@ namespace Mascoteach.Service.Implementations
             var users = await _userRepository.GetAllAsync();
             var user = users.FirstOrDefault(u => u.Email == request.Email);
 
-            // Kiểm tra user tồn tại và dùng BCrypt để so sánh mật khẩu thô với Hash trong DB
-            if (user == null || !BCrypt.Net.BCrypt.Verify(request.Password, user.PasswordHash))
+            // Kiểm tra user tồn tại, chưa bị xóa, và dùng BCrypt để so sánh mật khẩu thô với Hash trong DB
+            if (user == null || user.IsDeleted || !BCrypt.Net.BCrypt.Verify(request.Password, user.PasswordHash))
                 return null;
 
             var response = _mapper.Map<AuthResponse>(user);

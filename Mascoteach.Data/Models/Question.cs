@@ -15,5 +15,7 @@ public partial class Question
 
     public string CorrectAnswer { get; set; } = null!;
 
+    public bool IsDeleted { get; set; }
+
     public virtual Quiz Quiz { get; set; } = null!;
 }

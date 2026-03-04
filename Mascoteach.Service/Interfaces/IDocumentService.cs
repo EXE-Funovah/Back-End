@@ -15,5 +15,6 @@ namespace Mascoteach.Service.Interfaces
         Task<DocumentResponse> UploadDocumentAsync(int teacherId, DocumentCreateRequest request);
         Task<bool> UpdateDocumentAsync(int id, int requestTeacherId, string newFileUrl);
         Task<bool> DeleteDocumentAsync(int id, int requestTeacherId);
+        Task<DocumentResponse?> ToggleDeleteAsync(int id, int requestTeacherId);
     }
 }

@@ -60,5 +60,14 @@ namespace Mascoteach.API.Controllers
             if (!success) return Forbid("Document does not exist or you do not have permission to perform this action.");
             return NoContent();
         }
+
+        // PATCH: api/Document/{id}/toggle-delete
+        [HttpPatch("{id}/toggle-delete")]
+        public async Task<IActionResult> ToggleDelete(int id)
+        {
+            var result = await _documentService.ToggleDeleteAsync(id, CurrentUserId);
+            if (result == null) return Forbid("Document does not exist or you do not have permission to perform this action.");
+            return Ok(result);
+        }
     }
 }
