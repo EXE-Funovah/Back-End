@@ -1,4 +1,5 @@
 ﻿using Mascoteach.Data.Models;
+using Mascoteach.Service.DTOs;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -9,9 +10,10 @@ namespace Mascoteach.Service.Interfaces
 {
     public interface IDocumentService
     {
-        Task<IEnumerable<Document>> GetDocumentsByTeacherAsync(int teacherId);
-        Task<Document?> GetDocumentByIdAsync(int id);
-        Task<Document> UploadDocumentAsync(int teacherId, string fileUrl);
-        Task<bool> DeleteDocumentAsync(int id);
+        Task<IEnumerable<DocumentResponse>> GetMyDocumentsAsync(int teacherId);
+        Task<DocumentResponse?> GetDocumentByIdAsync(int id);
+        Task<DocumentResponse> UploadDocumentAsync(int teacherId, DocumentCreateRequest request);
+        Task<bool> UpdateDocumentAsync(int id, int requestTeacherId, string newFileUrl);
+        Task<bool> DeleteDocumentAsync(int id, int requestTeacherId);
     }
 }

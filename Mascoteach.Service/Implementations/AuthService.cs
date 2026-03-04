@@ -40,7 +40,7 @@ namespace Mascoteach.Service.Implementations
             {
                 Email = request.Email,
                 PasswordHash = hashedPassword, // Lưu chuỗi đã mã hóa
-                Role = request.Role,           // 'Teacher', 'Parent', 'Student'
+                Role = request.Role,           // 'Teacher', 'Parent', 'Student', 'Admin'
                 SubscriptionTier = "Freemium",
                 CreatedAt = DateTime.Now
             };

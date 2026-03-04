@@ -9,6 +9,6 @@ namespace Mascoteach.Data.Interfaces
 {
     public interface IDocumentRepository : IGenericRepository<Document> 
     {
-    
+        Task<IEnumerable<Document>> GetByTeacherIdAsync(int teacherId);
     }
 }
