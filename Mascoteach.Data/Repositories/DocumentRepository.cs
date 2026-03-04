@@ -11,7 +11,7 @@ namespace Mascoteach.Data.Repositories
 {
     public class DocumentRepository : GenericRepository<Document>, IDocumentRepository
     {
-        public DocumentRepository(MascoteachContext context) :base(context) 
+        public DocumentRepository(MascoteachDbContext context) : base(context) 
         {
             
         }
@@ -19,8 +19,13 @@ namespace Mascoteach.Data.Repositories
         public async Task<IEnumerable<Document>> GetByTeacherIdAsync(int teacherId)
         {
             return await _context.Documents
-                        .Where(d => d.TeacherId == teacherId) // Lọc trực tiếp bằng SQL
-                                .ToListAsync();
+                        .Where(d => d.TeacherId == teacherId && d.IsDeleted == false)
+                        .ToListAsync();
+        }
+
+        public async Task<Document?> GetAllIncludingDeletedAsync(int id)
+        {
+            return await _context.Documents.FindAsync(id);
         }
     }
 }

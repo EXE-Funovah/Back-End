@@ -13,5 +13,7 @@ public partial class GameTemplate
 
     public string? ThumbnailUrl { get; set; }
 
+    public bool IsDeleted { get; set; }
+
     public virtual ICollection<LiveSession> LiveSessions { get; set; } = new List<LiveSession>();
 }

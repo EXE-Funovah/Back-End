@@ -16,7 +16,7 @@ var builder = WebApplication.CreateBuilder(args);
 // Database Context 
 var connectionString = builder.Configuration.GetConnectionString("DefaultConnection");
 
-builder.Services.AddDbContext<MascoteachContext>(options =>
+builder.Services.AddDbContext<MascoteachDbContext>(options =>
     options.UseSqlServer(connectionString));
 
 
@@ -37,7 +37,7 @@ builder.Services.AddScoped<IDocumentService, DocumentService>();
 builder.Services.AddScoped<IQuizService, QuizService>();
 builder.Services.AddScoped<IQuestionService, QuestionService>();
 builder.Services.AddScoped<IAuthService, AuthService>();
-builder.Services.AddScoped<IDocumentService, DocumentService>();
+
 
 
 

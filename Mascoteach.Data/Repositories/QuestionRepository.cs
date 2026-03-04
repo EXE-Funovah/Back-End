@@ -10,7 +10,7 @@ namespace Mascoteach.Data.Repositories
 {
     public class QuestionRepository : GenericRepository<Question>, IQuestionRepository
     {
-        public QuestionRepository(MascoteachContext context) : base(context)
+        public QuestionRepository(MascoteachDbContext context) : base(context)
         {
         }
     }

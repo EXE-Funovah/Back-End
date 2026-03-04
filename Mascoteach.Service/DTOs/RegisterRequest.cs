@@ -9,6 +9,9 @@ namespace Mascoteach.Service.DTOs
 {
     public class RegisterRequest
     {
+        [Required(ErrorMessage = "Full name is required.")]
+        public string FullName { get; set; } = null!;
+
         [Required(ErrorMessage = "Email is required.")]
         [EmailAddress(ErrorMessage = "Invalid email format.")]
         public string Email { get; set; } = null!;

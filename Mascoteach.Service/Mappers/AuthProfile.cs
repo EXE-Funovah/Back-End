@@ -15,6 +15,7 @@ namespace Mascoteach.Service.Mappers
         {
             // map user entity to auth response
             CreateMap<User, AuthResponse>()
+                .ForMember(dest => dest.FullName, opt => opt.MapFrom(src => src.FullName))
                 .ForMember(dest => dest.Token, opt => opt.Ignore());
         }
     }

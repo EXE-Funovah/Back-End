@@ -58,4 +58,14 @@ public class DocumentService : IDocumentService
         return await _documentRepository.SaveChangesAsync() > 0;
     }
 
+    public async Task<DocumentResponse?> ToggleDeleteAsync(int id, int teacherId)
+    {
+        // Bypass soft-delete filter to find any doc (including already-deleted ones)
+        var doc = await _documentRepository.GetAllIncludingDeletedAsync(id);
+        if (doc == null || doc.TeacherId != teacherId) return null;
+        doc.IsDeleted = !doc.IsDeleted;
+        _documentRepository.Update(doc);
+        await _documentRepository.SaveChangesAsync();
+        return _mapper.Map<DocumentResponse>(doc);
+    }
 }

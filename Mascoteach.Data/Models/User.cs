@@ -7,6 +7,8 @@ public partial class User
 {
     public int Id { get; set; }
 
+    public string FullName { get; set; } = null!;
+
     public string Email { get; set; } = null!;
 
     public string PasswordHash { get; set; } = null!;
@@ -18,6 +20,8 @@ public partial class User
     public int? DocumentsProcessed { get; set; }
 
     public DateTime? CreatedAt { get; set; }
+
+    public bool IsDeleted { get; set; }
 
     public virtual ICollection<Document> Documents { get; set; } = new List<Document>();
 

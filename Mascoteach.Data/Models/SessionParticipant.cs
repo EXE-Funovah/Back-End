@@ -13,5 +13,7 @@ public partial class SessionParticipant
 
     public int? TotalScore { get; set; }
 
+    public bool IsDeleted { get; set; }
+
     public virtual LiveSession Session { get; set; } = null!;
 }
