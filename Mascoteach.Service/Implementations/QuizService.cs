@@ -1,50 +1,74 @@
-﻿using Mascoteach.Data.Interfaces;
+﻿using AutoMapper;
+using Mascoteach.Data.Interfaces;
 using Mascoteach.Data.Models;
+using Mascoteach.Service.DTOs;
 using Mascoteach.Service.Interfaces;
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
 
 namespace Mascoteach.Service.Implementations
 {
     public class QuizService : IQuizService
     {
         private readonly IQuizRepository _quizRepository;
+        private readonly IMapper _mapper;
 
-        public QuizService(IQuizRepository quizRepository)
+        public QuizService(IQuizRepository quizRepository, IMapper mapper)
         {
             _quizRepository = quizRepository;
-        }
-        public async Task<IEnumerable<Quiz>> GetQuizzesByDocumentAsync(int documentId)
-        {
-            var allQuizzes = await _quizRepository.GetAllAsync();
-            return allQuizzes.Where(q => q.DocumentId == documentId);
+            _mapper = mapper;
         }
 
-        public async Task<Quiz?> GetQuizDetailAsync(int quizId)
+        public async Task<IEnumerable<QuizResponse>> GetByDocumentIdAsync(int documentId)
         {
-            // Need to add logic Include questions in Repository
-            return await _quizRepository.GetByIdAsync(quizId);  
+            var quizzes = await _quizRepository.GetByDocumentIdAsync(documentId);
+            return _mapper.Map<IEnumerable<QuizResponse>>(quizzes);
         }
 
-        public async Task<Quiz> CreateQuizAsync(int documentId, string title)
+        public async Task<QuizResponse?> GetByIdAsync(int id)
         {
-            var newQuiz = new Quiz
-            {
-                DocumentId = documentId,
-                Title = title,
-                Status = "AI_Drafted", // default status from SQL
-                CreatedAt = DateTime.Now
-            };
-            await _quizRepository.AddAsync(newQuiz);
+            var quiz = await _quizRepository.GetByIdAsync(id);
+            return _mapper.Map<QuizResponse>(quiz);
+        }
+
+        public async Task<QuizResponse> CreateAsync(QuizCreateRequest request)
+        {
+            var quiz = _mapper.Map<Quiz>(request);
+            quiz.Status = "AI_Drafted";
+            quiz.CreatedAt = DateTime.Now;
+            await _quizRepository.AddAsync(quiz);
             await _quizRepository.SaveChangesAsync();
-            return newQuiz;
+            return _mapper.Map<QuizResponse>(quiz);
         }
 
-        
+        public async Task<bool> UpdateAsync(int id, QuizUpdateRequest request)
+        {
+            var quiz = await _quizRepository.GetByIdAsync(id);
+            if (quiz == null) return false;
 
-        
+            quiz.Title = request.Title;
+            quiz.Status = request.Status;
+
+            _quizRepository.Update(quiz);
+            return await _quizRepository.SaveChangesAsync() > 0;
+        }
+
+        public async Task<bool> DeleteAsync(int id)
+        {
+            var quiz = await _quizRepository.GetByIdAsync(id);
+            if (quiz == null) return false;
+
+            _quizRepository.Delete(quiz);
+            return await _quizRepository.SaveChangesAsync() > 0;
+        }
+
+        public async Task<QuizResponse?> ToggleDeleteAsync(int id)
+        {
+            var quiz = await _quizRepository.GetAllIncludingDeletedAsync(id);
+            if (quiz == null) return null;
+
+            quiz.IsDeleted = !quiz.IsDeleted;
+            _quizRepository.Update(quiz);
+            await _quizRepository.SaveChangesAsync();
+            return _mapper.Map<QuizResponse>(quiz);
+        }
     }
 }
