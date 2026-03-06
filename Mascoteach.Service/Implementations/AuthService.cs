@@ -57,8 +57,7 @@ namespace Mascoteach.Service.Implementations
 
         public async Task<AuthResponse?> LoginAsync(LoginRequest request)
         {
-            var users = await _userRepository.GetAllAsync();
-            var user = users.FirstOrDefault(u => u.Email == request.Email);
+            var user = await _userRepository.GetByEmailAsync(request.Email);
 
             // Kiểm tra user tồn tại, chưa bị xóa, và dùng BCrypt để so sánh mật khẩu thô với Hash trong DB
             if (user == null || user.IsDeleted || !BCrypt.Net.BCrypt.Verify(request.Password, user.PasswordHash))
@@ -77,6 +76,7 @@ namespace Mascoteach.Service.Implementations
             // Định nghĩa các thông tin bên trong Token (Claims)
             var claims = new List<Claim>
             {
+                new Claim("FullName", user.FullName),
                 new Claim(ClaimTypes.Email, user.Email),
                 new Claim(ClaimTypes.Role, user.Role), // Role: Teacher, Parent, hoặc Student từ SQL
                 new Claim("UserId", user.Id.ToString())

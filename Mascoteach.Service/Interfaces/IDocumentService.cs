@@ -10,6 +10,7 @@ namespace Mascoteach.Service.Interfaces
 {
     public interface IDocumentService
     {
+        Task<IEnumerable<DocumentResponse>> GetAllDocumentsAsync();
         Task<IEnumerable<DocumentResponse>> GetMyDocumentsAsync(int teacherId);
         Task<DocumentResponse?> GetDocumentByIdAsync(int id);
         Task<DocumentResponse> UploadDocumentAsync(int teacherId, DocumentCreateRequest request);
