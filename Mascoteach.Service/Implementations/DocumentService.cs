@@ -7,25 +7,49 @@ using Mascoteach.Service.Interfaces;
 public class DocumentService : IDocumentService
 {
     private readonly IDocumentRepository _documentRepository;
+    private readonly IUserRepository _userRepository;
     private readonly IMapper _mapper;
 
-    public DocumentService(IDocumentRepository documentRepository, IMapper mapper)
+    public DocumentService(IDocumentRepository documentRepository, IUserRepository userRepository, IMapper mapper)
     {
         _documentRepository = documentRepository;
+        _userRepository = userRepository;
         _mapper = mapper;
     }
 
     public async Task<DocumentResponse> UploadDocumentAsync(int teacherId, DocumentCreateRequest request)
     {
-        var newDoc = new Document
+        var user = await _userRepository.GetByIdAsync(teacherId)
+            ?? throw new KeyNotFoundException($"User with id {teacherId} not found.");
+
+        if (user.SubscriptionTier == "Freemium" && (user.DocumentsProcessed ?? 0) >= 5)
+            throw new InvalidOperationException(
+                "You have reached the limit of 5 documents for the Freemium tier. Please upgrade to Premium.");
+
+        using var transaction = await _documentRepository.BeginTransactionAsync();
+        try
         {
-            TeacherId = teacherId,
-            FileUrl = request.FileUrl,
-            UploadedAt = DateTime.Now
-        };
-        await _documentRepository.AddAsync(newDoc);
-        await _documentRepository.SaveChangesAsync();
-        return _mapper.Map<DocumentResponse>(newDoc);
+            var newDoc = new Document
+            {
+                TeacherId = teacherId,
+                FileUrl = request.FileUrl,
+                UploadedAt = DateTime.Now
+            };
+            await _documentRepository.AddAsync(newDoc);
+            await _documentRepository.SaveChangesAsync();
+
+            user.DocumentsProcessed = (user.DocumentsProcessed ?? 0) + 1;
+            _userRepository.Update(user);
+            await _userRepository.SaveChangesAsync();
+
+            await transaction.CommitAsync();
+            return _mapper.Map<DocumentResponse>(newDoc);
+        }
+        catch
+        {
+            await transaction.RollbackAsync();
+            throw;
+        }
     }
 
     public async Task<IEnumerable<DocumentResponse>> GetMyDocumentsAsync(int teacherId)
