@@ -1,6 +1,7 @@
 ﻿using Mascoteach.Data.Interfaces;
 using Mascoteach.Data.Models;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Storage;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -51,5 +52,8 @@ namespace Mascoteach.Data.Repositories
         }
 
         public async Task<int> SaveChangesAsync() => await _context.SaveChangesAsync();
+
+        public async Task<IDbContextTransaction> BeginTransactionAsync()
+            => await _context.Database.BeginTransactionAsync();
     }
 }

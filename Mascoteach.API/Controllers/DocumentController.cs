@@ -37,8 +37,15 @@ namespace Mascoteach.API.Controllers
         [HttpPost]
         public async Task<IActionResult> Create([FromBody] DocumentCreateRequest request)
         {
-            var result = await _documentService.UploadDocumentAsync(CurrentUserId, request);
-            return Ok(result);
+            try
+            {
+                var result = await _documentService.UploadDocumentAsync(CurrentUserId, request);
+                return Ok(result);
+            }
+            catch (InvalidOperationException ex)
+            {
+                return BadRequest(ex.Message);
+            }
         }
 
         // PUT: api/Document/{id}

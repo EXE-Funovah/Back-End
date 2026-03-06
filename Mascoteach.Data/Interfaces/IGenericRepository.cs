@@ -1,4 +1,5 @@
-﻿using System;
+﻿using Microsoft.EntityFrameworkCore.Storage;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
@@ -13,6 +14,7 @@ namespace Mascoteach.Data.Interfaces
         Task AddAsync(T entity); 
         void Update(T entity);   
         void Delete(T entity);   
-        Task<int> SaveChangesAsync(); 
+        Task<int> SaveChangesAsync();
+        Task<IDbContextTransaction> BeginTransactionAsync();
     }
 }
