@@ -27,6 +27,9 @@ builder.Services.AddScoped<IUserRepository, UserRepository>();
 builder.Services.AddScoped<IDocumentRepository, DocumentRepository>();
 builder.Services.AddScoped<IQuizRepository, QuizRepository>();
 builder.Services.AddScoped<IQuestionRepository, QuestionRepository>();
+builder.Services.AddScoped<IGameTemplateRepository, GameTemplateRepository>();
+builder.Services.AddScoped<ILiveSessionRepository, LiveSessionRepository>();
+builder.Services.AddScoped<ISessionParticipantRepository, SessionParticipantRepository>();
 
 
 
@@ -37,6 +40,9 @@ builder.Services.AddScoped<IDocumentService, DocumentService>();
 builder.Services.AddScoped<IQuizService, QuizService>();
 builder.Services.AddScoped<IQuestionService, QuestionService>();
 builder.Services.AddScoped<IAuthService, AuthService>();
+builder.Services.AddScoped<IGameTemplateService, GameTemplateService>();
+builder.Services.AddScoped<ILiveSessionService, LiveSessionService>();
+builder.Services.AddScoped<ISessionParticipantService, SessionParticipantService>();
 
 
 
