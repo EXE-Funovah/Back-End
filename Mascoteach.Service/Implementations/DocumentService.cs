@@ -52,6 +52,12 @@ public class DocumentService : IDocumentService
         }
     }
 
+    public async Task<IEnumerable<DocumentResponse>> GetAllDocumentsAsync()
+    {
+        var docs = await _documentRepository.GetAllAsync();
+        return _mapper.Map<IEnumerable<DocumentResponse>>(docs);
+    }
+
     public async Task<IEnumerable<DocumentResponse>> GetMyDocumentsAsync(int teacherId)
     {
         var myDocs = await _documentRepository.GetByTeacherIdAsync(teacherId);

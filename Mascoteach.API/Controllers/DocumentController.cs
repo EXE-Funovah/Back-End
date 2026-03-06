@@ -16,6 +16,14 @@ namespace Mascoteach.API.Controllers
             _documentService = documentService;
         }
 
+        // GET: api/Document
+        [HttpGet]
+        public async Task<IActionResult> GetAll()
+        {
+            var result = await _documentService.GetAllDocumentsAsync();
+            return Ok(result);
+        }
+
         // GET: api/Document/me
         [HttpGet("me")]
         public async Task<IActionResult> GetMyDocuments()
