@@ -8,6 +8,9 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
 using System.Text;
+using Amazon.S3;
+using Amazon.Runtime;
+
 
 
 
@@ -45,6 +48,26 @@ builder.Services.AddScoped<IAuthService, AuthService>();
 builder.Services.AddScoped<IGameTemplateService, GameTemplateService>();
 builder.Services.AddScoped<ILiveSessionService, LiveSessionService>();
 builder.Services.AddScoped<ISessionParticipantService, SessionParticipantService>();
+builder.Services.AddScoped<IS3Service, S3Service>();
+
+// AWS S3 Configuration
+var awsAccessKey = builder.Configuration["AWS:AccessKey"];
+var awsSecretKey = builder.Configuration["AWS:SecretKey"];
+var awsRegion = builder.Configuration["AWS:Region"];
+
+if (!string.IsNullOrEmpty(awsAccessKey) && !string.IsNullOrEmpty(awsSecretKey))
+{
+    var credentials = new BasicAWSCredentials(awsAccessKey, awsSecretKey);
+    var s3Config = new AmazonS3Config
+    {
+        RegionEndpoint = Amazon.RegionEndpoint.GetBySystemName(awsRegion ?? "us-east-1")
+    };
+    builder.Services.AddSingleton<IAmazonS3>(new AmazonS3Client(credentials, s3Config));
+}
+else
+{
+    builder.Services.AddSingleton<IAmazonS3>(new AmazonS3Client(Amazon.RegionEndpoint.GetBySystemName(awsRegion ?? "us-east-1")));
+}
 
 // HttpClient cho AI Service
 builder.Services.AddHttpClient("AIService", client =>
