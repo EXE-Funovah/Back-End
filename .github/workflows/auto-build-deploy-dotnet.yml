@@ -39,4 +39,5 @@ jobs:
         run: |
           docker run -d --name $IMAGE_NAME \
             -e ConnectionStrings__DefaultConnection="${{ secrets.CONNECTIONSTRING }}" \
+            -e AiService__BaseUrl="${{ secrets.AI_SERVICE }}"
             -p $DOCKER_PORT:$APP_PORT $IMAGE_NAME:v1
