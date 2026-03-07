@@ -10,10 +10,12 @@ namespace Mascoteach.API.Controllers
     public class DocumentController : BaseController
     {
         private readonly IDocumentService _documentService;
+        private readonly IS3Service _s3Service;
 
-        public DocumentController(IDocumentService documentService)
+        public DocumentController(IDocumentService documentService, IS3Service s3Service)
         {
             _documentService = documentService;
+            _s3Service = s3Service;
         }
 
         // GET: api/Document
@@ -22,6 +24,21 @@ namespace Mascoteach.API.Controllers
         {
             var result = await _documentService.GetAllDocumentsAsync();
             return Ok(result);
+        }
+
+        // POST: api/Document/generate-upload-url
+        [HttpPost("generate-upload-url")]
+        public async Task<IActionResult> GenerateUploadUrl([FromBody] PresignedUrlRequest request)
+        {
+            try
+            {
+                var result = await _s3Service.GeneratePresignedUploadUrlAsync(request.FileName, request.ContentType);
+                return Ok(result);
+            }
+            catch (Exception ex)
+            {
+                return BadRequest(new { message = "Failed to generate upload URL", error = ex.Message });
+            }
         }
 
         // GET: api/Document/me
