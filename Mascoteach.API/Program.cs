@@ -27,6 +27,7 @@ builder.Services.AddScoped<IUserRepository, UserRepository>();
 builder.Services.AddScoped<IDocumentRepository, DocumentRepository>();
 builder.Services.AddScoped<IQuizRepository, QuizRepository>();
 builder.Services.AddScoped<IQuestionRepository, QuestionRepository>();
+builder.Services.AddScoped<IOptionRepository, OptionRepository>();
 builder.Services.AddScoped<IGameTemplateRepository, GameTemplateRepository>();
 builder.Services.AddScoped<ILiveSessionRepository, LiveSessionRepository>();
 builder.Services.AddScoped<ISessionParticipantRepository, SessionParticipantRepository>();
@@ -39,13 +40,18 @@ builder.Services.AddScoped<IUserService, UserService>();
 builder.Services.AddScoped<IDocumentService, DocumentService>();
 builder.Services.AddScoped<IQuizService, QuizService>();
 builder.Services.AddScoped<IQuestionService, QuestionService>();
+builder.Services.AddScoped<IOptionService, OptionService>();
 builder.Services.AddScoped<IAuthService, AuthService>();
 builder.Services.AddScoped<IGameTemplateService, GameTemplateService>();
 builder.Services.AddScoped<ILiveSessionService, LiveSessionService>();
 builder.Services.AddScoped<ISessionParticipantService, SessionParticipantService>();
 
-
-
+// HttpClient cho AI Service
+builder.Services.AddHttpClient("AIService", client =>
+{
+    client.BaseAddress = new Uri(builder.Configuration["AIService:BaseUrl"] ?? "http://localhost:5001");
+    client.Timeout = TimeSpan.FromSeconds(120);
+});
 
 // Add services to the container.
 

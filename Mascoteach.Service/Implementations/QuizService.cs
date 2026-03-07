@@ -9,11 +9,19 @@ namespace Mascoteach.Service.Implementations
     public class QuizService : IQuizService
     {
         private readonly IQuizRepository _quizRepository;
+        private readonly IQuestionRepository _questionRepository;
+        private readonly IOptionRepository _optionRepository;
         private readonly IMapper _mapper;
 
-        public QuizService(IQuizRepository quizRepository, IMapper mapper)
+        public QuizService(
+            IQuizRepository quizRepository,
+            IQuestionRepository questionRepository,
+            IOptionRepository optionRepository,
+            IMapper mapper)
         {
             _quizRepository = quizRepository;
+            _questionRepository = questionRepository;
+            _optionRepository = optionRepository;
             _mapper = mapper;
         }
 
@@ -69,6 +77,64 @@ namespace Mascoteach.Service.Implementations
             _quizRepository.Update(quiz);
             await _quizRepository.SaveChangesAsync();
             return _mapper.Map<QuizResponse>(quiz);
+        }
+
+        /// <summary>
+        /// Tạo Quiz + Questions + Options từ kết quả AI Service.
+        /// Dùng transaction để đảm bảo tính toàn vẹn dữ liệu.
+        /// </summary>
+        public async Task<QuizResponse> CreateFromAIAsync(AIGenerateQuizRequest request)
+        {
+            using var transaction = await _quizRepository.BeginTransactionAsync();
+            try
+            {
+                // 1. Tạo Quiz
+                var quiz = new Quiz
+                {
+                    DocumentId = request.DocumentId,
+                    Title = request.QuizTitle,
+                    Status = "AI_Drafted",
+                    CreatedAt = DateTime.Now,
+                    IsDeleted = false
+                };
+                await _quizRepository.AddAsync(quiz);
+                await _quizRepository.SaveChangesAsync();
+
+                // 2. Tạo Questions + Options
+                foreach (var qItem in request.Questions)
+                {
+                    var question = new Question
+                    {
+                        QuizId = quiz.Id,
+                        QuestionText = qItem.QuestionText,
+                        QuestionType = qItem.QuestionType,
+                        IsDeleted = false
+                    };
+                    await _questionRepository.AddAsync(question);
+                    await _questionRepository.SaveChangesAsync();
+
+                    foreach (var oItem in qItem.Options)
+                    {
+                        var option = new Option
+                        {
+                            QuestionId = question.Id,
+                            OptionText = oItem.OptionText,
+                            IsCorrect = oItem.IsCorrect,
+                            IsDeleted = false
+                        };
+                        await _optionRepository.AddAsync(option);
+                    }
+                    await _optionRepository.SaveChangesAsync();
+                }
+
+                await transaction.CommitAsync();
+                return _mapper.Map<QuizResponse>(quiz);
+            }
+            catch
+            {
+                await transaction.RollbackAsync();
+                throw;
+            }
         }
     }
 }

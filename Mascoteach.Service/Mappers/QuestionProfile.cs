@@ -8,7 +8,9 @@ public class QuestionProfile : Profile
 {
     public QuestionProfile()
     {
-        CreateMap<Question, QuestionResponse>();
-        CreateMap<QuestionCreateRequest, Question>();
+        CreateMap<Question, QuestionResponse>()
+            .ForMember(dest => dest.Options, opt => opt.MapFrom(src => src.Options));
+        CreateMap<QuestionCreateRequest, Question>()
+            .ForMember(dest => dest.Options, opt => opt.Ignore());
     }
 }

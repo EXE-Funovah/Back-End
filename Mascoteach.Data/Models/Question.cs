@@ -11,11 +11,11 @@ public partial class Question
 
     public string QuestionText { get; set; } = null!;
 
-    public string Options { get; set; } = null!;
-
-    public string CorrectAnswer { get; set; } = null!;
+    public string? QuestionType { get; set; }
 
     public bool IsDeleted { get; set; }
+
+    public virtual ICollection<Option> Options { get; set; } = new List<Option>();
 
     public virtual Quiz Quiz { get; set; } = null!;
 }

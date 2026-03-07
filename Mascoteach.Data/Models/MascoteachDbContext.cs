@@ -21,6 +21,8 @@ public partial class MascoteachDbContext : DbContext
 
     public virtual DbSet<LiveSession> LiveSessions { get; set; }
 
+    public virtual DbSet<Option> Options { get; set; }
+
     public virtual DbSet<Question> Questions { get; set; }
 
     public virtual DbSet<Quiz> Quizzes { get; set; }
@@ -29,11 +31,15 @@ public partial class MascoteachDbContext : DbContext
 
     public virtual DbSet<User> Users { get; set; }
 
+    protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
+#warning To protect potentially sensitive information in your connection string, you should move it out of source code. You can avoid scaffolding the connection string by using the Name= syntax to read it from configuration - see https://go.microsoft.com/fwlink/?linkid=2131148. For more guidance on storing connection strings, see https://go.microsoft.com/fwlink/?LinkId=723263.
+        => optionsBuilder.UseSqlServer("Server=database.purintech.id.vn;Database=MascoteachDB;user=maxverstappen;Password=maxverstappen;TrustServerCertificate=True;");
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         modelBuilder.Entity<Document>(entity =>
         {
-            entity.HasKey(e => e.Id).HasName("PK__Document__3213E83F859B4FB2");
+            entity.HasKey(e => e.Id).HasName("PK__Document__3213E83F06A6C57F");
 
             entity.Property(e => e.Id).HasColumnName("id");
             entity.Property(e => e.FileUrl)
@@ -54,7 +60,7 @@ public partial class MascoteachDbContext : DbContext
 
         modelBuilder.Entity<GameTemplate>(entity =>
         {
-            entity.HasKey(e => e.Id).HasName("PK__Game_Tem__3213E83FE24BABEC");
+            entity.HasKey(e => e.Id).HasName("PK__Game_Tem__3213E83F4C166024");
 
             entity.ToTable("Game_Templates");
 
@@ -73,11 +79,11 @@ public partial class MascoteachDbContext : DbContext
 
         modelBuilder.Entity<LiveSession>(entity =>
         {
-            entity.HasKey(e => e.Id).HasName("PK__Live_Ses__3213E83F9D3AF509");
+            entity.HasKey(e => e.Id).HasName("PK__Live_Ses__3213E83F35A4B00F");
 
             entity.ToTable("Live_Sessions");
 
-            entity.HasIndex(e => e.GamePin, "UQ__Live_Ses__BBB798540268D3F8").IsUnique();
+            entity.HasIndex(e => e.GamePin, "UQ__Live_Ses__BBB79854AE64FD58").IsUnique();
 
             entity.Property(e => e.Id).HasColumnName("id");
             entity.Property(e => e.CreatedAt)
@@ -113,17 +119,34 @@ public partial class MascoteachDbContext : DbContext
                 .HasConstraintName("FK_LiveSessions_GameTemplates");
         });
 
-        modelBuilder.Entity<Question>(entity =>
+        modelBuilder.Entity<Option>(entity =>
         {
-            entity.HasKey(e => e.Id).HasName("PK__Question__3213E83FE9C551D2");
+            entity.HasKey(e => e.Id).HasName("PK__Options__3213E83F2C2BEC40");
 
             entity.Property(e => e.Id).HasColumnName("id");
-            entity.Property(e => e.CorrectAnswer)
-                .HasMaxLength(255)
-                .HasColumnName("correct_answer");
+            entity.Property(e => e.IsCorrect).HasColumnName("is_correct");
             entity.Property(e => e.IsDeleted).HasColumnName("is_deleted");
-            entity.Property(e => e.Options).HasColumnName("options");
+            entity.Property(e => e.OptionText).HasColumnName("option_text");
+            entity.Property(e => e.QuestionId).HasColumnName("question_id");
+
+            entity.HasOne(d => d.Question).WithMany(p => p.Options)
+                .HasForeignKey(d => d.QuestionId)
+                .OnDelete(DeleteBehavior.ClientSetNull)
+                .HasConstraintName("FK_Options_Questions");
+        });
+
+        modelBuilder.Entity<Question>(entity =>
+        {
+            entity.HasKey(e => e.Id).HasName("PK__Question__3213E83F0BA585BF");
+
+            entity.Property(e => e.Id).HasColumnName("id");
+            entity.Property(e => e.IsDeleted).HasColumnName("is_deleted");
             entity.Property(e => e.QuestionText).HasColumnName("question_text");
+            entity.Property(e => e.QuestionType)
+                .HasMaxLength(50)
+                .IsUnicode(false)
+                .HasDefaultValue("MultipleChoice")
+                .HasColumnName("question_type");
             entity.Property(e => e.QuizId).HasColumnName("quiz_id");
 
             entity.HasOne(d => d.Quiz).WithMany(p => p.Questions)
@@ -134,7 +157,7 @@ public partial class MascoteachDbContext : DbContext
 
         modelBuilder.Entity<Quiz>(entity =>
         {
-            entity.HasKey(e => e.Id).HasName("PK__Quizzes__3213E83F46D76211");
+            entity.HasKey(e => e.Id).HasName("PK__Quizzes__3213E83F70093524");
 
             entity.Property(e => e.Id).HasColumnName("id");
             entity.Property(e => e.CreatedAt)
@@ -159,7 +182,7 @@ public partial class MascoteachDbContext : DbContext
 
         modelBuilder.Entity<SessionParticipant>(entity =>
         {
-            entity.HasKey(e => e.Id).HasName("PK__Session___3213E83F703EE507");
+            entity.HasKey(e => e.Id).HasName("PK__Session___3213E83F15FAEA13");
 
             entity.ToTable("Session_Participants");
 
@@ -181,9 +204,9 @@ public partial class MascoteachDbContext : DbContext
 
         modelBuilder.Entity<User>(entity =>
         {
-            entity.HasKey(e => e.Id).HasName("PK__Users__3213E83F8287F5A3");
+            entity.HasKey(e => e.Id).HasName("PK__Users__3213E83F8238BA73");
 
-            entity.HasIndex(e => e.Email, "UQ__Users__AB6E616401B971B6").IsUnique();
+            entity.HasIndex(e => e.Email, "UQ__Users__AB6E61644394921A").IsUnique();
 
             entity.Property(e => e.Id).HasColumnName("id");
             entity.Property(e => e.CreatedAt)

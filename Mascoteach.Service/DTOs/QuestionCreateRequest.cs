@@ -10,9 +10,20 @@ public class QuestionCreateRequest
     [Required]
     public string QuestionText { get; set; } = null!;
 
-    [Required]
-    public string Options { get; set; } = null!;
+    public string QuestionType { get; set; } = "MultipleChoice";
 
+    /// <summary>
+    /// Danh sách options đi kèm khi tạo question
+    /// </summary>
+    public List<OptionItemRequest>? Options { get; set; }
+}
+
+/// <summary>
+/// DTO cho từng option khi tạo question (nested)
+/// </summary>
+public class OptionItemRequest
+{
     [Required]
-    public string CorrectAnswer { get; set; } = null!;
+    public string OptionText { get; set; } = null!;
+    public bool IsCorrect { get; set; } = false;
 }
