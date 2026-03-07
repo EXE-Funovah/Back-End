@@ -10,7 +10,7 @@ on:
 
 jobs:
   build-and-deploy:
-    runs-on: self-hosted  # Chạy trên VPS Linux
+    runs-on: self-hosted # Chạy trên VPS Linux
 
     env:
       IMAGE_NAME: ${{ secrets.DOCKER_IMAGE_NAME }}
@@ -20,7 +20,6 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      
       - name: Set up environment for .NET installation
         run: |
           echo "DOTNET_ROOT=$HOME/.dotnet" >> $GITHUB_ENV
@@ -39,5 +38,10 @@ jobs:
         run: |
           docker run -d --name $IMAGE_NAME \
             -e ConnectionStrings__DefaultConnection="${{ secrets.CONNECTIONSTRING }}" \
-            -e AiService__BaseUrl="${{ secrets.AI_SERVICE }}"
+            -e AiService__BaseUrl="${{ secrets.AI_SERVICE }}" \
+            -e AWS__AccessKey="${{ secrets.AWS_ACCESS_KEY }}" \
+            -e AWS__SecretKey="${{ secrets.AWS_SECRETKEY }}" \
+            -e AWS__Region="${{ secrets.AWS_REGION }}" \
+            -e AWS__BucketName="${{ secrets.AWS_BUCKETNAME }}" \
+            -e AWS__PRESIGNEDURLEXPIRATIONMINUTES="${{ secrets.AWS_PRESIGNEDURLEXPIRATIONMINUTES }}" \
             -p $DOCKER_PORT:$APP_PORT $IMAGE_NAME:v1
