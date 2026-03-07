@@ -9,7 +9,7 @@ COPY ["EXE101-Mascoteach-Backend.sln", "./"]
 COPY ["Mascoteach.API/Mascoteach.API.csproj", "Mascoteach.API/"]
 COPY ["Mascoteach.Data/Mascoteach.Data.csproj", "Mascoteach.Data/"]
 COPY ["Mascoteach.Service/Mascoteach.Service.csproj", "Mascoteach.Service/"]
-RUN dotnet restore "SWP391.sln"
+RUN dotnet restore "EXE101-Mascoteach-Backend.sln"
 
 COPY . .
 WORKDIR "/src"
