@@ -8,6 +8,8 @@ public class DocumentProfile : Profile
 {
     public DocumentProfile()
     {
-        CreateMap<Document, DocumentResponse>();
+        CreateMap<Document, DocumentResponse>()
+            .ForMember(dest => dest.S3Key, opt => opt.MapFrom(src => src.FileUrl))
+            .ForMember(dest => dest.PresignedUrl, opt => opt.Ignore());
     }
 }

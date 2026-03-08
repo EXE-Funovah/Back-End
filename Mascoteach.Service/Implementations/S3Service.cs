@@ -47,4 +47,17 @@ public class S3Service : IS3Service
             ExpiresAt = DateTime.UtcNow.AddMinutes(_urlExpirationMinutes)
         };
     }
+
+    public async Task<string> GeneratePresignedDownloadUrlAsync(string s3Key)
+    {
+        var request = new GetPreSignedUrlRequest
+        {
+            BucketName = _bucketName,
+            Key = s3Key,
+            Verb = HttpVerb.GET,
+            Expires = DateTime.UtcNow.AddMinutes(_urlExpirationMinutes)
+        };
+
+        return await Task.Run(() => _s3Client.GetPreSignedURL(request));
+    }
 }

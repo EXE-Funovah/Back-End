@@ -4,17 +4,21 @@ using Mascoteach.Data.Models;
 using Mascoteach.Service.DTOs;
 using Mascoteach.Service.Interfaces;
 
+namespace Mascoteach.Service.Implementations;
+
 public class DocumentService : IDocumentService
 {
     private readonly IDocumentRepository _documentRepository;
     private readonly IUserRepository _userRepository;
     private readonly IMapper _mapper;
+    private readonly IS3Service _s3Service;
 
-    public DocumentService(IDocumentRepository documentRepository, IUserRepository userRepository, IMapper mapper)
+    public DocumentService(IDocumentRepository documentRepository, IUserRepository userRepository, IMapper mapper, IS3Service s3Service)
     {
         _documentRepository = documentRepository;
         _userRepository = userRepository;
         _mapper = mapper;
+        _s3Service = s3Service;
     }
 
     public async Task<DocumentResponse> UploadDocumentAsync(int teacherId, DocumentCreateRequest request)
@@ -32,7 +36,7 @@ public class DocumentService : IDocumentService
             var newDoc = new Document
             {
                 TeacherId = teacherId,
-                FileUrl = request.FileUrl,
+                FileUrl = request.S3Key,
                 UploadedAt = DateTime.Now
             };
             await _documentRepository.AddAsync(newDoc);
@@ -43,7 +47,10 @@ public class DocumentService : IDocumentService
             await _userRepository.SaveChangesAsync();
 
             await transaction.CommitAsync();
-            return _mapper.Map<DocumentResponse>(newDoc);
+            
+            var response = _mapper.Map<DocumentResponse>(newDoc);
+            response.PresignedUrl = await _s3Service.GeneratePresignedDownloadUrlAsync(newDoc.FileUrl);
+            return response;
         }
         catch
         {
@@ -55,27 +62,44 @@ public class DocumentService : IDocumentService
     public async Task<IEnumerable<DocumentResponse>> GetAllDocumentsAsync()
     {
         var docs = await _documentRepository.GetAllAsync();
-        return _mapper.Map<IEnumerable<DocumentResponse>>(docs);
+        var responses = _mapper.Map<IEnumerable<DocumentResponse>>(docs).ToList();
+        
+        foreach (var response in responses)
+        {
+            response.PresignedUrl = await _s3Service.GeneratePresignedDownloadUrlAsync(response.S3Key);
+        }
+        
+        return responses;
     }
 
     public async Task<IEnumerable<DocumentResponse>> GetMyDocumentsAsync(int teacherId)
     {
         var myDocs = await _documentRepository.GetByTeacherIdAsync(teacherId);
-
-        return _mapper.Map<IEnumerable<DocumentResponse>>(myDocs);
+        var responses = _mapper.Map<IEnumerable<DocumentResponse>>(myDocs).ToList();
+        
+        foreach (var response in responses)
+        {
+            response.PresignedUrl = await _s3Service.GeneratePresignedDownloadUrlAsync(response.S3Key);
+        }
+        
+        return responses;
     }
 
     public async Task<DocumentResponse?> GetDocumentByIdAsync(int id)
     {
         var doc = await _documentRepository.GetByIdAsync(id);
-        return _mapper.Map<DocumentResponse>(doc);
+        if (doc == null) return null;
+        
+        var response = _mapper.Map<DocumentResponse>(doc);
+        response.PresignedUrl = await _s3Service.GeneratePresignedDownloadUrlAsync(response.S3Key);
+        return response;
     }
 
-    public async Task<bool> UpdateDocumentAsync(int id, int teacherId, string newFileUrl)
+    public async Task<bool> UpdateDocumentAsync(int id, int teacherId, string newS3Key)
     {
         var doc = await _documentRepository.GetByIdAsync(id);
         if (doc == null || doc.TeacherId != teacherId) return false;
-        doc.FileUrl = newFileUrl;
+        doc.FileUrl = newS3Key;
         _documentRepository.Update(doc);
         return await _documentRepository.SaveChangesAsync() > 0;
     }
@@ -96,6 +120,9 @@ public class DocumentService : IDocumentService
         doc.IsDeleted = !doc.IsDeleted;
         _documentRepository.Update(doc);
         await _documentRepository.SaveChangesAsync();
-        return _mapper.Map<DocumentResponse>(doc);
+        
+        var response = _mapper.Map<DocumentResponse>(doc);
+        response.PresignedUrl = await _s3Service.GeneratePresignedDownloadUrlAsync(response.S3Key);
+        return response;
     }
 }

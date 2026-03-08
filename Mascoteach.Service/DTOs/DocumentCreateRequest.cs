@@ -6,5 +6,5 @@ namespace Mascoteach.Service.DTOs;
 public class DocumentCreateRequest
 {
     [Required]
-    public string FileUrl { get; set; } = null!;
+    public string S3Key { get; set; } = null!;
 }
