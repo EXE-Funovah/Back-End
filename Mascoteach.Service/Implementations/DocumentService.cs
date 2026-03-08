@@ -26,9 +26,9 @@ public class DocumentService : IDocumentService
         var user = await _userRepository.GetByIdAsync(teacherId)
             ?? throw new KeyNotFoundException($"User with id {teacherId} not found.");
 
-        if (user.SubscriptionTier == "Freemium" && (user.DocumentsProcessed ?? 0) >= 5)
+        if (user.SubscriptionTier == "Freemium" && (user.DocumentsProcessed ?? 0) >= 50)
             throw new InvalidOperationException(
-                "You have reached the limit of 5 documents for the Freemium tier. Please upgrade to Premium.");
+                "You have reached the limit of 50 documents for the Freemium tier. Please upgrade to Premium.");
 
         using var transaction = await _documentRepository.BeginTransactionAsync();
         try
