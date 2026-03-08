@@ -75,10 +75,10 @@ namespace Mascoteach.API.Controllers
 
         // PUT: api/Document/{id}
         [HttpPut("{id}")]
-        public async Task<IActionResult> Update(int id, [FromBody] string newFileUrl)
+        public async Task<IActionResult> Update(int id, [FromBody] DocumentCreateRequest request)
         {
             // Truyền CurrentUserId vào Service để check: chỉ chủ sở hữu mới được sửa
-            var success = await _documentService.UpdateDocumentAsync(id, CurrentUserId, newFileUrl);
+            var success = await _documentService.UpdateDocumentAsync(id, CurrentUserId, request.S3Key);
             if (!success) return Forbid("Document does not exist or you do not have permission to perform this action.");
             return Ok("Update successfully");
         }
