@@ -69,13 +69,6 @@ else
     builder.Services.AddSingleton<IAmazonS3>(new AmazonS3Client(Amazon.RegionEndpoint.GetBySystemName(awsRegion ?? "us-east-1")));
 }
 
-// HttpClient cho AI Service
-builder.Services.AddHttpClient("AIService", client =>
-{
-    client.BaseAddress = new Uri(builder.Configuration["AIService:BaseUrl"] ?? "http://localhost:5001");
-    client.Timeout = TimeSpan.FromSeconds(120);
-});
-
 // Add services to the container.
 
 builder.Services.AddCors(options =>

@@ -68,19 +68,5 @@ namespace Mascoteach.API.Controllers
             return Ok(result);
         }
 
-        // POST: api/Quiz/generate-from-ai
-        [HttpPost("generate-from-ai")]
-        public async Task<IActionResult> GenerateFromAI([FromBody] AIGenerateQuizRequest request)
-        {
-            try
-            {
-                var result = await _quizService.CreateFromAIAsync(request);
-                return Ok(result);
-            }
-            catch (Exception ex)
-            {
-                return BadRequest(ex.Message);
-            }
-        }
     }
 }
