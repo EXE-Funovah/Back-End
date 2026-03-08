@@ -10,10 +10,5 @@ namespace Mascoteach.Service.Interfaces
         Task<bool> UpdateAsync(int id, QuizUpdateRequest request);
         Task<bool> DeleteAsync(int id);
         Task<QuizResponse?> ToggleDeleteAsync(int id);
-
-        /// <summary>
-        /// Tạo Quiz + Questions + Options từ kết quả AI Service
-        /// </summary>
-        Task<QuizResponse> CreateFromAIAsync(AIGenerateQuizRequest request);
     }
 }
