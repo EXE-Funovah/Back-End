@@ -220,7 +220,7 @@ public partial class MascoteachDbContext : DbContext
                 .HasColumnName("email");
             entity.Property(e => e.FullName)
                 .HasMaxLength(255)
-                .IsUnicode(false)
+                .IsUnicode(true)
                 .HasColumnName("full_name");
             entity.Property(e => e.IsDeleted).HasColumnName("is_deleted");
             entity.Property(e => e.PasswordHash)
