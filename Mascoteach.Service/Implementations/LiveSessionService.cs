@@ -38,6 +38,8 @@ namespace Mascoteach.Service.Implementations
         public async Task<LiveSessionResponse?> GetByPinAsync(string pin)
         {
             var session = await _liveSessionRepository.GetByPinAsync(pin);
+            if (session == null) return null;
+            if (session.Status == "Ended") return null;
             return _mapper.Map<LiveSessionResponse>(session);
         }
 
