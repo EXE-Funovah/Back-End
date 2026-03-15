@@ -1,3 +1,6 @@
+using Amazon.Runtime;
+using Amazon.S3;
+using Mascoteach.API.Hubs;
 using Mascoteach.Data.Interfaces;
 using Mascoteach.Data.Models;
 using Mascoteach.Data.Repositories;
@@ -8,8 +11,6 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
 using System.Text;
-using Amazon.S3;
-using Amazon.Runtime;
 
 
 
@@ -49,6 +50,7 @@ builder.Services.AddScoped<IGameTemplateService, GameTemplateService>();
 builder.Services.AddScoped<ILiveSessionService, LiveSessionService>();
 builder.Services.AddScoped<ISessionParticipantService, SessionParticipantService>();
 builder.Services.AddScoped<IS3Service, S3Service>();
+builder.Services.AddSignalR();
 
 // AWS S3 Configuration
 var awsAccessKey = builder.Configuration["AWS:AccessKey"];
@@ -75,9 +77,16 @@ builder.Services.AddCors(options =>
 {
     options.AddPolicy("AllowAll", policy =>
     {
-        policy.AllowAnyOrigin()
+        policy.WithOrigins(
+                "http://localhost:5173",    
+                "http://localhost:5500",     
+                "http://127.0.0.1:5173",
+                "http://127.0.0.1:5500",
+                "http://mascoteach.com"
+              )
               .AllowAnyMethod()
-              .AllowAnyHeader();
+              .AllowAnyHeader()
+              .AllowCredentials(); // signalR needed
     });
 });
 
@@ -153,5 +162,7 @@ app.UseAuthentication();
 app.UseAuthorization();
 
 app.MapControllers();
+
+app.MapHub<GameHub>("/hubs/game");
 
 app.Run();
