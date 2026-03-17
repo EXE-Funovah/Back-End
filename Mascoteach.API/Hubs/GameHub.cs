@@ -49,6 +49,10 @@ namespace Mascoteach.API.Hubs
                 timestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()
             });
         }
+        public async Task CloseQuestion(string gamePin)
+        {
+            await Clients.Group(gamePin).SendAsync("QuestionClosed");
+        }
 
         // Host broadcast leaderboard
         public async Task BroadcastScores(string gamePin, object scores)
