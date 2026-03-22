@@ -50,8 +50,8 @@ builder.Services.AddScoped<IGameTemplateService, GameTemplateService>();
 builder.Services.AddScoped<ILiveSessionService, LiveSessionService>();
 builder.Services.AddScoped<ISessionParticipantService, SessionParticipantService>();
 builder.Services.AddScoped<IS3Service, S3Service>();
-builder.Services.AddSignalR();
-builder.Services.AddMemoryCache();
+builder.Services.AddSignalR(); // signalR
+builder.Services.AddMemoryCache(); 
 
 // AWS S3 Configuration
 var awsAccessKey = builder.Configuration["AWS:AccessKey"];
