@@ -9,6 +9,7 @@ COPY ["EXE101-Mascoteach-Backend.sln", "./"]
 COPY ["Mascoteach.API/Mascoteach.API.csproj", "Mascoteach.API/"]
 COPY ["Mascoteach.Data/Mascoteach.Data.csproj", "Mascoteach.Data/"]
 COPY ["Mascoteach.Service/Mascoteach.Service.csproj", "Mascoteach.Service/"]
+COPY ["Mascoteach.Tests/Mascoteach.Tests.csproj", "Mascoteach.Tests/"]
 RUN dotnet restore "EXE101-Mascoteach-Backend.sln"
 
 COPY . .
