@@ -17,7 +17,7 @@ namespace Mascoteach.Data.Repositories
                 .ToListAsync();
         }
 
-        public async Task<Question?> GetAllIncludingDeletedAsync(int id)
+        public async Task<Question?> GetByIdIncludingDeletedAsync(int id)
         {
             return await _context.Questions.FindAsync(id);
         }

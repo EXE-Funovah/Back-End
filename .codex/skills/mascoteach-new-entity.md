@@ -71,7 +71,7 @@ namespace Mascoteach.Data.Interfaces;
 
 public interface IEntityNameRepository : IGenericRepository<EntityName>
 {
-    Task<EntityName?> GetAllIncludingDeletedAsync(int id);
+    Task<EntityName?> GetByIdIncludingDeletedAsync(int id);
 }
 ```
 
@@ -94,7 +94,7 @@ public class EntityNameRepository : GenericRepository<EntityName>, IEntityNameRe
     {
     }
 
-    public async Task<EntityName?> GetAllIncludingDeletedAsync(int id)
+    public async Task<EntityName?> GetByIdIncludingDeletedAsync(int id)
     {
         return await _context.EntityNames.FindAsync(id);
     }
@@ -195,7 +195,7 @@ Pattern:
 - Map responses with AutoMapper.
 - For updates, fetch entity first and return `false` when missing.
 - For deletes, call repository `Delete` for soft-delete.
-- For toggle-delete, use `GetAllIncludingDeletedAsync`.
+- For toggle-delete, use `GetByIdIncludingDeletedAsync`.
 - Use transaction when one operation updates multiple aggregates.
 
 ### 8. Controller
@@ -272,5 +272,5 @@ Use the correct startup project if running EF commands.
 - Do not manually map response DTOs in controllers.
 - Do not hard-delete rows.
 - Do not forget DI registration.
-- Do not forget `GetAllIncludingDeletedAsync` if adding toggle-delete.
+- Do not forget `GetByIdIncludingDeletedAsync` if adding toggle-delete.
 - Do not touch CORS, JWT, SignalR, or S3 config unless the task asks for it.

@@ -47,15 +47,7 @@ namespace Mascoteach.API.Hubs
         public async Task StartGame(string gamePin)
         {
             // Update status → Active trong DB
-            var session = await _sessionService.GetByPinAsync(gamePin);
-            if (session != null)
-            {
-                await _sessionService.UpdateAsync(session.Id, new LiveSessionUpdateRequest
-                {
-                    Status = "Active"
-                });
-            }
-
+            await _sessionService.UpdateStatusByPinAsync(gamePin, "Active");
             await Clients.Group(gamePin).SendAsync("GameStarted");
         }
 
@@ -167,14 +159,7 @@ namespace Mascoteach.API.Hubs
             // Update status → Ended trong DB
             try
             {
-                var session = await _sessionService.GetByPinAsync(gamePin);
-                if (session != null)
-                {
-                    await _sessionService.UpdateAsync(session.Id, new LiveSessionUpdateRequest
-                    {
-                        Status = "Ended"
-                    });
-                }
+                await _sessionService.UpdateStatusByPinAsync(gamePin, "Ended");
             }
             catch (Exception ex)
             {

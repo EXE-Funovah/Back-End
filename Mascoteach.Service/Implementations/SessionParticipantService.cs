@@ -66,7 +66,7 @@ namespace Mascoteach.Service.Implementations
 
         public async Task<SessionParticipantResponse?> ToggleDeleteAsync(int id)
         {
-            var participant = await _sessionParticipantRepository.GetAllIncludingDeletedAsync(id);
+            var participant = await _sessionParticipantRepository.GetByIdIncludingDeletedAsync(id);
             if (participant == null) return null;
 
             participant.IsDeleted = !participant.IsDeleted;

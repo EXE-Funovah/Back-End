@@ -42,28 +42,37 @@ namespace Mascoteach.API.Controllers
             return Ok(result);
         }
 
-        // PUT: api/User/{id}
+        // PUT: api/User/{id} — only owner or admin
         [HttpPut("{id}")]
         public async Task<IActionResult> Update(int id, [FromBody] UserUpdateRequest request)
         {
+            if (CurrentUserId != id && CurrentUserRole != "Admin")
+                return Forbid("You do not have permission to update this user.");
+
             var success = await _userService.UpdateAsync(id, request);
             if (!success) return NotFound("User does not exist.");
             return Ok("Update successfully.");
         }
 
-        // DELETE: api/User/{id}
+        // DELETE: api/User/{id} — only owner or admin
         [HttpDelete("{id}")]
         public async Task<IActionResult> Delete(int id)
         {
+            if (CurrentUserId != id && CurrentUserRole != "Admin")
+                return Forbid("You do not have permission to delete this user.");
+
             var success = await _userService.DeleteAsync(id);
             if (!success) return NotFound("User does not exist.");
             return NoContent();
         }
 
-        // PATCH: api/User/{id}/toggle-delete
+        // PATCH: api/User/{id}/toggle-delete — admin only
         [HttpPatch("{id}/toggle-delete")]
         public async Task<IActionResult> ToggleDelete(int id)
         {
+            if (CurrentUserRole != "Admin")
+                return Forbid("Only admin can toggle-delete users.");
+
             var result = await _userService.ToggleDeleteAsync(id);
             if (result == null) return NotFound("User does not exist.");
             return Ok(result);

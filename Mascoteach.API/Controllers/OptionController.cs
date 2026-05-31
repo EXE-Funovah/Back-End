@@ -37,7 +37,7 @@ namespace Mascoteach.API.Controllers
         [HttpPost]
         public async Task<IActionResult> Create([FromBody] OptionCreateRequest request)
         {
-            var result = await _optionService.CreateAsync(request);
+            var result = await _optionService.CreateAsync(CurrentUserId, request);
             return Ok(result);
         }
 
@@ -45,8 +45,8 @@ namespace Mascoteach.API.Controllers
         [HttpPut("{id}")]
         public async Task<IActionResult> Update(int id, [FromBody] OptionUpdateRequest request)
         {
-            var success = await _optionService.UpdateAsync(id, request);
-            if (!success) return NotFound("Option does not exist.");
+            var success = await _optionService.UpdateAsync(id, CurrentUserId, request);
+            if (!success) return Forbid("Option does not exist or you do not have permission.");
             return Ok("Update successfully.");
         }
 
@@ -54,9 +54,18 @@ namespace Mascoteach.API.Controllers
         [HttpDelete("{id}")]
         public async Task<IActionResult> Delete(int id)
         {
-            var success = await _optionService.DeleteAsync(id);
-            if (!success) return NotFound("Option does not exist.");
+            var success = await _optionService.DeleteAsync(id, CurrentUserId);
+            if (!success) return Forbid("Option does not exist or you do not have permission.");
             return NoContent();
+        }
+
+        // PATCH: api/Option/{id}/toggle-delete
+        [HttpPatch("{id}/toggle-delete")]
+        public async Task<IActionResult> ToggleDelete(int id)
+        {
+            var result = await _optionService.ToggleDeleteAsync(id, CurrentUserId);
+            if (result == null) return Forbid("Option does not exist or you do not have permission.");
+            return Ok(result);
         }
     }
 }

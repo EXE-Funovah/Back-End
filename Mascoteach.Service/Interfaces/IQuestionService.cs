@@ -1,4 +1,4 @@
-﻿using Mascoteach.Service.DTOs;
+using Mascoteach.Service.DTOs;
 
 namespace Mascoteach.Service.Interfaces
 {
@@ -6,9 +6,9 @@ namespace Mascoteach.Service.Interfaces
     {
         Task<IEnumerable<QuestionResponse>> GetByQuizIdAsync(int quizId);
         Task<QuestionResponse?> GetByIdAsync(int id);
-        Task<QuestionResponse> CreateAsync(QuestionCreateRequest request);
-        Task<bool> UpdateAsync(int id, QuestionUpdateRequest request);
-        Task<bool> DeleteAsync(int id);
-        Task<QuestionResponse?> ToggleDeleteAsync(int id);
+        Task<QuestionResponse> CreateAsync(int teacherId, QuestionCreateRequest request);
+        Task<bool> UpdateAsync(int id, int teacherId, QuestionUpdateRequest request);
+        Task<bool> DeleteAsync(int id, int teacherId);
+        Task<QuestionResponse?> ToggleDeleteAsync(int id, int teacherId);
     }
 }

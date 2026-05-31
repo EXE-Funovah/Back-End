@@ -115,7 +115,7 @@ public class DocumentService : IDocumentService
     public async Task<DocumentResponse?> ToggleDeleteAsync(int id, int teacherId)
     {
         // Bypass soft-delete filter to find any doc (including already-deleted ones)
-        var doc = await _documentRepository.GetAllIncludingDeletedAsync(id);
+        var doc = await _documentRepository.GetByIdIncludingDeletedAsync(id);
         if (doc == null || doc.TeacherId != teacherId) return null;
         doc.IsDeleted = !doc.IsDeleted;
         _documentRepository.Update(doc);

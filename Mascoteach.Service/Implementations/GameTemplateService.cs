@@ -61,7 +61,7 @@ namespace Mascoteach.Service.Implementations
 
         public async Task<GameTemplateResponse?> ToggleDeleteAsync(int id)
         {
-            var template = await _gameTemplateRepository.GetAllIncludingDeletedAsync(id);
+            var template = await _gameTemplateRepository.GetByIdIncludingDeletedAsync(id);
             if (template == null) return null;
 
             template.IsDeleted = !template.IsDeleted;

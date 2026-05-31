@@ -16,5 +16,10 @@ namespace Mascoteach.Data.Repositories
                 .Where(o => o.QuestionId == questionId && o.IsDeleted == false)
                 .ToListAsync();
         }
+
+        public async Task<Option?> GetByIdIncludingDeletedAsync(int id)
+        {
+            return await _context.Options.FindAsync(id);
+        }
     }
 }

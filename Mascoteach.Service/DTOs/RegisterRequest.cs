@@ -18,7 +18,7 @@ namespace Mascoteach.Service.DTOs
 
         [Required(ErrorMessage = "Password is required.")]
         public string Password { get; set; } = null!;
-        // Role phải khớp với CHECK constraint trong SQL: 'Teacher', 'Parent', 'Student'
+        [Required(ErrorMessage = "Role is required.")]
         public string Role { get; set; } = null!;
     }
 }

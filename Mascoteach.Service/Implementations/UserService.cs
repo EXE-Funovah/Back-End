@@ -60,7 +60,7 @@ namespace Mascoteach.Service.Implementations
 
         public async Task<UserResponse?> ToggleDeleteAsync(int id)
         {
-            var user = await _userRepository.GetAllIncludingDeletedAsync(id);
+            var user = await _userRepository.GetByIdIncludingDeletedAsync(id);
             if (user == null) return null;
 
             user.IsDeleted = !user.IsDeleted;
