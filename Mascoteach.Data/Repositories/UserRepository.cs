@@ -16,7 +16,7 @@ namespace Mascoteach.Data.Repositories
                 .FirstOrDefaultAsync(u => u.Email == email && u.IsDeleted == false);
         }
 
-        public async Task<User?> GetAllIncludingDeletedAsync(int id)
+        public async Task<User?> GetByIdIncludingDeletedAsync(int id)
         {
             return await _context.Users.FindAsync(id);
         }

@@ -10,7 +10,7 @@ namespace Mascoteach.Data.Repositories
         {
         }
 
-        public async Task<GameTemplate?> GetAllIncludingDeletedAsync(int id)
+        public async Task<GameTemplate?> GetByIdIncludingDeletedAsync(int id)
         {
             return await _context.GameTemplates.FindAsync(id);
         }

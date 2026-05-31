@@ -58,10 +58,10 @@ namespace Mascoteach.Service.Implementations
             return _mapper.Map<LiveSessionResponse>(session);
         }
 
-        public async Task<bool> UpdateAsync(int id, LiveSessionUpdateRequest request)
+        public async Task<bool> UpdateAsync(int id, int teacherId, LiveSessionUpdateRequest request)
         {
             var session = await _liveSessionRepository.GetByIdAsync(id);
-            if (session == null) return false;
+            if (session == null || session.TeacherId != teacherId) return false;
 
             session.Status = request.Status;
 
@@ -69,24 +69,34 @@ namespace Mascoteach.Service.Implementations
             return await _liveSessionRepository.SaveChangesAsync() > 0;
         }
 
-        public async Task<bool> DeleteAsync(int id)
+        public async Task<bool> DeleteAsync(int id, int teacherId)
         {
             var session = await _liveSessionRepository.GetByIdAsync(id);
-            if (session == null) return false;
+            if (session == null || session.TeacherId != teacherId) return false;
 
             _liveSessionRepository.Delete(session);
             return await _liveSessionRepository.SaveChangesAsync() > 0;
         }
 
-        public async Task<LiveSessionResponse?> ToggleDeleteAsync(int id)
+        public async Task<LiveSessionResponse?> ToggleDeleteAsync(int id, int teacherId)
         {
-            var session = await _liveSessionRepository.GetAllIncludingDeletedAsync(id);
-            if (session == null) return null;
+            var session = await _liveSessionRepository.GetByIdIncludingDeletedAsync(id);
+            if (session == null || session.TeacherId != teacherId) return null;
 
             session.IsDeleted = !session.IsDeleted;
             _liveSessionRepository.Update(session);
             await _liveSessionRepository.SaveChangesAsync();
             return _mapper.Map<LiveSessionResponse>(session);
+        }
+
+        public async Task<bool> UpdateStatusByPinAsync(string gamePin, string status)
+        {
+            var session = await _liveSessionRepository.GetByPinAsync(gamePin);
+            if (session == null) return false;
+
+            session.Status = status;
+            _liveSessionRepository.Update(session);
+            return await _liveSessionRepository.SaveChangesAsync() > 0;
         }
 
         private async Task<string> GenerateUniquePinAsync()

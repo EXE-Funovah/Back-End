@@ -4,6 +4,6 @@ namespace Mascoteach.Data.Interfaces
 {
     public interface IGameTemplateRepository : IGenericRepository<GameTemplate>
     {
-        Task<GameTemplate?> GetAllIncludingDeletedAsync(int id);
+        Task<GameTemplate?> GetByIdIncludingDeletedAsync(int id);
     }
 }

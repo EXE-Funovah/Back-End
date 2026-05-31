@@ -6,8 +6,9 @@ namespace Mascoteach.Service.Interfaces
     {
         Task<IEnumerable<OptionResponse>> GetByQuestionIdAsync(int questionId);
         Task<OptionResponse?> GetByIdAsync(int id);
-        Task<OptionResponse> CreateAsync(OptionCreateRequest request);
-        Task<bool> UpdateAsync(int id, OptionUpdateRequest request);
-        Task<bool> DeleteAsync(int id);
+        Task<OptionResponse> CreateAsync(int teacherId, OptionCreateRequest request);
+        Task<bool> UpdateAsync(int id, int teacherId, OptionUpdateRequest request);
+        Task<bool> DeleteAsync(int id, int teacherId);
+        Task<OptionResponse?> ToggleDeleteAsync(int id, int teacherId);
     }
 }

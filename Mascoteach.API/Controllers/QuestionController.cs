@@ -37,7 +37,7 @@ namespace Mascoteach.API.Controllers
         [HttpPost]
         public async Task<IActionResult> Create([FromBody] QuestionCreateRequest request)
         {
-            var result = await _questionService.CreateAsync(request);
+            var result = await _questionService.CreateAsync(CurrentUserId, request);
             return Ok(result);
         }
 
@@ -45,8 +45,8 @@ namespace Mascoteach.API.Controllers
         [HttpPut("{id}")]
         public async Task<IActionResult> Update(int id, [FromBody] QuestionUpdateRequest request)
         {
-            var success = await _questionService.UpdateAsync(id, request);
-            if (!success) return NotFound("Question does not exist.");
+            var success = await _questionService.UpdateAsync(id, CurrentUserId, request);
+            if (!success) return Forbid("Question does not exist or you do not have permission.");
             return Ok("Update successfully.");
         }
 
@@ -54,8 +54,8 @@ namespace Mascoteach.API.Controllers
         [HttpDelete("{id}")]
         public async Task<IActionResult> Delete(int id)
         {
-            var success = await _questionService.DeleteAsync(id);
-            if (!success) return NotFound("Question does not exist.");
+            var success = await _questionService.DeleteAsync(id, CurrentUserId);
+            if (!success) return Forbid("Question does not exist or you do not have permission.");
             return NoContent();
         }
 
@@ -63,8 +63,8 @@ namespace Mascoteach.API.Controllers
         [HttpPatch("{id}/toggle-delete")]
         public async Task<IActionResult> ToggleDelete(int id)
         {
-            var result = await _questionService.ToggleDeleteAsync(id);
-            if (result == null) return NotFound("Question does not exist.");
+            var result = await _questionService.ToggleDeleteAsync(id, CurrentUserId);
+            if (result == null) return Forbid("Question does not exist or you do not have permission.");
             return Ok(result);
         }
     }

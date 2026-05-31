@@ -23,7 +23,7 @@ namespace Mascoteach.Data.Repositories
                         .ToListAsync();
         }
 
-        public async Task<Document?> GetAllIncludingDeletedAsync(int id)
+        public async Task<Document?> GetByIdIncludingDeletedAsync(int id)
         {
             return await _context.Documents.FindAsync(id);
         }

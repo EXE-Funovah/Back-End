@@ -5,5 +5,6 @@ namespace Mascoteach.Data.Interfaces
     public interface IOptionRepository : IGenericRepository<Option>
     {
         Task<IEnumerable<Option>> GetByQuestionIdAsync(int questionId);
+        Task<Option?> GetByIdIncludingDeletedAsync(int id);
     }
 }

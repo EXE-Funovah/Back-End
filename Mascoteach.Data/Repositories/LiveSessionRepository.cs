@@ -23,7 +23,7 @@ namespace Mascoteach.Data.Repositories
                 .ToListAsync();
         }
 
-        public async Task<LiveSession?> GetAllIncludingDeletedAsync(int id)
+        public async Task<LiveSession?> GetByIdIncludingDeletedAsync(int id)
         {
             return await _context.LiveSessions.FindAsync(id);
         }

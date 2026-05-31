@@ -1,6 +1,9 @@
-﻿using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Mvc;
 using Mascoteach.Service.Interfaces;
 using Mascoteach.Service.DTOs;
+
+namespace Mascoteach.API.Controllers;
 
 [ApiController]
 [Route("api/[controller]")]
@@ -10,6 +13,7 @@ public class AuthController : ControllerBase
 
     public AuthController(IAuthService authService) => _authService = authService;
 
+    [AllowAnonymous]
     [HttpPost("register")]
     public async Task<IActionResult> Register(RegisterRequest request)
     {
@@ -18,6 +22,7 @@ public class AuthController : ControllerBase
         return Ok(result);
     }
 
+    [AllowAnonymous]
     [HttpPost("login")]
     public async Task<IActionResult> Login(LoginRequest request)
     {

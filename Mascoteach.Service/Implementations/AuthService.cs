@@ -30,8 +30,8 @@ namespace Mascoteach.Service.Implementations
        
         public async Task<AuthResponse?> RegisterAsync(RegisterRequest request)
         {
-            var users = await _userRepository.GetAllAsync();
-            if (users.Any(u => u.Email == request.Email)) return null;
+            var existingUser = await _userRepository.GetByEmailAsync(request.Email);
+            if (existingUser != null) return null;
 
             // Mã hóa mật khẩu thô thành chuỗi Hash
             string hashedPassword = BCrypt.Net.BCrypt.HashPassword(request.Password);
