@@ -18,6 +18,7 @@ using System.Text;
 var builder = WebApplication.CreateBuilder(args);
 // Deploy test
 // CI/CD redeploy test
+// fix port
 // Database Context 
 var connectionString = builder.Configuration.GetConnectionString("DefaultConnection");
 
@@ -153,12 +154,9 @@ var app = builder.Build();
 // Configure the HTTP request pipeline.
 if (app.Environment.IsDevelopment())
 {
-    
+    app.UseSwagger();
+    app.UseSwaggerUI();
 }
-
-app.UseSwagger();
-
-app.UseSwaggerUI();
 
 app.UseHttpsRedirection();
 
