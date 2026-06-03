@@ -20,6 +20,15 @@ jobs:
       APP_PORT: ${{ github.ref_name == 'develop' && secrets.DEV_APP_PORT || secrets.APP_PORT }}
       CONNECTIONSTRING: ${{ github.ref_name == 'develop' && secrets.DEV_CONNECTIONSTRING || secrets.CONNECTIONSTRING }}
       ASPNETCORE_ENVIRONMENT: ${{ github.ref_name == 'develop' && 'Development' || 'Production' }}
+      GOOGLE_CLIENT_ID: ${{ github.ref_name == 'develop' && secrets.DEV_GOOGLE_CLIENT_ID || secrets.GOOGLE_CLIENT_ID }}
+      FRONTEND_RESET_PASSWORD_URL: ${{ github.ref_name == 'develop' && secrets.DEV_FRONTEND_RESET_PASSWORD_URL || secrets.FRONTEND_RESET_PASSWORD_URL }}
+      AUTH_PASSWORD_RESET_TOKEN_MINUTES: ${{ github.ref_name == 'develop' && secrets.DEV_AUTH_PASSWORD_RESET_TOKEN_MINUTES || secrets.AUTH_PASSWORD_RESET_TOKEN_MINUTES }}
+      EMAIL_SMTP_HOST: ${{ github.ref_name == 'develop' && secrets.DEV_EMAIL_SMTP_HOST || secrets.EMAIL_SMTP_HOST }}
+      EMAIL_SMTP_PORT: ${{ github.ref_name == 'develop' && secrets.DEV_EMAIL_SMTP_PORT || secrets.EMAIL_SMTP_PORT }}
+      EMAIL_USERNAME: ${{ github.ref_name == 'develop' && secrets.DEV_EMAIL_USERNAME || secrets.EMAIL_USERNAME }}
+      EMAIL_PASSWORD: ${{ github.ref_name == 'develop' && secrets.DEV_EMAIL_PASSWORD || secrets.EMAIL_PASSWORD }}
+      EMAIL_FROM_EMAIL: ${{ github.ref_name == 'develop' && secrets.DEV_EMAIL_FROM_EMAIL || secrets.EMAIL_FROM_EMAIL }}
+      EMAIL_FROM_NAME: ${{ github.ref_name == 'develop' && secrets.DEV_EMAIL_FROM_NAME || secrets.EMAIL_FROM_NAME }}
 
     steps:
       - name: Checkout code
@@ -51,4 +60,13 @@ jobs:
             -e AWS__Region="${{ secrets.AWS_REGION }}" \
             -e AWS__BucketName="${{ secrets.AWS_BUCKETNAME }}" \
             -e AWS__PRESIGNEDURLEXPIRATIONMINUTES="${{ secrets.AWS_PRESIGNEDURLEXPIRATIONMINUTES }}" \
+            -e Google__ClientId="$GOOGLE_CLIENT_ID" \
+            -e Frontend__ResetPasswordUrl="$FRONTEND_RESET_PASSWORD_URL" \
+            -e Auth__PasswordResetTokenMinutes="$AUTH_PASSWORD_RESET_TOKEN_MINUTES" \
+            -e Email__SmtpHost="$EMAIL_SMTP_HOST" \
+            -e Email__SmtpPort="$EMAIL_SMTP_PORT" \
+            -e Email__Username="$EMAIL_USERNAME" \
+            -e Email__Password="$EMAIL_PASSWORD" \
+            -e Email__FromEmail="$EMAIL_FROM_EMAIL" \
+            -e Email__FromName="$EMAIL_FROM_NAME" \
             -p $DOCKER_PORT:$APP_PORT $IMAGE_NAME:v1

@@ -53,6 +53,8 @@ builder.Services.AddScoped<IGameTemplateService, GameTemplateService>();
 builder.Services.AddScoped<ILiveSessionService, LiveSessionService>();
 builder.Services.AddScoped<ISessionParticipantService, SessionParticipantService>();
 builder.Services.AddScoped<IS3Service, S3Service>();
+builder.Services.AddScoped<IEmailService, EmailService>();
+builder.Services.AddScoped<IGoogleTokenValidator, GoogleTokenValidator>();
 builder.Services.AddSignalR(); // signalR
 builder.Services.AddMemoryCache(); 
 

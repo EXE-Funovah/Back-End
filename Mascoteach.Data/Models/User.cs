@@ -11,7 +11,7 @@ public partial class User
 
     public string Email { get; set; } = null!;
 
-    public string PasswordHash { get; set; } = null!;
+    public string? PasswordHash { get; set; }
 
     public string Role { get; set; } = null!;
 
@@ -22,6 +22,14 @@ public partial class User
     public DateTime? CreatedAt { get; set; }
 
     public bool IsDeleted { get; set; }
+
+    public string? GoogleSubject { get; set; }
+
+    public string? ResetTokenHash { get; set; }
+
+    public DateTime? ResetTokenExpiresAt { get; set; }
+
+    public string? Authenticator { get; set; }
 
     public virtual ICollection<Document> Documents { get; set; } = new List<Document>();
 

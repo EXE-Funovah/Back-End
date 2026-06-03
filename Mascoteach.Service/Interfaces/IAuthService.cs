@@ -12,5 +12,8 @@ namespace Mascoteach.Service.Interfaces
         // register and login, provide token to DTO
         Task<AuthResponse?> LoginAsync(LoginRequest request);
         Task<AuthResponse?> RegisterAsync(RegisterRequest request);
+        Task<AuthResponse?> GoogleLoginAsync(GoogleLoginRequest request);
+        Task ForgotPasswordAsync(ForgotPasswordRequest request);
+        Task<bool> ResetPasswordAsync(ResetPasswordRequest request);
     }
 }

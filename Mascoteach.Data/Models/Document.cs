@@ -15,6 +15,8 @@ public partial class Document
 
     public bool IsDeleted { get; set; }
 
+    public string? FileName { get; set; }
+
     public virtual ICollection<Quiz> Quizzes { get; set; } = new List<Quiz>();
 
     public virtual User Teacher { get; set; } = null!;
