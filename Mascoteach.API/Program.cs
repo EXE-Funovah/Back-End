@@ -20,6 +20,7 @@ var builder = WebApplication.CreateBuilder(args);
 // CI/CD redeploy test
 // fix port
 // redeploy db 
+// redeploy dev
 // Database Context 
 var connectionString = builder.Configuration.GetConnectionString("DefaultConnection");
 
