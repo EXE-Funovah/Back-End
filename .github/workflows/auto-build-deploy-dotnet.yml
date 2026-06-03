@@ -19,6 +19,7 @@ jobs:
       DOCKER_PORT: ${{ github.ref_name == 'develop' && secrets.DEV_DOCKER_PORT || secrets.DOCKER_PORT }}
       APP_PORT: ${{ github.ref_name == 'develop' && secrets.DEV_APP_PORT || secrets.APP_PORT }}
       CONNECTIONSTRING: ${{ github.ref_name == 'develop' && secrets.DEV_CONNECTIONSTRING || secrets.CONNECTIONSTRING }}
+      ASPNETCORE_ENVIRONMENT: ${{ github.ref_name == 'develop' && 'Development' || 'Production' }}
 
     steps:
       - name: Checkout code
@@ -44,6 +45,7 @@ jobs:
             --network mascoteach-network \
             --restart unless-stopped \
             -e ConnectionStrings__DefaultConnection="$CONNECTIONSTRING" \
+            -e ASPNETCORE_ENVIRONMENT="$ASPNETCORE_ENVIRONMENT" \
             -e AWS__AccessKey="${{ secrets.AWS_ACCESS_KEY }}" \
             -e AWS__SecretKey="${{ secrets.AWS_SECRETKEY }}" \
             -e AWS__Region="${{ secrets.AWS_REGION }}" \
