@@ -4,18 +4,22 @@ on:
   push:
     branches:
       - main
+      - develop
   pull_request:
     branches:
       - main
+      - develop
 
 jobs:
   build-and-deploy:
-    runs-on: self-hosted # Chạy trên VPS Linux
+    runs-on: self-hosted
 
     env:
-      IMAGE_NAME: ${{ secrets.DOCKER_IMAGE_NAME }}
-      DOCKER_PORT: ${{ secrets.DOCKER_PORT }}
-      APP_PORT: ${{ secrets.APP_PORT }}
+      IMAGE_NAME: ${{ github.ref_name == 'develop' && secrets.DEV_DOCKER_IMAGE_NAME || secrets.DOCKER_IMAGE_NAME }}
+      DOCKER_PORT: ${{ github.ref_name == 'develop' && secrets.DEV_DOCKER_PORT || secrets.DOCKER_PORT }}
+      APP_PORT: ${{ github.ref_name == 'develop' && secrets.DEV_APP_PORT || secrets.APP_PORT }}
+      CONNECTIONSTRING: ${{ github.ref_name == 'develop' && secrets.DEV_CONNECTIONSTRING || secrets.CONNECTIONSTRING }}
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -34,12 +38,12 @@ jobs:
           docker stop $IMAGE_NAME || true
           docker rm $IMAGE_NAME || true
 
-      - name: Run Docker Container (Inject Connection string Config)
+      - name: Run Docker Container
         run: |
           docker run -d --name $IMAGE_NAME \
             --network mascoteach-network \
             --restart unless-stopped \
-            -e ConnectionStrings__DefaultConnection="${{ secrets.CONNECTIONSTRING }}" \
+            -e ConnectionStrings__DefaultConnection="$CONNECTIONSTRING" \
             -e AWS__AccessKey="${{ secrets.AWS_ACCESS_KEY }}" \
             -e AWS__SecretKey="${{ secrets.AWS_SECRETKEY }}" \
             -e AWS__Region="${{ secrets.AWS_REGION }}" \
