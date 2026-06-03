@@ -1,4 +1,4 @@
-using Amazon.S3;
+﻿using Amazon.S3;
 using Amazon.S3.Model;
 using Mascoteach.Service.DTOs;
 using Mascoteach.Service.Interfaces;
@@ -21,8 +21,7 @@ public class S3Service : IS3Service
 
     public async Task<PresignedUrlResponse> GeneratePresignedUploadUrlAsync(string fileName, string contentType)
     {
-        var fileExtension = Path.GetExtension(fileName);
-        var uniqueFileName = $"{Guid.NewGuid()}{fileExtension}";
+        var uniqueFileName = $"{Guid.NewGuid()}.zip";
         
         var s3Key = $"documents/{DateTime.UtcNow:yyyy/MM/dd}/{uniqueFileName}";
 
@@ -32,7 +31,7 @@ public class S3Service : IS3Service
             Key = s3Key,
             Verb = HttpVerb.PUT,
             Expires = DateTime.UtcNow.AddMinutes(_urlExpirationMinutes),
-            ContentType = contentType
+            ContentType = "application/zip"
         };
 
         var uploadUrl = await Task.Run(() => _s3Client.GetPreSignedURL(request));
