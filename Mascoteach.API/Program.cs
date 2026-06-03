@@ -94,6 +94,7 @@ builder.Services.AddCors(options =>
                 "http://127.0.0.1:5500",     
                 "https://127.0.0.1:5500",
                 "https://mascoteach.com",
+                "https://dev.mascoteach.com",
                 "https://ai.mascoteach.com"
               )
               .AllowAnyMethod()
