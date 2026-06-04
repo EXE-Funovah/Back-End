@@ -88,6 +88,8 @@ When adding role restrictions:
 - Store only `ResetTokenHash`, never the raw reset token.
 - `ResetTokenExpiresAt` controls expiry; default config is `Auth:PasswordResetTokenMinutes`.
 - Send reset links using `Frontend:ResetPasswordUrl` plus `?token=...`.
+- Password reset emails should be Vietnamese HTML emails with a button/anchor, plus text fallback.
+- Do not display the raw reset token as visible body text; keep it inside the reset link `href`.
 - Skip reset email for Google-only accounts.
 - `POST /api/Auth/reset-password` must verify token hash, expiry, and password confirmation.
 - The new password must be different from the current password when a current BCrypt hash exists.
