@@ -6,10 +6,6 @@ namespace Mascoteach.Data.Models;
 
 public partial class MascoteachDbContext : DbContext
 {
-    public MascoteachDbContext()
-    {
-    }
-
     public MascoteachDbContext(DbContextOptions<MascoteachDbContext> options)
         : base(options)
     {
@@ -31,15 +27,16 @@ public partial class MascoteachDbContext : DbContext
 
     public virtual DbSet<User> Users { get; set; }
 
-    
-
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         modelBuilder.Entity<Document>(entity =>
         {
-            entity.HasKey(e => e.Id).HasName("PK__Document__3213E83F06A6C57F");
+            entity.HasKey(e => e.Id).HasName("PK__Document__3213E83F80515809");
 
             entity.Property(e => e.Id).HasColumnName("id");
+            entity.Property(e => e.FileName)
+                .HasMaxLength(255)
+                .HasColumnName("file_name");
             entity.Property(e => e.FileUrl)
                 .IsUnicode(false)
                 .HasColumnName("file_url");
@@ -58,7 +55,7 @@ public partial class MascoteachDbContext : DbContext
 
         modelBuilder.Entity<GameTemplate>(entity =>
         {
-            entity.HasKey(e => e.Id).HasName("PK__Game_Tem__3213E83F4C166024");
+            entity.HasKey(e => e.Id).HasName("PK__Game_Tem__3213E83F5C2E8953");
 
             entity.ToTable("Game_Templates");
 
@@ -77,11 +74,11 @@ public partial class MascoteachDbContext : DbContext
 
         modelBuilder.Entity<LiveSession>(entity =>
         {
-            entity.HasKey(e => e.Id).HasName("PK__Live_Ses__3213E83F35A4B00F");
+            entity.HasKey(e => e.Id).HasName("PK__Live_Ses__3213E83F21E5C4D5");
 
             entity.ToTable("Live_Sessions");
 
-            entity.HasIndex(e => e.GamePin, "UQ__Live_Ses__BBB79854AE64FD58").IsUnique();
+            entity.HasIndex(e => e.GamePin, "UQ__Live_Ses__BBB79854C8CEC8E0").IsUnique();
 
             entity.Property(e => e.Id).HasColumnName("id");
             entity.Property(e => e.CreatedAt)
@@ -119,7 +116,7 @@ public partial class MascoteachDbContext : DbContext
 
         modelBuilder.Entity<Option>(entity =>
         {
-            entity.HasKey(e => e.Id).HasName("PK__Options__3213E83F2C2BEC40");
+            entity.HasKey(e => e.Id).HasName("PK__Options__3213E83F65D587A0");
 
             entity.Property(e => e.Id).HasColumnName("id");
             entity.Property(e => e.IsCorrect).HasColumnName("is_correct");
@@ -135,7 +132,7 @@ public partial class MascoteachDbContext : DbContext
 
         modelBuilder.Entity<Question>(entity =>
         {
-            entity.HasKey(e => e.Id).HasName("PK__Question__3213E83F0BA585BF");
+            entity.HasKey(e => e.Id).HasName("PK__Question__3213E83F183DEF03");
 
             entity.Property(e => e.Id).HasColumnName("id");
             entity.Property(e => e.IsDeleted).HasColumnName("is_deleted");
@@ -155,7 +152,7 @@ public partial class MascoteachDbContext : DbContext
 
         modelBuilder.Entity<Quiz>(entity =>
         {
-            entity.HasKey(e => e.Id).HasName("PK__Quizzes__3213E83F70093524");
+            entity.HasKey(e => e.Id).HasName("PK__Quizzes__3213E83FB6D49418");
 
             entity.Property(e => e.Id).HasColumnName("id");
             entity.Property(e => e.CreatedAt)
@@ -180,7 +177,7 @@ public partial class MascoteachDbContext : DbContext
 
         modelBuilder.Entity<SessionParticipant>(entity =>
         {
-            entity.HasKey(e => e.Id).HasName("PK__Session___3213E83F15FAEA13");
+            entity.HasKey(e => e.Id).HasName("PK__Session___3213E83F637607BF");
 
             entity.ToTable("Session_Participants");
 
@@ -202,11 +199,16 @@ public partial class MascoteachDbContext : DbContext
 
         modelBuilder.Entity<User>(entity =>
         {
-            entity.HasKey(e => e.Id).HasName("PK__Users__3213E83F8238BA73");
+            entity.HasKey(e => e.Id).HasName("PK__Users__3213E83F8F516609");
 
-            entity.HasIndex(e => e.Email, "UQ__Users__AB6E61644394921A").IsUnique();
+            entity.HasIndex(e => e.Email, "UQ__Users__AB6E616426BBBC00").IsUnique();
 
             entity.Property(e => e.Id).HasColumnName("id");
+            entity.Property(e => e.Authenticator)
+                .HasMaxLength(50)
+                .IsUnicode(false)
+                .HasDefaultValue("Local")
+                .HasColumnName("authenticator");
             entity.Property(e => e.CreatedAt)
                 .HasDefaultValueSql("(getdate())")
                 .HasColumnType("datetime")
@@ -220,13 +222,23 @@ public partial class MascoteachDbContext : DbContext
                 .HasColumnName("email");
             entity.Property(e => e.FullName)
                 .HasMaxLength(255)
-                .IsUnicode(true)
                 .HasColumnName("full_name");
+            entity.Property(e => e.GoogleSubject)
+                .HasMaxLength(255)
+                .IsUnicode(false)
+                .HasColumnName("google_subject");
             entity.Property(e => e.IsDeleted).HasColumnName("is_deleted");
             entity.Property(e => e.PasswordHash)
                 .HasMaxLength(255)
                 .IsUnicode(false)
                 .HasColumnName("password_hash");
+            entity.Property(e => e.ResetTokenExpiresAt)
+                .HasColumnType("datetime")
+                .HasColumnName("reset_token_expires_at");
+            entity.Property(e => e.ResetTokenHash)
+                .HasMaxLength(255)
+                .IsUnicode(false)
+                .HasColumnName("reset_token_hash");
             entity.Property(e => e.Role)
                 .HasMaxLength(50)
                 .IsUnicode(false)

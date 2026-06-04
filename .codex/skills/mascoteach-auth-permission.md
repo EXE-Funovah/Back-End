@@ -3,7 +3,8 @@ description: |
   Use this skill when working on Mascoteach authentication, authorization, JWT claims, user identity, roles,
   ownership checks, CurrentUserId, BaseController, login/register, BCrypt password handling, or [Authorize] /
   [AllowAnonymous] endpoint access. Triggers: "auth", "permission", "role", "JWT", "login", "register",
-  "CurrentUserId", "only owner", "teacher only", "student join".
+  "Google login", "forgot password", "reset password", "Gmail SMTP", "CurrentUserId", "only owner",
+  "teacher only", "student join".
 ---
 
 # Mascoteach - Auth And Permission Skill
@@ -13,6 +14,8 @@ description: |
 - Authentication is JWT Bearer, configured in `Mascoteach.API/Program.cs`.
 - `AuthService` hashes passwords with `BCrypt.Net.BCrypt.HashPassword`.
 - Login verifies passwords with `BCrypt.Net.BCrypt.Verify`.
+- Google login verifies Google ID tokens through `IGoogleTokenValidator`.
+- Forgot/reset password sends reset links through `IEmailService`.
 - JWT claims include:
   - `"FullName"`
   - `ClaimTypes.Email`
@@ -27,6 +30,9 @@ description: |
 - Use `[AllowAnonymous]` only for flows that must work without login:
   - `AuthController.Register`
   - `AuthController.Login`
+  - `AuthController.GoogleLogin`
+  - `AuthController.ForgotPassword`
+  - `AuthController.ResetPassword`
   - student live-session lookup by PIN
   - student session-participant creation
 - If an endpoint creates teacher-owned data, set owner fields from `CurrentUserId`, not request body.
@@ -61,6 +67,46 @@ When adding role restrictions:
 - Check email uniqueness through `IUserRepository`.
 - Soft-deleted users must not be able to login.
 - Default subscription tier is currently `Freemium`.
+- Local users have `Authenticator = "Local"` and a BCrypt `PasswordHash`.
+- Google-only users have `Authenticator = "Google"`, `PasswordHash = null`, and `GoogleSubject` set from Google `sub`.
+- If a Google-only user attempts email/password login, return a clear message telling them to sign in with Google.
+- Google-created users default to role `Teacher`.
+
+## Google login rules
+
+- Frontend sends Google `credential` / ID token to `POST /api/Auth/google-login`.
+- Backend must verify the token server-side with configured `Google:ClientId`.
+- Use Google `sub` as `User.GoogleSubject`; do not trust email/name from the request body.
+- Match existing users by `GoogleSubject` first, then email for linking.
+- If an existing local user logs in with Google, set `GoogleSubject` and use `Authenticator = "Both"`.
+- Return normal Mascoteach `AuthResponse` with the internal JWT after successful Google verification.
+
+## Forgot/reset password rules
+
+- `POST /api/Auth/forgot-password` returns the same generic success message whether the email exists or not.
+- Do not return reset tokens in API responses.
+- Store only `ResetTokenHash`, never the raw reset token.
+- `ResetTokenExpiresAt` controls expiry; default config is `Auth:PasswordResetTokenMinutes`.
+- Send reset links using `Frontend:ResetPasswordUrl` plus `?token=...`.
+- Skip reset email for Google-only accounts.
+- `POST /api/Auth/reset-password` must verify token hash, expiry, and password confirmation.
+- The new password must be different from the current password when a current BCrypt hash exists.
+- On successful reset, BCrypt hash the new password and clear `ResetTokenHash` and `ResetTokenExpiresAt`.
+- If a Google account later sets/resets a password, use `Authenticator = "Both"`.
+
+## Auth configuration
+
+- Local config lives in `appsettings.Development.json`; do not commit secrets.
+- Deploy config should come from environment variables / GitHub Secrets:
+  - `Google__ClientId`
+  - `Frontend__ResetPasswordUrl`
+  - `Auth__PasswordResetTokenMinutes`
+  - `Email__SmtpHost`
+  - `Email__SmtpPort`
+  - `Email__Username`
+  - `Email__Password`
+  - `Email__FromEmail`
+  - `Email__FromName`
 
 ## Validation checklist
 
@@ -69,4 +115,8 @@ When adding role restrictions:
 - Current user id comes from JWT, not the client body.
 - Owner-scoped operations cannot update/delete another teacher's resource.
 - Password handling remains BCrypt-based.
+- Google tokens are verified with Google before issuing Mascoteach JWTs.
+- Reset tokens are hashed, expiring, and cleared after use.
+- Reset password rejects reuse of the current password.
+- Gmail/SMTP and Google settings are supplied by config, not hardcoded secrets.
 - `dotnet build EXE101-Mascoteach-Backend.sln --no-restore` succeeds.

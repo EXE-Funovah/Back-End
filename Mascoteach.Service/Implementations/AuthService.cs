@@ -9,6 +9,8 @@ using System;
 using System.Collections.Generic;
 using System.IdentityModel.Tokens.Jwt;
 using System.Linq;
+using System.Net;
+using System.Security.Cryptography;
 using System.Security.Claims;
 using System.Text;
 using System.Threading.Tasks;
@@ -20,12 +22,21 @@ namespace Mascoteach.Service.Implementations
         private readonly IUserRepository _userRepository;
         private readonly IMapper _mapper;
         private readonly IConfiguration _config;
+        private readonly IEmailService _emailService;
+        private readonly IGoogleTokenValidator _googleTokenValidator;
 
-        public AuthService(IUserRepository userRepository, IMapper mapper, IConfiguration config)
+        public AuthService(
+            IUserRepository userRepository,
+            IMapper mapper,
+            IConfiguration config,
+            IEmailService emailService,
+            IGoogleTokenValidator googleTokenValidator)
         {
             _userRepository = userRepository;
             _mapper = mapper;
             _config = config;
+            _emailService = emailService;
+            _googleTokenValidator = googleTokenValidator;
         }
        
         public async Task<AuthResponse?> RegisterAsync(RegisterRequest request)
@@ -44,7 +55,8 @@ namespace Mascoteach.Service.Implementations
                 Role = request.Role,           // 'Teacher', 'Parent', 'Student', 'Admin'
                 SubscriptionTier = "Freemium",
                 CreatedAt = DateTime.Now,
-                IsDeleted = false
+                IsDeleted = false,
+                Authenticator = "Local"
             };
 
             await _userRepository.AddAsync(newUser);
@@ -60,12 +72,128 @@ namespace Mascoteach.Service.Implementations
             var user = await _userRepository.GetByEmailAsync(request.Email);
 
             // Kiểm tra user tồn tại, chưa bị xóa, và dùng BCrypt để so sánh mật khẩu thô với Hash trong DB
-            if (user == null || user.IsDeleted || !BCrypt.Net.BCrypt.Verify(request.Password, user.PasswordHash))
+            if (user == null || user.IsDeleted)
+                return null;
+
+            if (IsGoogleOnlyUser(user))
+                throw new InvalidOperationException("This account was registered with Google. Please sign in with Google.");
+
+            if (string.IsNullOrEmpty(user.PasswordHash) || !BCrypt.Net.BCrypt.Verify(request.Password, user.PasswordHash))
                 return null;
 
             var response = _mapper.Map<AuthResponse>(user);
             response.Token = GenerateJwtToken(user);
             return response;
+        }
+
+        public async Task<AuthResponse?> GoogleLoginAsync(GoogleLoginRequest request)
+        {
+            var googleUser = await _googleTokenValidator.ValidateAsync(request.Credential);
+            if (googleUser == null || !googleUser.EmailVerified) return null;
+
+            var user = await _userRepository.GetByGoogleSubjectAsync(googleUser.Subject)
+                ?? await _userRepository.GetByEmailAsync(googleUser.Email);
+
+            if (user == null)
+            {
+                user = new User
+                {
+                    FullName = googleUser.FullName,
+                    Email = googleUser.Email,
+                    PasswordHash = null,
+                    Role = "Teacher",
+                    SubscriptionTier = "Freemium",
+                    CreatedAt = DateTime.Now,
+                    IsDeleted = false,
+                    GoogleSubject = googleUser.Subject,
+                    Authenticator = "Google"
+                };
+
+                await _userRepository.AddAsync(user);
+            }
+            else
+            {
+                user.GoogleSubject ??= googleUser.Subject;
+                user.Authenticator = string.IsNullOrEmpty(user.PasswordHash) ? "Google" : "Both";
+                _userRepository.Update(user);
+            }
+
+            await _userRepository.SaveChangesAsync();
+
+            var response = _mapper.Map<AuthResponse>(user);
+            response.Token = GenerateJwtToken(user);
+            return response;
+        }
+
+        public async Task ForgotPasswordAsync(ForgotPasswordRequest request)
+        {
+            var user = await _userRepository.GetByEmailAsync(request.Email);
+            if (user == null || user.IsDeleted || IsGoogleOnlyUser(user))
+                return;
+
+            var rawToken = GenerateResetToken();
+            user.ResetTokenHash = HashResetToken(rawToken);
+            user.ResetTokenExpiresAt = DateTime.UtcNow.AddMinutes(GetPasswordResetDurationMinutes());
+
+            _userRepository.Update(user);
+            await _userRepository.SaveChangesAsync();
+
+            var resetBaseUrl = _config["Frontend:ResetPasswordUrl"] ?? "http://localhost:5173/reset-password";
+            var resetLink = $"{resetBaseUrl}?token={WebUtility.UrlEncode(rawToken)}";
+            await _emailService.SendPasswordResetEmailAsync(user.Email, user.FullName, resetLink);
+        }
+
+        public async Task<bool> ResetPasswordAsync(ResetPasswordRequest request)
+        {
+            if (request.NewPassword != request.ConfirmPassword)
+                throw new InvalidOperationException("Confirm password does not match.");
+
+            var tokenHash = HashResetToken(request.Token);
+            var user = await _userRepository.GetByResetTokenHashAsync(tokenHash);
+            if (user == null || user.IsDeleted || user.ResetTokenExpiresAt == null)
+                return false;
+
+            if (user.ResetTokenExpiresAt <= DateTime.UtcNow)
+                return false;
+
+            if (!string.IsNullOrEmpty(user.PasswordHash) &&
+                BCrypt.Net.BCrypt.Verify(request.NewPassword, user.PasswordHash))
+                throw new InvalidOperationException("New password must be different from your current password.");
+
+            user.PasswordHash = BCrypt.Net.BCrypt.HashPassword(request.NewPassword);
+            user.ResetTokenHash = null;
+            user.ResetTokenExpiresAt = null;
+            user.Authenticator = user.Authenticator == "Google" ? "Both" : "Local";
+
+            _userRepository.Update(user);
+            return await _userRepository.SaveChangesAsync() > 0;
+        }
+
+        public static string HashResetToken(string token)
+        {
+            var bytes = SHA256.HashData(Encoding.UTF8.GetBytes(token));
+            return Convert.ToBase64String(bytes);
+        }
+
+        private static string GenerateResetToken()
+        {
+            var bytes = RandomNumberGenerator.GetBytes(32);
+            return Convert.ToBase64String(bytes)
+                .TrimEnd('=')
+                .Replace('+', '-')
+                .Replace('/', '_');
+        }
+
+        private int GetPasswordResetDurationMinutes()
+        {
+            return int.TryParse(_config["Auth:PasswordResetTokenMinutes"], out var minutes)
+                ? minutes
+                : 30;
+        }
+
+        private static bool IsGoogleOnlyUser(User user)
+        {
+            return user.Authenticator == "Google" && string.IsNullOrEmpty(user.PasswordHash);
         }
 
         private string GenerateJwtToken(Mascoteach.Data.Models.User user)

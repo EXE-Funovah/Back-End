@@ -67,6 +67,10 @@ namespace Mascoteach.API.Controllers
                 var result = await _documentService.UploadDocumentAsync(CurrentUserId, request);
                 return Ok(result);
             }
+            catch (ArgumentException ex)
+            {
+                return BadRequest(ex.Message);
+            }
             catch (InvalidOperationException ex)
             {
                 return BadRequest(ex.Message);
@@ -77,10 +81,17 @@ namespace Mascoteach.API.Controllers
         [HttpPut("{id}")]
         public async Task<IActionResult> Update(int id, [FromBody] DocumentCreateRequest request)
         {
-            // Truyền CurrentUserId vào Service để check: chỉ chủ sở hữu mới được sửa
-            var success = await _documentService.UpdateDocumentAsync(id, CurrentUserId, request.S3Key);
-            if (!success) return Forbid("Document does not exist or you do not have permission to perform this action.");
-            return Ok("Update successfully");
+            try
+            {
+                // Truyền CurrentUserId vào Service để check: chỉ chủ sở hữu mới được sửa
+                var success = await _documentService.UpdateDocumentAsync(id, CurrentUserId, request?.S3Key ?? string.Empty);
+                if (!success) return Forbid("Document does not exist or you do not have permission to perform this action.");
+                return Ok("Update successfully");
+            }
+            catch (ArgumentException ex)
+            {
+                return BadRequest(ex.Message);
+            }
         }
 
         // DELETE: api/Document/{id}

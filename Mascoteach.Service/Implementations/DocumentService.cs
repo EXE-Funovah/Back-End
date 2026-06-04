@@ -21,8 +21,19 @@ public class DocumentService : IDocumentService
         _s3Service = s3Service;
     }
 
+    private static void EnsureZipS3Key(string s3Key)
+    {
+        if (string.IsNullOrWhiteSpace(s3Key))
+            throw new ArgumentException("S3 key is required.");
+
+        if (!s3Key.EndsWith(".zip", StringComparison.OrdinalIgnoreCase))
+            throw new ArgumentException($"S3 key must end with .zip. Got: {s3Key}");
+    }
+
     public async Task<DocumentResponse> UploadDocumentAsync(int teacherId, DocumentCreateRequest request)
     {
+        EnsureZipS3Key(request.S3Key);
+
         var user = await _userRepository.GetByIdAsync(teacherId)
             ?? throw new KeyNotFoundException($"User with id {teacherId} not found.");
 
@@ -37,6 +48,7 @@ public class DocumentService : IDocumentService
             {
                 TeacherId = teacherId,
                 FileUrl = request.S3Key,
+                FileName = string.IsNullOrWhiteSpace(request.FileName) ? null : request.FileName.Trim(),
                 UploadedAt = DateTime.Now
             };
             await _documentRepository.AddAsync(newDoc);
@@ -97,6 +109,8 @@ public class DocumentService : IDocumentService
 
     public async Task<bool> UpdateDocumentAsync(int id, int teacherId, string newS3Key)
     {
+        EnsureZipS3Key(newS3Key);
+
         var doc = await _documentRepository.GetByIdAsync(id);
         if (doc == null || doc.TeacherId != teacherId) return false;
         doc.FileUrl = newS3Key;
