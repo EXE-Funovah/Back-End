@@ -156,6 +156,10 @@ namespace Mascoteach.Service.Implementations
             if (user.ResetTokenExpiresAt <= DateTime.UtcNow)
                 return false;
 
+            if (!string.IsNullOrEmpty(user.PasswordHash) &&
+                BCrypt.Net.BCrypt.Verify(request.NewPassword, user.PasswordHash))
+                throw new InvalidOperationException("New password must be different from your current password.");
+
             user.PasswordHash = BCrypt.Net.BCrypt.HashPassword(request.NewPassword);
             user.ResetTokenHash = null;
             user.ResetTokenExpiresAt = null;

@@ -214,6 +214,41 @@ public class AuthServiceTests
     }
 
     [Fact]
+    public async Task ResetPasswordAsync_NewPasswordMatchesCurrentPassword_Throws()
+    {
+        var token = "reset-token";
+        var currentHash = BCrypt.Net.BCrypt.HashPassword("old_password");
+        var user = new User
+        {
+            Id = 1,
+            Email = "local@test.com",
+            FullName = "Local User",
+            PasswordHash = currentHash,
+            Role = "Teacher",
+            SubscriptionTier = "Freemium",
+            Authenticator = "Local",
+            ResetTokenHash = AuthService.HashResetToken(token),
+            ResetTokenExpiresAt = DateTime.UtcNow.AddMinutes(15)
+        };
+        _userRepo.Setup(r => r.GetByResetTokenHashAsync(AuthService.HashResetToken(token)))
+            .ReturnsAsync(user);
+
+        var ex = await Assert.ThrowsAsync<InvalidOperationException>(
+            () => _sut.ResetPasswordAsync(new ResetPasswordRequest
+            {
+                Token = token,
+                NewPassword = "old_password",
+                ConfirmPassword = "old_password"
+            }));
+
+        Assert.Contains("different", ex.Message);
+        Assert.Equal(currentHash, user.PasswordHash);
+        Assert.NotNull(user.ResetTokenHash);
+        Assert.NotNull(user.ResetTokenExpiresAt);
+        _userRepo.Verify(r => r.SaveChangesAsync(), Times.Never);
+    }
+
+    [Fact]
     public async Task GoogleLoginAsync_NewGoogleUser_CreatesTeacherUserAndReturnsToken()
     {
         _googleTokenValidator.Setup(v => v.ValidateAsync("google-id-token"))

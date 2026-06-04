@@ -31,7 +31,7 @@ public class DocumentServiceTests
 
     private Document MakeDoc(int id = 1, int teacherId = 10) => new()
     {
-        Id = id, TeacherId = teacherId, FileUrl = "documents/2025/01/01/test.pdf"
+        Id = id, TeacherId = teacherId, FileUrl = "documents/2025/01/01/test.zip"
     };
 
     // ── UploadDocumentAsync ──
@@ -49,7 +49,7 @@ public class DocumentServiceTests
         _s3Service.Setup(s => s.GeneratePresignedDownloadUrlAsync(It.IsAny<string>()))
             .ReturnsAsync("https://presigned-url");
 
-        var result = await _sut.UploadDocumentAsync(10, new DocumentCreateRequest { S3Key = "key.pdf" });
+        var result = await _sut.UploadDocumentAsync(10, new DocumentCreateRequest { S3Key = "key.zip" });
 
         Assert.NotNull(result);
         Assert.Equal("https://presigned-url", result.PresignedUrl);
@@ -62,7 +62,7 @@ public class DocumentServiceTests
         _userRepo.Setup(r => r.GetByIdAsync(10)).ReturnsAsync(user);
 
         await Assert.ThrowsAsync<InvalidOperationException>(
-            () => _sut.UploadDocumentAsync(10, new DocumentCreateRequest { S3Key = "key.pdf" }));
+            () => _sut.UploadDocumentAsync(10, new DocumentCreateRequest { S3Key = "key.zip" }));
     }
 
     [Fact]
@@ -71,7 +71,7 @@ public class DocumentServiceTests
         _userRepo.Setup(r => r.GetByIdAsync(10)).ReturnsAsync((User?)null);
 
         await Assert.ThrowsAsync<KeyNotFoundException>(
-            () => _sut.UploadDocumentAsync(10, new DocumentCreateRequest { S3Key = "key.pdf" }));
+            () => _sut.UploadDocumentAsync(10, new DocumentCreateRequest { S3Key = "key.zip" }));
     }
 
     // ── UpdateDocumentAsync ──
@@ -82,7 +82,7 @@ public class DocumentServiceTests
         _docRepo.Setup(r => r.GetByIdAsync(1)).ReturnsAsync(MakeDoc());
         _docRepo.Setup(r => r.SaveChangesAsync()).ReturnsAsync(1);
 
-        Assert.True(await _sut.UpdateDocumentAsync(1, 10, "new-key.pdf"));
+        Assert.True(await _sut.UpdateDocumentAsync(1, 10, "new-key.zip"));
     }
 
     [Fact]
@@ -90,7 +90,7 @@ public class DocumentServiceTests
     {
         _docRepo.Setup(r => r.GetByIdAsync(1)).ReturnsAsync(MakeDoc(teacherId: 99));
 
-        Assert.False(await _sut.UpdateDocumentAsync(1, 10, "new-key.pdf"));
+        Assert.False(await _sut.UpdateDocumentAsync(1, 10, "new-key.zip"));
     }
 
     // ── DeleteDocumentAsync ──

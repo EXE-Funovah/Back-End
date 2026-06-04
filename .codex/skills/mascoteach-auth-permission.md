@@ -90,6 +90,7 @@ When adding role restrictions:
 - Send reset links using `Frontend:ResetPasswordUrl` plus `?token=...`.
 - Skip reset email for Google-only accounts.
 - `POST /api/Auth/reset-password` must verify token hash, expiry, and password confirmation.
+- The new password must be different from the current password when a current BCrypt hash exists.
 - On successful reset, BCrypt hash the new password and clear `ResetTokenHash` and `ResetTokenExpiresAt`.
 - If a Google account later sets/resets a password, use `Authenticator = "Both"`.
 
@@ -116,5 +117,6 @@ When adding role restrictions:
 - Password handling remains BCrypt-based.
 - Google tokens are verified with Google before issuing Mascoteach JWTs.
 - Reset tokens are hashed, expiring, and cleared after use.
+- Reset password rejects reuse of the current password.
 - Gmail/SMTP and Google settings are supplied by config, not hardcoded secrets.
 - `dotnet build EXE101-Mascoteach-Backend.sln --no-restore` succeeds.
