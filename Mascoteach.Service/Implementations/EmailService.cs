@@ -3,6 +3,7 @@ using MailKit.Security;
 using Microsoft.Extensions.Configuration;
 using MimeKit;
 using Mascoteach.Service.Interfaces;
+using System.Net;
 
 namespace Mascoteach.Service.Implementations;
 
@@ -27,11 +28,34 @@ public class EmailService : IEmailService
         var message = new MimeMessage();
         message.From.Add(new MailboxAddress(fromName, fromEmail));
         message.To.Add(new MailboxAddress(fullName, email));
-        message.Subject = "Reset your Mascoteach password";
-        message.Body = new TextPart("plain")
+        message.Subject = "Đặt lại mật khẩu Mascoteach";
+
+        var safeFullName = WebUtility.HtmlEncode(fullName);
+        var safeResetLink = WebUtility.HtmlEncode(resetLink);
+        var builder = new BodyBuilder
         {
-            Text = $"Hi {fullName},\n\nUse this link to reset your Mascoteach password:\n{resetLink}\n\nThis link will expire soon. If you did not request this, you can ignore this email."
+            HtmlBody = $"""
+                <!doctype html>
+                <html lang="vi">
+                <body style="margin:0;padding:0;background:#f6f8fb;font-family:Arial,sans-serif;color:#111827;">
+                  <div style="max-width:560px;margin:0 auto;padding:32px 20px;">
+                    <div style="background:#ffffff;border:1px solid #e5e7eb;border-radius:12px;padding:28px;">
+                      <h2 style="margin:0 0 16px;color:#111827;font-size:22px;">Đặt lại mật khẩu Mascoteach</h2>
+                      <p style="margin:0 0 12px;line-height:1.6;">Xin chào {safeFullName},</p>
+                      <p style="margin:0 0 20px;line-height:1.6;">Bạn vừa yêu cầu đặt lại mật khẩu cho tài khoản Mascoteach. Nhấn nút bên dưới để tiếp tục.</p>
+                      <p style="margin:0 0 24px;">
+                        <a href="{safeResetLink}" style="display:inline-block;padding:12px 20px;background:#1f2937;color:#ffffff;text-decoration:none;border-radius:8px;font-weight:700;">Đặt lại mật khẩu</a>
+                      </p>
+                      <p style="margin:0 0 12px;line-height:1.6;color:#4b5563;">Liên kết này sẽ hết hạn sau một thời gian ngắn.</p>
+                      <p style="margin:0;line-height:1.6;color:#4b5563;">Nếu bạn không yêu cầu đặt lại mật khẩu, bạn có thể bỏ qua email này.</p>
+                    </div>
+                  </div>
+                </body>
+                </html>
+                """,
+            TextBody = $"Xin chào {fullName},\n\nBạn vừa yêu cầu đặt lại mật khẩu cho tài khoản Mascoteach.\nMở liên kết sau để tiếp tục: {resetLink}\n\nLiên kết này sẽ hết hạn sau một thời gian ngắn. Nếu bạn không yêu cầu đặt lại mật khẩu, bạn có thể bỏ qua email này."
         };
+        message.Body = builder.ToMessageBody();
 
         using var client = new SmtpClient();
         await client.ConnectAsync(host, port, SecureSocketOptions.StartTls);
