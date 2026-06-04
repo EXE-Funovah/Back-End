@@ -18,9 +18,7 @@ using System.Text;
 var builder = WebApplication.CreateBuilder(args);
 // Deploy test
 // CI/CD redeploy test
-// fix port
-// redeploy db 
-// redeploy dev
+// redeploy email
 // Database Context 
 var connectionString = builder.Configuration.GetConnectionString("DefaultConnection");
 
