@@ -40,18 +40,28 @@ public class DocumentServiceTests
     public async Task UploadDocumentAsync_UnderQuota_Succeeds()
     {
         var user = MakeUser(docsProcessed: 5);
+        Document? addedDocument = null;
         _userRepo.Setup(r => r.GetByIdAsync(10)).ReturnsAsync(user);
         var mockTx = new Mock<IDbContextTransaction>();
         _docRepo.Setup(r => r.BeginTransactionAsync()).ReturnsAsync(mockTx.Object);
-        _docRepo.Setup(r => r.AddAsync(It.IsAny<Document>())).Returns(Task.CompletedTask);
+        _docRepo.Setup(r => r.AddAsync(It.IsAny<Document>()))
+            .Callback<Document>(doc => addedDocument = doc)
+            .Returns(Task.CompletedTask);
         _docRepo.Setup(r => r.SaveChangesAsync()).ReturnsAsync(1);
         _userRepo.Setup(r => r.SaveChangesAsync()).ReturnsAsync(1);
         _s3Service.Setup(s => s.GeneratePresignedDownloadUrlAsync(It.IsAny<string>()))
             .ReturnsAsync("https://presigned-url");
 
-        var result = await _sut.UploadDocumentAsync(10, new DocumentCreateRequest { S3Key = "key.zip" });
+        var result = await _sut.UploadDocumentAsync(10, new DocumentCreateRequest
+        {
+            S3Key = "key.zip",
+            FileName = "biology.pdf"
+        });
 
         Assert.NotNull(result);
+        Assert.NotNull(addedDocument);
+        Assert.Equal("biology.pdf", addedDocument!.FileName);
+        Assert.Equal("biology.pdf", result.FileName);
         Assert.Equal("https://presigned-url", result.PresignedUrl);
     }
 
@@ -72,6 +82,13 @@ public class DocumentServiceTests
 
         await Assert.ThrowsAsync<KeyNotFoundException>(
             () => _sut.UploadDocumentAsync(10, new DocumentCreateRequest { S3Key = "key.zip" }));
+    }
+
+    [Fact]
+    public async Task UploadDocumentAsync_NonZipExtension_Throws()
+    {
+        await Assert.ThrowsAsync<ArgumentException>(
+            () => _sut.UploadDocumentAsync(10, new DocumentCreateRequest { S3Key = "key.pdf" }));
     }
 
     // ── UpdateDocumentAsync ──

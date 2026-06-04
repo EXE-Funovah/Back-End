@@ -48,6 +48,7 @@ public class DocumentService : IDocumentService
             {
                 TeacherId = teacherId,
                 FileUrl = request.S3Key,
+                FileName = string.IsNullOrWhiteSpace(request.FileName) ? null : request.FileName.Trim(),
                 UploadedAt = DateTime.Now
             };
             await _documentRepository.AddAsync(newDoc);

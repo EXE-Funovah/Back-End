@@ -7,4 +7,6 @@ public class DocumentCreateRequest
 {
     [Required]
     public string S3Key { get; set; } = null!;
+
+    public string? FileName { get; set; }
 }
