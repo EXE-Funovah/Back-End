@@ -58,6 +58,23 @@ public class AuthController : ControllerBase
     }
 
     [AllowAnonymous]
+    [HttpPost("verify-email")]
+    public async Task<IActionResult> VerifyEmail(VerifyEmailRequest request)
+    {
+        var success = await _authService.VerifyEmailAsync(request);
+        if (!success) return BadRequest("Invalid or expired verification token.");
+        return Ok(new { message = "Email verified successfully. You can now sign in." });
+    }
+
+    [AllowAnonymous]
+    [HttpPost("resend-verification")]
+    public async Task<IActionResult> ResendVerification(ResendVerificationRequest request)
+    {
+        await _authService.ResendVerificationAsync(request);
+        return Ok(new { message = "If this email exists and is not verified, a verification link has been sent." });
+    }
+
+    [AllowAnonymous]
     [HttpPost("reset-password")]
     public async Task<IActionResult> ResetPassword(ResetPasswordRequest request)
     {

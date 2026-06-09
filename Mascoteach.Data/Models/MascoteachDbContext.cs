@@ -201,6 +201,8 @@ public partial class MascoteachDbContext : DbContext
         {
             entity.HasKey(e => e.Id).HasName("PK__Users__3213E83F8F516609");
 
+            entity.HasIndex(e => e.EmailVerificationTokenHash, "IX_Users_email_verification_token_hash").HasFilter("([email_verification_token_hash] IS NOT NULL)");
+
             entity.HasIndex(e => e.Email, "UQ__Users__AB6E616426BBBC00").IsUnique();
 
             entity.Property(e => e.Id).HasColumnName("id");
@@ -220,6 +222,17 @@ public partial class MascoteachDbContext : DbContext
                 .HasMaxLength(255)
                 .IsUnicode(false)
                 .HasColumnName("email");
+            entity.Property(e => e.EmailVerificationTokenExpiresAt)
+                .HasColumnType("datetime")
+                .HasColumnName("email_verification_token_expires_at");
+            entity.Property(e => e.EmailVerificationTokenHash)
+                .HasMaxLength(255)
+                .IsUnicode(false)
+                .HasColumnName("email_verification_token_hash");
+            entity.Property(e => e.EmailVerified).HasColumnName("email_verified");
+            entity.Property(e => e.EmailVerifiedAt)
+                .HasColumnType("datetime")
+                .HasColumnName("email_verified_at");
             entity.Property(e => e.FullName)
                 .HasMaxLength(255)
                 .HasColumnName("full_name");

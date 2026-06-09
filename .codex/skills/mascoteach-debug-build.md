@@ -141,13 +141,17 @@ dotnet ef dbcontext scaffold "Name=ConnectionStrings:DefaultConnection" Microsof
 
 ### Docker/GitHub Actions deploy config
 
+When changing deployment, GitHub Actions, Docker runtime config, appsettings keys, or GitHub Secrets, also read `.codex/skills/mascoteach-deployment.md`.
+
 The Dockerfile does not need changes for normal package/config additions. GitHub Actions passes runtime config through environment variables.
 
 For develop deployments, ensure these GitHub Secrets exist when auth email/Google flows are enabled:
 
 - `DEV_GOOGLE_CLIENT_ID`
 - `DEV_FRONTEND_RESET_PASSWORD_URL`
+- `DEV_FRONTEND_VERIFY_EMAIL_URL`
 - `DEV_AUTH_PASSWORD_RESET_TOKEN_MINUTES`
+- `DEV_AUTH_EMAIL_VERIFICATION_TOKEN_HOURS`
 - `DEV_EMAIL_SMTP_HOST`
 - `DEV_EMAIL_SMTP_PORT`
 - `DEV_EMAIL_USERNAME`

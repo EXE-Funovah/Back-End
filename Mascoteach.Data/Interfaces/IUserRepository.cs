@@ -7,6 +7,7 @@ namespace Mascoteach.Data.Interfaces
         Task<User?> GetByEmailAsync(string email);
         Task<User?> GetByGoogleSubjectAsync(string googleSubject);
         Task<User?> GetByResetTokenHashAsync(string resetTokenHash);
+        Task<User?> GetByEmailVerificationTokenHashAsync(string emailVerificationTokenHash);
         Task<User?> GetByIdIncludingDeletedAsync(int id);
     }
 }
