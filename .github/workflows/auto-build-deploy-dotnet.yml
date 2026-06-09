@@ -22,7 +22,9 @@ jobs:
       ASPNETCORE_ENVIRONMENT: ${{ github.ref_name == 'develop' && 'Development' || 'Production' }}
       GOOGLE_CLIENT_ID: ${{ github.ref_name == 'develop' && secrets.DEV_GOOGLE_CLIENT_ID || secrets.GOOGLE_CLIENT_ID }}
       FRONTEND_RESET_PASSWORD_URL: ${{ github.ref_name == 'develop' && secrets.DEV_FRONTEND_RESET_PASSWORD_URL || secrets.FRONTEND_RESET_PASSWORD_URL }}
+      FRONTEND_VERIFY_EMAIL_URL: ${{ github.ref_name == 'develop' && secrets.DEV_FRONTEND_VERIFY_EMAIL_URL || secrets.FRONTEND_VERIFY_EMAIL_URL }}
       AUTH_PASSWORD_RESET_TOKEN_MINUTES: ${{ github.ref_name == 'develop' && secrets.DEV_AUTH_PASSWORD_RESET_TOKEN_MINUTES || secrets.AUTH_PASSWORD_RESET_TOKEN_MINUTES }}
+      AUTH_EMAIL_VERIFICATION_TOKEN_HOURS: ${{ github.ref_name == 'develop' && secrets.DEV_AUTH_EMAIL_VERIFICATION_TOKEN_HOURS || secrets.AUTH_EMAIL_VERIFICATION_TOKEN_HOURS }}
       EMAIL_SMTP_HOST: ${{ github.ref_name == 'develop' && secrets.DEV_EMAIL_SMTP_HOST || secrets.EMAIL_SMTP_HOST }}
       EMAIL_SMTP_PORT: ${{ github.ref_name == 'develop' && secrets.DEV_EMAIL_SMTP_PORT || secrets.EMAIL_SMTP_PORT }}
       EMAIL_USERNAME: ${{ github.ref_name == 'develop' && secrets.DEV_EMAIL_USERNAME || secrets.EMAIL_USERNAME }}
@@ -62,7 +64,9 @@ jobs:
             -e AWS__PRESIGNEDURLEXPIRATIONMINUTES="${{ secrets.AWS_PRESIGNEDURLEXPIRATIONMINUTES }}" \
             -e Google__ClientId="$GOOGLE_CLIENT_ID" \
             -e Frontend__ResetPasswordUrl="$FRONTEND_RESET_PASSWORD_URL" \
+            -e Frontend__VerifyEmailUrl="$FRONTEND_VERIFY_EMAIL_URL" \
             -e Auth__PasswordResetTokenMinutes="$AUTH_PASSWORD_RESET_TOKEN_MINUTES" \
+            -e Auth__EmailVerificationTokenHours="$AUTH_EMAIL_VERIFICATION_TOKEN_HOURS" \
             -e Email__SmtpHost="$EMAIL_SMTP_HOST" \
             -e Email__SmtpPort="$EMAIL_SMTP_PORT" \
             -e Email__Username="$EMAIL_USERNAME" \
