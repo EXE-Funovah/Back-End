@@ -39,13 +39,14 @@ namespace Mascoteach.Service.Implementations
             _googleTokenValidator = googleTokenValidator;
         }
        
-        public async Task<AuthResponse?> RegisterAsync(RegisterRequest request)
+        public async Task<RegisterResponse?> RegisterAsync(RegisterRequest request)
         {
             var existingUser = await _userRepository.GetByEmailAsync(request.Email);
             if (existingUser != null) return null;
 
             // Mã hóa mật khẩu thô thành chuỗi Hash
             string hashedPassword = BCrypt.Net.BCrypt.HashPassword(request.Password);
+            var rawVerificationToken = GenerateResetToken();
 
             var newUser = new User
             {
@@ -56,15 +57,21 @@ namespace Mascoteach.Service.Implementations
                 SubscriptionTier = "Freemium",
                 CreatedAt = DateTime.Now,
                 IsDeleted = false,
-                Authenticator = "Local"
+                Authenticator = "Local",
+                EmailVerified = false,
+                EmailVerificationTokenHash = HashResetToken(rawVerificationToken),
+                EmailVerificationTokenExpiresAt = DateTime.UtcNow.AddHours(GetEmailVerificationDurationHours())
             };
 
             await _userRepository.AddAsync(newUser);
             await _userRepository.SaveChangesAsync();
 
-            var response = _mapper.Map<AuthResponse>(newUser);
-            response.Token = GenerateJwtToken(newUser);
-            return response;
+            await SendVerificationEmailAsync(newUser, rawVerificationToken);
+
+            return new RegisterResponse
+            {
+                Message = "Registration successful. Please check your email to verify your account."
+            };
         }
 
         public async Task<AuthResponse?> LoginAsync(LoginRequest request)
@@ -80,6 +87,9 @@ namespace Mascoteach.Service.Implementations
 
             if (string.IsNullOrEmpty(user.PasswordHash) || !BCrypt.Net.BCrypt.Verify(request.Password, user.PasswordHash))
                 return null;
+
+            if (!user.EmailVerified)
+                throw new InvalidOperationException("Please verify your email before signing in.");
 
             var response = _mapper.Map<AuthResponse>(user);
             response.Token = GenerateJwtToken(user);
@@ -106,7 +116,9 @@ namespace Mascoteach.Service.Implementations
                     CreatedAt = DateTime.Now,
                     IsDeleted = false,
                     GoogleSubject = googleUser.Subject,
-                    Authenticator = "Google"
+                    Authenticator = "Google",
+                    EmailVerified = true,
+                    EmailVerifiedAt = DateTime.UtcNow
                 };
 
                 await _userRepository.AddAsync(user);
@@ -115,6 +127,10 @@ namespace Mascoteach.Service.Implementations
             {
                 user.GoogleSubject ??= googleUser.Subject;
                 user.Authenticator = string.IsNullOrEmpty(user.PasswordHash) ? "Google" : "Both";
+                user.EmailVerified = true;
+                user.EmailVerifiedAt ??= DateTime.UtcNow;
+                user.EmailVerificationTokenHash = null;
+                user.EmailVerificationTokenExpiresAt = null;
                 _userRepository.Update(user);
             }
 
@@ -169,6 +185,41 @@ namespace Mascoteach.Service.Implementations
             return await _userRepository.SaveChangesAsync() > 0;
         }
 
+        public async Task<bool> VerifyEmailAsync(VerifyEmailRequest request)
+        {
+            var tokenHash = HashResetToken(request.Token);
+            var user = await _userRepository.GetByEmailVerificationTokenHashAsync(tokenHash);
+            if (user == null || user.IsDeleted || user.EmailVerificationTokenExpiresAt == null)
+                return false;
+
+            if (user.EmailVerificationTokenExpiresAt <= DateTime.UtcNow)
+                return false;
+
+            user.EmailVerified = true;
+            user.EmailVerifiedAt = DateTime.UtcNow;
+            user.EmailVerificationTokenHash = null;
+            user.EmailVerificationTokenExpiresAt = null;
+
+            _userRepository.Update(user);
+            return await _userRepository.SaveChangesAsync() > 0;
+        }
+
+        public async Task ResendVerificationAsync(ResendVerificationRequest request)
+        {
+            var user = await _userRepository.GetByEmailAsync(request.Email);
+            if (user == null || user.IsDeleted || user.EmailVerified)
+                return;
+
+            var rawVerificationToken = GenerateResetToken();
+            user.EmailVerificationTokenHash = HashResetToken(rawVerificationToken);
+            user.EmailVerificationTokenExpiresAt = DateTime.UtcNow.AddHours(GetEmailVerificationDurationHours());
+
+            _userRepository.Update(user);
+            await _userRepository.SaveChangesAsync();
+
+            await SendVerificationEmailAsync(user, rawVerificationToken);
+        }
+
         public static string HashResetToken(string token)
         {
             var bytes = SHA256.HashData(Encoding.UTF8.GetBytes(token));
@@ -189,6 +240,20 @@ namespace Mascoteach.Service.Implementations
             return int.TryParse(_config["Auth:PasswordResetTokenMinutes"], out var minutes)
                 ? minutes
                 : 30;
+        }
+
+        private int GetEmailVerificationDurationHours()
+        {
+            return int.TryParse(_config["Auth:EmailVerificationTokenHours"], out var hours)
+                ? hours
+                : 24;
+        }
+
+        private async Task SendVerificationEmailAsync(User user, string rawVerificationToken)
+        {
+            var verifyBaseUrl = _config["Frontend:VerifyEmailUrl"] ?? "http://localhost:5173/verify-email";
+            var verificationLink = $"{verifyBaseUrl}?token={WebUtility.UrlEncode(rawVerificationToken)}";
+            await _emailService.SendEmailVerificationAsync(user.Email, user.FullName, verificationLink);
         }
 
         private static bool IsGoogleOnlyUser(User user)
