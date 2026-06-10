@@ -31,6 +31,14 @@ public partial class User
 
     public string? Authenticator { get; set; }
 
+    public bool EmailVerified { get; set; }
+
+    public DateTime? EmailVerifiedAt { get; set; }
+
+    public string? EmailVerificationTokenHash { get; set; }
+
+    public DateTime? EmailVerificationTokenExpiresAt { get; set; }
+
     public virtual ICollection<Document> Documents { get; set; } = new List<Document>();
 
     public virtual ICollection<LiveSession> LiveSessions { get; set; } = new List<LiveSession>();

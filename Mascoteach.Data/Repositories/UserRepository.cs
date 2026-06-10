@@ -28,6 +28,12 @@ namespace Mascoteach.Data.Repositories
                 .FirstOrDefaultAsync(u => u.ResetTokenHash == resetTokenHash && u.IsDeleted == false);
         }
 
+        public async Task<User?> GetByEmailVerificationTokenHashAsync(string emailVerificationTokenHash)
+        {
+            return await _context.Users
+                .FirstOrDefaultAsync(u => u.EmailVerificationTokenHash == emailVerificationTokenHash && u.IsDeleted == false);
+        }
+
         public async Task<User?> GetByIdIncludingDeletedAsync(int id)
         {
             return await _context.Users.FindAsync(id);

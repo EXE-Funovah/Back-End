@@ -26,7 +26,9 @@ public class AuthServiceTests
             { "Jwt:Issuer", "TestIssuer" },
             { "Jwt:Audience", "TestAudience" },
             { "Jwt:DurationInMinutes", "60" },
-            { "Frontend:ResetPasswordUrl", "https://mascoteach.com/reset-password" }
+            { "Frontend:ResetPasswordUrl", "https://mascoteach.com/reset-password" },
+            { "Frontend:VerifyEmailUrl", "https://mascoteach.com/verify-email" },
+            { "Auth:EmailVerificationTokenHours", "24" }
         };
         var config = new ConfigurationBuilder().AddInMemoryCollection(configData).Build();
         _sut = new AuthService(_userRepo.Object, _mapper, config, _emailService.Object, _googleTokenValidator.Object);
@@ -35,7 +37,7 @@ public class AuthServiceTests
     // ── RegisterAsync ──
 
     [Fact]
-    public async Task RegisterAsync_NewEmail_ReturnsAuthResponse()
+    public async Task RegisterAsync_NewEmail_StoresVerificationTokenAndSendsEmail()
     {
         _userRepo.Setup(r => r.GetByEmailAsync("new@test.com")).ReturnsAsync((User?)null);
         _userRepo.Setup(r => r.AddAsync(It.IsAny<User>())).Returns(Task.CompletedTask);
@@ -50,8 +52,17 @@ public class AuthServiceTests
         });
 
         Assert.NotNull(result);
-        Assert.Equal("new@test.com", result!.Email);
-        Assert.False(string.IsNullOrEmpty(result.Token));
+        Assert.Equal("Registration successful. Please check your email to verify your account.", result!.Message);
+        _userRepo.Verify(r => r.AddAsync(It.Is<User>(u =>
+            u.Email == "new@test.com" &&
+            u.EmailVerified == false &&
+            !string.IsNullOrWhiteSpace(u.EmailVerificationTokenHash) &&
+            u.EmailVerificationTokenExpiresAt > DateTime.UtcNow)), Times.Once);
+        _emailService.Verify(s => s.SendEmailVerificationAsync(
+            "new@test.com",
+            "Test User",
+            It.Is<string>(link => link.StartsWith("https://mascoteach.com/verify-email?token="))),
+            Times.Once);
     }
 
     [Fact]
@@ -78,7 +89,8 @@ public class AuthServiceTests
             .ReturnsAsync(new User
             {
                 Id = 1, Email = "user@test.com", FullName = "User",
-                PasswordHash = hash, Role = "Teacher", SubscriptionTier = "Freemium"
+                PasswordHash = hash, Role = "Teacher", SubscriptionTier = "Freemium",
+                EmailVerified = true
             });
 
         var result = await _sut.LoginAsync(new LoginRequest
@@ -98,7 +110,8 @@ public class AuthServiceTests
             .ReturnsAsync(new User
             {
                 Id = 1, Email = "user@test.com", FullName = "User",
-                PasswordHash = hash, Role = "Teacher", SubscriptionTier = "Freemium"
+                PasswordHash = hash, Role = "Teacher", SubscriptionTier = "Freemium",
+                EmailVerified = true
             });
 
         var result = await _sut.LoginAsync(new LoginRequest
@@ -151,6 +164,33 @@ public class AuthServiceTests
             () => _sut.LoginAsync(new LoginRequest { Email = "google@test.com", Password = "any" }));
 
         Assert.Contains("Google", ex.Message);
+    }
+
+    [Fact]
+    public async Task LoginAsync_UnverifiedLocalUser_ThrowsVerifyEmailMessage()
+    {
+        var hash = BCrypt.Net.BCrypt.HashPassword("correct_password");
+        _userRepo.Setup(r => r.GetByEmailAsync("unverified@test.com"))
+            .ReturnsAsync(new User
+            {
+                Id = 1,
+                Email = "unverified@test.com",
+                FullName = "Unverified User",
+                PasswordHash = hash,
+                Role = "Teacher",
+                SubscriptionTier = "Freemium",
+                Authenticator = "Local",
+                EmailVerified = false
+            });
+
+        var ex = await Assert.ThrowsAsync<InvalidOperationException>(
+            () => _sut.LoginAsync(new LoginRequest
+            {
+                Email = "unverified@test.com",
+                Password = "correct_password"
+            }));
+
+        Assert.Contains("verify your email", ex.Message);
     }
 
     [Fact]
@@ -249,6 +289,90 @@ public class AuthServiceTests
     }
 
     [Fact]
+    public async Task VerifyEmailAsync_ValidToken_MarksUserVerifiedAndClearsToken()
+    {
+        var token = "verify-token";
+        var user = new User
+        {
+            Id = 1,
+            Email = "local@test.com",
+            FullName = "Local User",
+            PasswordHash = BCrypt.Net.BCrypt.HashPassword("password"),
+            Role = "Teacher",
+            SubscriptionTier = "Freemium",
+            Authenticator = "Local",
+            EmailVerified = false,
+            EmailVerificationTokenHash = AuthService.HashResetToken(token),
+            EmailVerificationTokenExpiresAt = DateTime.UtcNow.AddHours(1)
+        };
+        _userRepo.Setup(r => r.GetByEmailVerificationTokenHashAsync(AuthService.HashResetToken(token)))
+            .ReturnsAsync(user);
+        _userRepo.Setup(r => r.SaveChangesAsync()).ReturnsAsync(1);
+
+        var result = await _sut.VerifyEmailAsync(new VerifyEmailRequest { Token = token });
+
+        Assert.True(result);
+        Assert.True(user.EmailVerified);
+        Assert.True(user.EmailVerifiedAt <= DateTime.UtcNow);
+        Assert.Null(user.EmailVerificationTokenHash);
+        Assert.Null(user.EmailVerificationTokenExpiresAt);
+    }
+
+    [Fact]
+    public async Task VerifyEmailAsync_ExpiredToken_ReturnsFalse()
+    {
+        var token = "expired-token";
+        var user = new User
+        {
+            Id = 1,
+            Email = "local@test.com",
+            FullName = "Local User",
+            Role = "Teacher",
+            SubscriptionTier = "Freemium",
+            EmailVerified = false,
+            EmailVerificationTokenHash = AuthService.HashResetToken(token),
+            EmailVerificationTokenExpiresAt = DateTime.UtcNow.AddMinutes(-1)
+        };
+        _userRepo.Setup(r => r.GetByEmailVerificationTokenHashAsync(AuthService.HashResetToken(token)))
+            .ReturnsAsync(user);
+
+        var result = await _sut.VerifyEmailAsync(new VerifyEmailRequest { Token = token });
+
+        Assert.False(result);
+        Assert.False(user.EmailVerified);
+        Assert.NotNull(user.EmailVerificationTokenHash);
+        _userRepo.Verify(r => r.SaveChangesAsync(), Times.Never);
+    }
+
+    [Fact]
+    public async Task ResendVerificationAsync_UnverifiedUser_StoresNewTokenAndSendsEmail()
+    {
+        var user = new User
+        {
+            Id = 1,
+            Email = "local@test.com",
+            FullName = "Local User",
+            PasswordHash = BCrypt.Net.BCrypt.HashPassword("password"),
+            Role = "Teacher",
+            SubscriptionTier = "Freemium",
+            Authenticator = "Local",
+            EmailVerified = false
+        };
+        _userRepo.Setup(r => r.GetByEmailAsync("local@test.com")).ReturnsAsync(user);
+        _userRepo.Setup(r => r.SaveChangesAsync()).ReturnsAsync(1);
+
+        await _sut.ResendVerificationAsync(new ResendVerificationRequest { Email = "local@test.com" });
+
+        Assert.False(string.IsNullOrWhiteSpace(user.EmailVerificationTokenHash));
+        Assert.True(user.EmailVerificationTokenExpiresAt > DateTime.UtcNow);
+        _emailService.Verify(s => s.SendEmailVerificationAsync(
+            "local@test.com",
+            "Local User",
+            It.Is<string>(link => link.StartsWith("https://mascoteach.com/verify-email?token="))),
+            Times.Once);
+    }
+
+    [Fact]
     public async Task GoogleLoginAsync_NewGoogleUser_CreatesTeacherUserAndReturnsToken()
     {
         _googleTokenValidator.Setup(v => v.ValidateAsync("google-id-token"))
@@ -275,6 +399,8 @@ public class AuthServiceTests
             u.Authenticator == "Google" &&
             u.GoogleSubject == "google-sub" &&
             u.PasswordHash == null &&
+            u.EmailVerified &&
+            u.EmailVerifiedAt != null &&
             u.Role == "Teacher")), Times.Once);
     }
 }

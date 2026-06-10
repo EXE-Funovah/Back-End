@@ -3,8 +3,8 @@ description: |
   Use this skill when working on Mascoteach authentication, authorization, JWT claims, user identity, roles,
   ownership checks, CurrentUserId, BaseController, login/register, BCrypt password handling, or [Authorize] /
   [AllowAnonymous] endpoint access. Triggers: "auth", "permission", "role", "JWT", "login", "register",
-  "Google login", "forgot password", "reset password", "Gmail SMTP", "CurrentUserId", "only owner",
-  "teacher only", "student join".
+  "email verification", "verify email", "resend verification", "Google login", "forgot password",
+  "reset password", "Gmail SMTP", "CurrentUserId", "only owner", "teacher only", "student join".
 ---
 
 # Mascoteach - Auth And Permission Skill
@@ -15,6 +15,8 @@ description: |
 - `AuthService` hashes passwords with `BCrypt.Net.BCrypt.HashPassword`.
 - Login verifies passwords with `BCrypt.Net.BCrypt.Verify`.
 - Google login verifies Google ID tokens through `IGoogleTokenValidator`.
+- Register creates an unverified local user and sends an email verification link.
+- Local login is blocked until `User.EmailVerified == true`.
 - Forgot/reset password sends reset links through `IEmailService`.
 - JWT claims include:
   - `"FullName"`
@@ -31,6 +33,8 @@ description: |
   - `AuthController.Register`
   - `AuthController.Login`
   - `AuthController.GoogleLogin`
+  - `AuthController.VerifyEmail`
+  - `AuthController.ResendVerification`
   - `AuthController.ForgotPassword`
   - `AuthController.ResetPassword`
   - student live-session lookup by PIN
@@ -66,11 +70,31 @@ When adding role restrictions:
 - Do not expose `PasswordHash` in DTOs.
 - Check email uniqueness through `IUserRepository`.
 - Soft-deleted users must not be able to login.
+- Local users must verify email before login. If `EmailVerified == false`, return a clear message telling them to verify email first.
 - Default subscription tier is currently `Freemium`.
 - Local users have `Authenticator = "Local"` and a BCrypt `PasswordHash`.
 - Google-only users have `Authenticator = "Google"`, `PasswordHash = null`, and `GoogleSubject` set from Google `sub`.
 - If a Google-only user attempts email/password login, return a clear message telling them to sign in with Google.
 - Google-created users default to role `Teacher`.
+- Register should return a message response, not an `AuthResponse` with JWT, until email verification succeeds.
+
+## Email verification rules
+
+- `POST /api/Auth/register` creates local users with `EmailVerified = false`.
+- Do not return verification tokens in API responses.
+- Store only `EmailVerificationTokenHash`, never the raw verification token.
+- `EmailVerificationTokenExpiresAt` controls expiry; default config is `Auth:EmailVerificationTokenHours`.
+- Send verification links using `Frontend:VerifyEmailUrl` plus `?token=...`.
+- Verification emails should have an HTML button/anchor plus text fallback.
+- `POST /api/Auth/verify-email` must verify token hash and expiry, then set:
+  - `EmailVerified = true`
+  - `EmailVerifiedAt = DateTime.UtcNow`
+  - `EmailVerificationTokenHash = null`
+  - `EmailVerificationTokenExpiresAt = null`
+- `POST /api/Auth/resend-verification` returns a generic success message whether the email exists or not.
+- Do not send a new verification email when the account is already verified.
+- Existing users should be marked verified by the DB rollout script when adding verification columns.
+- Swagger testing flow: register, copy token from email link, call `POST /api/Auth/verify-email`, then login.
 
 ## Google login rules
 
@@ -79,6 +103,7 @@ When adding role restrictions:
 - Use Google `sub` as `User.GoogleSubject`; do not trust email/name from the request body.
 - Match existing users by `GoogleSubject` first, then email for linking.
 - If an existing local user logs in with Google, set `GoogleSubject` and use `Authenticator = "Both"`.
+- If Google reports `EmailVerified = true`, set `User.EmailVerified = true`, set `EmailVerifiedAt`, and clear email verification token fields.
 - Return normal Mascoteach `AuthResponse` with the internal JWT after successful Google verification.
 
 ## Forgot/reset password rules
@@ -102,7 +127,9 @@ When adding role restrictions:
 - Deploy config should come from environment variables / GitHub Secrets:
   - `Google__ClientId`
   - `Frontend__ResetPasswordUrl`
+  - `Frontend__VerifyEmailUrl`
   - `Auth__PasswordResetTokenMinutes`
+  - `Auth__EmailVerificationTokenHours`
   - `Email__SmtpHost`
   - `Email__SmtpPort`
   - `Email__Username`
@@ -118,6 +145,10 @@ When adding role restrictions:
 - Owner-scoped operations cannot update/delete another teacher's resource.
 - Password handling remains BCrypt-based.
 - Google tokens are verified with Google before issuing Mascoteach JWTs.
+- Local register sends verification email and does not issue JWT before verification.
+- Local login rejects unverified users.
+- Email verification tokens are hashed, expiring, and cleared after use.
+- Resend verification uses a generic response and does not email already verified accounts.
 - Reset tokens are hashed, expiring, and cleared after use.
 - Reset password rejects reuse of the current password.
 - Gmail/SMTP and Google settings are supplied by config, not hardcoded secrets.
