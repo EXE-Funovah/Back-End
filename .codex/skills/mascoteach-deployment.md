@@ -22,11 +22,40 @@ Do not assume adding `appsettings` is enough. Docker deploy reads values from en
 
 - `develop` deploy uses `DEV_*` GitHub Secrets.
 - `main` / production deploy uses the same secret names without `DEV_`.
+- Pull requests must validate only; they must never stop/remove/run deployment containers.
+- Deploy containers only on `push` events after code is merged into `develop` or `main`.
 - Runtime .NET environment variable names use double underscores, for example:
   - `Frontend__ResetPasswordUrl`
   - `Frontend__VerifyEmailUrl`
   - `Auth__PasswordResetTokenMinutes`
   - `Auth__EmailVerificationTokenHours`
+
+## Pull request safety rule
+
+Never use one deploy job for both `push` and `pull_request`.
+
+Correct shape:
+
+```yaml
+jobs:
+  validate-pr:
+    if: github.event_name == 'pull_request'
+    # build/test only, no docker stop/rm/run
+
+  build-and-deploy:
+    if: github.event_name == 'push'
+    # docker deploy is allowed here
+```
+
+Reason:
+
+- On `push` to `develop`, `github.ref_name == 'develop'`.
+- On `pull_request` targeting `develop`, `github.ref_name` is not `develop`; it is a PR ref such as a merge ref.
+- If a workflow checks `github.ref_name == 'develop'` inside a PR deploy job, the condition can be false and fall back to production secrets.
+- A PR like `validateEmail -> develop` must not be able to deploy production.
+- A PR like `develop -> main` must not deploy production until it is merged and creates a `push` to `main`.
+
+If branch selection is needed for PR-only validation, use `github.base_ref` for the target branch and `github.head_ref` for the source branch. Do not use those values to deploy.
 
 ## Deployment checklist for new config
 
@@ -77,6 +106,8 @@ Production secrets use the same names without `DEV_`.
 - Adding a key to `appsettings.Development.json` but forgetting `docker run -e`.
 - Creating GitHub Secrets but forgetting the workflow job-level selector.
 - Using `Section:Key` as an environment variable name instead of `Section__Key`.
+- Letting `pull_request` run `docker stop`, `docker rm`, or `docker run`.
+- Using `github.ref_name == 'develop'` in a PR deploy job and accidentally falling back to production secrets.
 - Adding dev secrets only, then later merging to `main` without production secret names.
 - Scaffold before running the DB script.
 - Starting the deployed app before production DB has the new columns.
