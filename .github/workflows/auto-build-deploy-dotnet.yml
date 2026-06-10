@@ -11,7 +11,21 @@ on:
       - develop
 
 jobs:
+  validate-pr:
+    if: github.event_name == 'pull_request'
+    runs-on: self-hosted
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Build Docker Image for PR validation
+        run: |
+          docker build -t mascoteach-pr-validation:${{ github.sha }} .
+          docker image rm mascoteach-pr-validation:${{ github.sha }} || true
+
   build-and-deploy:
+    if: github.event_name == 'push'
     runs-on: self-hosted
 
     env:
