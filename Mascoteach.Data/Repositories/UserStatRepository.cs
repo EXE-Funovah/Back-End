@@ -13,7 +13,7 @@ namespace Mascoteach.Data.Repositories
         public async Task<UserStat?> GetByUserIdAsync(int userId)
         {
             return await _context.UserStats
-                        .FirstOrDefaultAsync(s => s.UserId == userId);
+                        .FirstOrDefaultAsync(s => s.UserId == userId && s.IsDeleted == false);
         }
     }
 }

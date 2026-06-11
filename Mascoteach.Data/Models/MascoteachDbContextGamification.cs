@@ -35,10 +35,11 @@ public partial class MascoteachDbContext
                 .HasDefaultValueSql("(getdate())")
                 .HasColumnType("datetime")
                 .HasColumnName("updated_at");
+            entity.Property(e => e.IsDeleted).HasColumnName("is_deleted");
 
             entity.HasOne(d => d.User).WithOne()
                 .HasForeignKey<UserStat>(d => d.UserId)
-                .OnDelete(DeleteBehavior.Cascade)
+                .OnDelete(DeleteBehavior.ClientSetNull)
                 .HasConstraintName("FK_UserStats_Users");
         });
 
@@ -52,6 +53,8 @@ public partial class MascoteachDbContext
                 e => new { e.UserId, e.CompletedAt },
                 "IX_QuizAttempts_user_completed");
 
+            entity.HasIndex(e => e.QuizId, "IX_QuizAttempts_quiz_id");
+
             entity.Property(e => e.Id).HasColumnName("id");
             entity.Property(e => e.UserId).HasColumnName("user_id");
             entity.Property(e => e.QuizId).HasColumnName("quiz_id");
@@ -63,6 +66,7 @@ public partial class MascoteachDbContext
                 .HasDefaultValueSql("(getdate())")
                 .HasColumnType("datetime")
                 .HasColumnName("completed_at");
+            entity.Property(e => e.IsDeleted).HasColumnName("is_deleted");
 
             entity.HasOne(d => d.User).WithMany()
                 .HasForeignKey(d => d.UserId)

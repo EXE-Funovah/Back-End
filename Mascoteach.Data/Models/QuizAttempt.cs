@@ -4,7 +4,7 @@ namespace Mascoteach.Data.Models;
 
 /// <summary>
 /// Gamification: 1 row / 1 lần làm quiz của user.
-/// Bảng: dbo.Quiz_Attempts (xem migration_gamification.sql).
+/// Bảng: dbo.Quiz_Attempts (xem gamificationSqlScriptDev_Prod.sql).
 /// </summary>
 public partial class QuizAttempt
 {
@@ -23,6 +23,8 @@ public partial class QuizAttempt
     public int XpEarned { get; set; }
 
     public DateTime CompletedAt { get; set; }
+
+    public bool IsDeleted { get; set; }
 
     public virtual User User { get; set; } = null!;
 
