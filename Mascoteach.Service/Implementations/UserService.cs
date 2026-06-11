@@ -69,6 +69,17 @@ namespace Mascoteach.Service.Implementations
             return _mapper.Map<UserResponse>(user);
         }
 
+        public async Task<UserResponse?> UpgradeSubscriptionAsync(int userId)
+        {
+            var user = await _userRepository.GetByIdAsync(userId);
+            if (user == null) return null;
+
+            user.SubscriptionTier = "Premium";
+            _userRepository.Update(user);
+            await _userRepository.SaveChangesAsync();
+            return _mapper.Map<UserResponse>(user);
+        }
+
         // dùng nội bộ bởi AuthService
         public async Task<User?> GetUserByEmailAsync(string email)
         {
