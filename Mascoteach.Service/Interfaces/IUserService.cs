@@ -12,9 +12,6 @@ namespace Mascoteach.Service.Interfaces
         Task<bool> DeleteAsync(int id);
         Task<UserResponse?> ToggleDeleteAsync(int id);
 
-        /// <summary>Nâng cấp gói (mock payment): set SubscriptionTier = "Premium".</summary>
-        Task<UserResponse?> UpgradeSubscriptionAsync(int userId);
-
         // dùng nội bộ bởi AuthService
         Task<User?> GetUserByEmailAsync(string email);
         Task<bool> RegisterUserAsync(User user);

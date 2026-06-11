@@ -33,6 +33,10 @@ namespace Mascoteach.API.Controllers
             {
                 return BadRequest(ex.Message);
             }
+            catch (UnauthorizedAccessException ex)
+            {
+                return Forbid(ex.Message);
+            }
         }
 
         // GET: api/QuizAttempt/me?from=&to= — lịch sử (week chart)
