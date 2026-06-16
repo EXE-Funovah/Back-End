@@ -83,6 +83,18 @@ Mascoteach is DB-first. For schema changes:
 - Review `Mascoteach.Data/Models/User.cs` and `Mascoteach.Data/Models/MascoteachDbContext.cs` or any affected model/context files before editing business logic.
 - Production deployment requires the SQL rollout to happen before the new backend container starts using the new columns.
 
+## Current DB rollout state
+
+The gamification/document-owner rollout has already been applied to both dev and production:
+
+- `Documents.owner_id` exists and replaces the old `Documents.teacher_id`.
+- `User_Stats` exists.
+- `Quiz_Attempts` exists.
+- No new runtime environment variables or GitHub Secrets were introduced for this rollout.
+
+Do not generate future production scripts that assume `Documents.teacher_id` still exists. `LiveSessions.teacher_id`
+is still valid and should remain unchanged unless a separate live-session schema change is requested.
+
 ## Current auth/email deployment keys
 
 Develop secrets:

@@ -132,12 +132,28 @@ Current auth-related `Users` columns:
 Current document addition:
 
 - `Documents.file_name`
+- `Documents.owner_id` replaces the old `Documents.teacher_id` column.
+
+Current gamification schema:
+
+- `User_Stats`
+- `Quiz_Attempts`
+
+Dev and production have both been rolled out for `Documents.owner_id`, `User_Stats`, and `Quiz_Attempts`.
+Do not write new code against `Documents.teacher_id`; only `LiveSessions.teacher_id` remains intentional.
 
 Common scaffold command:
 
 ```powershell
 dotnet ef dbcontext scaffold "Name=ConnectionStrings:DefaultConnection" Microsoft.EntityFrameworkCore.SqlServer --project Mascoteach.Data --startup-project Mascoteach.API --context MascoteachDbContext --context-dir Models --output-dir Models --force --no-onconfiguring
 ```
+
+After scaffold, review that:
+
+- `Document` has `OwnerId` / `Owner`.
+- `MascoteachDbContext` maps `Documents.owner_id`.
+- `LiveSession` still has `TeacherId` mapped to `LiveSessions.teacher_id`.
+- Gamification mappings for `User_Stats` and `Quiz_Attempts` are not duplicated in partial DbContext files.
 
 ### Docker/GitHub Actions deploy config
 
