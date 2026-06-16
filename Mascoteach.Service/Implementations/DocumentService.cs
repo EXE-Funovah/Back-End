@@ -30,12 +30,12 @@ public class DocumentService : IDocumentService
             throw new ArgumentException($"S3 key must end with .zip. Got: {s3Key}");
     }
 
-    public async Task<DocumentResponse> UploadDocumentAsync(int teacherId, DocumentCreateRequest request)
+    public async Task<DocumentResponse> UploadDocumentAsync(int ownerId, DocumentCreateRequest request)
     {
         EnsureZipS3Key(request.S3Key);
 
-        var user = await _userRepository.GetByIdAsync(teacherId)
-            ?? throw new KeyNotFoundException($"User with id {teacherId} not found.");
+        var user = await _userRepository.GetByIdAsync(ownerId)
+            ?? throw new KeyNotFoundException($"User with id {ownerId} not found.");
 
         if (user.SubscriptionTier == "Freemium" && (user.DocumentsProcessed ?? 0) >= 50)
             throw new InvalidOperationException(
@@ -46,7 +46,7 @@ public class DocumentService : IDocumentService
         {
             var newDoc = new Document
             {
-                TeacherId = teacherId,
+                OwnerId = ownerId,
                 FileUrl = request.S3Key,
                 FileName = string.IsNullOrWhiteSpace(request.FileName) ? null : request.FileName.Trim(),
                 UploadedAt = DateTime.Now
@@ -84,9 +84,9 @@ public class DocumentService : IDocumentService
         return responses;
     }
 
-    public async Task<IEnumerable<DocumentResponse>> GetMyDocumentsAsync(int teacherId)
+    public async Task<IEnumerable<DocumentResponse>> GetMyDocumentsAsync(int ownerId)
     {
-        var myDocs = await _documentRepository.GetByTeacherIdAsync(teacherId);
+        var myDocs = await _documentRepository.GetByOwnerIdAsync(ownerId);
         var responses = _mapper.Map<IEnumerable<DocumentResponse>>(myDocs).ToList();
         
         foreach (var response in responses)
@@ -107,30 +107,30 @@ public class DocumentService : IDocumentService
         return response;
     }
 
-    public async Task<bool> UpdateDocumentAsync(int id, int teacherId, string newS3Key)
+    public async Task<bool> UpdateDocumentAsync(int id, int ownerId, string newS3Key)
     {
         EnsureZipS3Key(newS3Key);
 
         var doc = await _documentRepository.GetByIdAsync(id);
-        if (doc == null || doc.TeacherId != teacherId) return false;
+        if (doc == null || doc.OwnerId != ownerId) return false;
         doc.FileUrl = newS3Key;
         _documentRepository.Update(doc);
         return await _documentRepository.SaveChangesAsync() > 0;
     }
 
-    public async Task<bool> DeleteDocumentAsync(int id, int teacherId)
+    public async Task<bool> DeleteDocumentAsync(int id, int ownerId)
     {
         var doc = await _documentRepository.GetByIdAsync(id);
-        if (doc == null || doc.TeacherId != teacherId) return false;
+        if (doc == null || doc.OwnerId != ownerId) return false;
         _documentRepository.Delete(doc);
         return await _documentRepository.SaveChangesAsync() > 0;
     }
 
-    public async Task<DocumentResponse?> ToggleDeleteAsync(int id, int teacherId)
+    public async Task<DocumentResponse?> ToggleDeleteAsync(int id, int ownerId)
     {
         // Bypass soft-delete filter to find any doc (including already-deleted ones)
         var doc = await _documentRepository.GetByIdIncludingDeletedAsync(id);
-        if (doc == null || doc.TeacherId != teacherId) return null;
+        if (doc == null || doc.OwnerId != ownerId) return null;
         doc.IsDeleted = !doc.IsDeleted;
         _documentRepository.Update(doc);
         await _documentRepository.SaveChangesAsync();

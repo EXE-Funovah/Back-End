@@ -37,6 +37,8 @@ builder.Services.AddScoped<IOptionRepository, OptionRepository>();
 builder.Services.AddScoped<IGameTemplateRepository, GameTemplateRepository>();
 builder.Services.AddScoped<ILiveSessionRepository, LiveSessionRepository>();
 builder.Services.AddScoped<ISessionParticipantRepository, SessionParticipantRepository>();
+builder.Services.AddScoped<IUserStatRepository, UserStatRepository>();
+builder.Services.AddScoped<IQuizAttemptRepository, QuizAttemptRepository>();
 
 
 
@@ -53,6 +55,8 @@ builder.Services.AddScoped<ILiveSessionService, LiveSessionService>();
 builder.Services.AddScoped<ISessionParticipantService, SessionParticipantService>();
 builder.Services.AddScoped<IS3Service, S3Service>();
 builder.Services.AddScoped<IEmailService, EmailService>();
+builder.Services.AddScoped<IUserStatService, UserStatService>();
+builder.Services.AddScoped<IQuizAttemptService, QuizAttemptService>();
 builder.Services.AddScoped<IGoogleTokenValidator, GoogleTokenValidator>();
 builder.Services.AddSignalR(); // signalR
 builder.Services.AddMemoryCache(); 

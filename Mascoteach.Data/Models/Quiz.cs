@@ -22,4 +22,6 @@ public partial class Quiz
     public virtual ICollection<LiveSession> LiveSessions { get; set; } = new List<LiveSession>();
 
     public virtual ICollection<Question> Questions { get; set; } = new List<Question>();
+
+    public virtual ICollection<QuizAttempt> QuizAttempts { get; set; } = new List<QuizAttempt>();
 }

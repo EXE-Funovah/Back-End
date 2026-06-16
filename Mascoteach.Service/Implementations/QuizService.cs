@@ -36,9 +36,9 @@ namespace Mascoteach.Service.Implementations
 
         public async Task<QuizResponse> CreateAsync(int teacherId, QuizCreateRequest request)
         {
-            // Verify document belongs to this teacher
+            // Verify document belongs to this user
             var doc = await _documentRepository.GetByIdAsync(request.DocumentId);
-            if (doc == null || doc.TeacherId != teacherId)
+            if (doc == null || doc.OwnerId != teacherId)
                 throw new UnauthorizedAccessException("Document does not exist or you do not own it.");
 
             var quiz = _mapper.Map<Quiz>(request);
@@ -56,7 +56,7 @@ namespace Mascoteach.Service.Implementations
 
             // Check ownership via document
             var doc = await _documentRepository.GetByIdAsync(quiz.DocumentId);
-            if (doc == null || doc.TeacherId != teacherId) return false;
+            if (doc == null || doc.OwnerId != teacherId) return false;
 
             quiz.Title = request.Title;
             quiz.Status = request.Status;
@@ -71,7 +71,7 @@ namespace Mascoteach.Service.Implementations
             if (quiz == null) return false;
 
             var doc = await _documentRepository.GetByIdAsync(quiz.DocumentId);
-            if (doc == null || doc.TeacherId != teacherId) return false;
+            if (doc == null || doc.OwnerId != teacherId) return false;
 
             _quizRepository.Delete(quiz);
             return await _quizRepository.SaveChangesAsync() > 0;
@@ -83,7 +83,7 @@ namespace Mascoteach.Service.Implementations
             if (quiz == null) return null;
 
             var doc = await _documentRepository.GetByIdIncludingDeletedAsync(quiz.DocumentId);
-            if (doc == null || doc.TeacherId != teacherId) return null;
+            if (doc == null || doc.OwnerId != teacherId) return null;
 
             quiz.IsDeleted = !quiz.IsDeleted;
             _quizRepository.Update(quiz);

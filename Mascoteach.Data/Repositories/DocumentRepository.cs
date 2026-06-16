@@ -16,10 +16,10 @@ namespace Mascoteach.Data.Repositories
             
         }
 
-        public async Task<IEnumerable<Document>> GetByTeacherIdAsync(int teacherId)
+        public async Task<IEnumerable<Document>> GetByOwnerIdAsync(int ownerId)
         {
             return await _context.Documents
-                        .Where(d => d.TeacherId == teacherId && d.IsDeleted == false)
+                        .Where(d => d.OwnerId == ownerId && d.IsDeleted == false)
                         .ToListAsync();
         }
 

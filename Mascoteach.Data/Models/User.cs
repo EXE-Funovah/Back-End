@@ -42,4 +42,8 @@ public partial class User
     public virtual ICollection<Document> Documents { get; set; } = new List<Document>();
 
     public virtual ICollection<LiveSession> LiveSessions { get; set; } = new List<LiveSession>();
+
+    public virtual ICollection<QuizAttempt> QuizAttempts { get; set; } = new List<QuizAttempt>();
+
+    public virtual UserStat? UserStat { get; set; }
 }
