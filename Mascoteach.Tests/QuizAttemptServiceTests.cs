@@ -41,7 +41,7 @@ public class QuizAttemptServiceTests
     private static Document MakeDocument(int ownerId = 10) => new()
     {
         Id = 3,
-        TeacherId = ownerId,
+        OwnerId = ownerId,
         FileUrl = "documents/2026/06/11/sample.zip"
     };
 

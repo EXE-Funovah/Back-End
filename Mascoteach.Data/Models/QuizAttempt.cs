@@ -1,11 +1,8 @@
-using System;
+﻿using System;
+using System.Collections.Generic;
 
 namespace Mascoteach.Data.Models;
 
-/// <summary>
-/// Gamification: 1 row / 1 lần làm quiz của user.
-/// Bảng: dbo.Quiz_Attempts (xem gamificationSqlScriptDev_Prod.sql).
-/// </summary>
 public partial class QuizAttempt
 {
     public int Id { get; set; }
@@ -26,7 +23,7 @@ public partial class QuizAttempt
 
     public bool IsDeleted { get; set; }
 
-    public virtual User User { get; set; } = null!;
-
     public virtual Quiz Quiz { get; set; } = null!;
+
+    public virtual User User { get; set; } = null!;
 }

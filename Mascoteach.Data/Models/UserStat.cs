@@ -1,11 +1,8 @@
-using System;
+﻿using System;
+using System.Collections.Generic;
 
 namespace Mascoteach.Data.Models;
 
-/// <summary>
-/// Gamification: 1 row / 1 user. Cập nhật mỗi lần submit QuizAttempt.
-/// Bảng: dbo.User_Stats (xem gamificationSqlScriptDev_Prod.sql).
-/// </summary>
 public partial class UserStat
 {
     public int UserId { get; set; }

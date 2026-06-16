@@ -25,7 +25,7 @@ public class QuestionServiceTests
             _quizRepo.Object, _docRepo.Object, _mapper);
     }
 
-    private Document MakeDoc(int teacherId = 10) => new() { Id = 1, TeacherId = teacherId, FileUrl = "k" };
+    private Document MakeDoc(int ownerId = 10) => new() { Id = 1, OwnerId = ownerId, FileUrl = "k" };
     private Quiz MakeQuiz() => new() { Id = 1, DocumentId = 1, Title = "Q", Status = "AI_Drafted" };
     private Question MakeQuestion(int id = 1) => new() { Id = id, QuizId = 1, QuestionText = "What?", QuestionType = "MultipleChoice" };
 
@@ -138,7 +138,7 @@ public class QuestionServiceTests
     public async Task ToggleDeleteAsync_WrongTeacher_ReturnsNull()
     {
         _quizRepo.Setup(r => r.GetByIdAsync(1)).ReturnsAsync(MakeQuiz());
-        _docRepo.Setup(r => r.GetByIdAsync(1)).ReturnsAsync(MakeDoc(teacherId: 99));
+        _docRepo.Setup(r => r.GetByIdAsync(1)).ReturnsAsync(MakeDoc(ownerId: 99));
         _questionRepo.Setup(r => r.GetByIdIncludingDeletedAsync(1)).ReturnsAsync(MakeQuestion());
 
         Assert.Null(await _sut.ToggleDeleteAsync(1, 10));

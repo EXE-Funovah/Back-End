@@ -54,14 +54,14 @@ namespace Mascoteach.Service.Implementations
         }
 
         /// <summary>
-        /// Verify ownership: Question → Quiz → Document → TeacherId
+        /// Verify ownership: Question -> Quiz -> Document -> OwnerId
         /// </summary>
         private async Task<bool> IsOwnerAsync(int quizId, int teacherId)
         {
             var quiz = await _quizRepository.GetByIdAsync(quizId);
             if (quiz == null) return false;
             var doc = await _documentRepository.GetByIdAsync(quiz.DocumentId);
-            return doc != null && doc.TeacherId == teacherId;
+            return doc != null && doc.OwnerId == teacherId;
         }
 
         public async Task<QuestionResponse> CreateAsync(int teacherId, QuestionCreateRequest request)

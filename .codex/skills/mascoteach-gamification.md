@@ -18,7 +18,6 @@ Out of scope unless the user explicitly asks:
 - `attempt_type` / `assignment_id`.
 - Live-session XP.
 - `Documents.visibility`.
-- Refactoring `Documents.teacher_id` to `owner_id`.
 - Teacher/student or parent/student relationship checks.
 
 ## Database shape
@@ -29,7 +28,7 @@ Gamification currently depends on:
 - `Quiz_Attempts`: one row per submitted quiz attempt.
 - Existing `Quizzes`, `Questions`, `Options`, `Documents`.
 
-`Documents.teacher_id` is a legacy owner column. Until the DB is refactored, treat it as the document owner id for both teachers and students.
+`Documents.owner_id` is the document owner column. Treat it as the owner id for both teachers and students.
 
 ## Submit quiz rules
 
@@ -53,7 +52,7 @@ Required validation before awarding XP:
 
 1. Quiz exists and is not deleted.
 2. Quiz document exists and is not deleted.
-3. Current user owns the quiz document: `quiz.DocumentId -> Documents.teacher_id == CurrentUserId`.
+3. Current user owns the quiz document: `quiz.DocumentId -> Documents.owner_id == CurrentUserId`.
 4. Quiz has questions.
 5. Submitted answer count equals quiz question count.
 6. No duplicate submitted `questionId`.
