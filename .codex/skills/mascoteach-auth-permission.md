@@ -51,7 +51,7 @@ For teacher-owned resources:
 4. Return `false`/`null` from the service when the resource is missing or not owned.
 5. Controller should return `Forbid(...)` for ownership failures when existing local pattern does so.
 
-Existing example: `DocumentService.UpdateDocumentAsync` checks `doc.TeacherId != teacherId`.
+Existing example: `DocumentService.UpdateDocumentAsync` checks `doc.OwnerId != ownerId`.
 
 ## Role checks
 

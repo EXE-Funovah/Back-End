@@ -7,7 +7,7 @@ public partial class Document
 {
     public int Id { get; set; }
 
-    public int TeacherId { get; set; }
+    public int OwnerId { get; set; }
 
     public string FileUrl { get; set; } = null!;
 
@@ -17,7 +17,7 @@ public partial class Document
 
     public string? FileName { get; set; }
 
-    public virtual ICollection<Quiz> Quizzes { get; set; } = new List<Quiz>();
+    public virtual User Owner { get; set; } = null!;
 
-    public virtual User Teacher { get; set; } = null!;
+    public virtual ICollection<Quiz> Quizzes { get; set; } = new List<Quiz>();
 }

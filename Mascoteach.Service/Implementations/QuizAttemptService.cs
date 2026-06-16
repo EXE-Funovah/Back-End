@@ -38,7 +38,7 @@ public class QuizAttemptService : IQuizAttemptService
         var document = await _documentRepository.GetByIdAsync(quiz.DocumentId)
             ?? throw new KeyNotFoundException($"Document {quiz.DocumentId} not found.");
 
-        if (document.TeacherId != userId)
+        if (document.OwnerId != userId)
             throw new UnauthorizedAccessException("You do not own this quiz.");
 
         var questions = (await _questionRepository.GetByQuizIdAsync(quiz.Id)).ToList();

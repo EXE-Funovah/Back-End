@@ -24,7 +24,7 @@ public class OptionServiceTests
             _quizRepo.Object, _docRepo.Object, _mapper);
     }
 
-    private Document MakeDoc(int teacherId = 10) => new() { Id = 1, TeacherId = teacherId, FileUrl = "k" };
+    private Document MakeDoc(int ownerId = 10) => new() { Id = 1, OwnerId = ownerId, FileUrl = "k" };
     private Quiz MakeQuiz() => new() { Id = 1, DocumentId = 1, Title = "Q", Status = "AI_Drafted" };
     private Question MakeQuestion() => new() { Id = 1, QuizId = 1, QuestionText = "What?" };
     private Option MakeOption(int id = 1) => new() { Id = id, QuestionId = 1, OptionText = "A", IsCorrect = true };

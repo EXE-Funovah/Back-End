@@ -22,8 +22,8 @@ public class QuizServiceTests
 
     // ── Helpers ──
 
-    private Document MakeDoc(int id = 1, int teacherId = 10)
-        => new() { Id = id, TeacherId = teacherId, FileUrl = "key.pdf" };
+    private Document MakeDoc(int id = 1, int ownerId = 10)
+        => new() { Id = id, OwnerId = ownerId, FileUrl = "key.pdf" };
 
     private Quiz MakeQuiz(int id = 1, int docId = 1)
         => new() { Id = id, DocumentId = docId, Title = "Quiz 1", Status = "AI_Drafted" };
@@ -47,7 +47,7 @@ public class QuizServiceTests
     [Fact]
     public async Task CreateAsync_WrongTeacher_Throws()
     {
-        var doc = MakeDoc(teacherId: 99);
+        var doc = MakeDoc(ownerId: 99);
         _docRepo.Setup(r => r.GetByIdAsync(1)).ReturnsAsync(doc);
 
         await Assert.ThrowsAsync<UnauthorizedAccessException>(
@@ -83,7 +83,7 @@ public class QuizServiceTests
     public async Task UpdateAsync_WrongTeacher_ReturnsFalse()
     {
         var quiz = MakeQuiz();
-        var doc = MakeDoc(teacherId: 99);
+        var doc = MakeDoc(ownerId: 99);
         _quizRepo.Setup(r => r.GetByIdAsync(1)).ReturnsAsync(quiz);
         _docRepo.Setup(r => r.GetByIdAsync(1)).ReturnsAsync(doc);
 
@@ -120,7 +120,7 @@ public class QuizServiceTests
     public async Task DeleteAsync_WrongTeacher_ReturnsFalse()
     {
         var quiz = MakeQuiz();
-        var doc = MakeDoc(teacherId: 99);
+        var doc = MakeDoc(ownerId: 99);
         _quizRepo.Setup(r => r.GetByIdAsync(1)).ReturnsAsync(quiz);
         _docRepo.Setup(r => r.GetByIdAsync(1)).ReturnsAsync(doc);
 
@@ -149,7 +149,7 @@ public class QuizServiceTests
     public async Task ToggleDeleteAsync_WrongTeacher_ReturnsNull()
     {
         var quiz = MakeQuiz();
-        var doc = MakeDoc(teacherId: 99);
+        var doc = MakeDoc(ownerId: 99);
         _quizRepo.Setup(r => r.GetByIdIncludingDeletedAsync(1)).ReturnsAsync(quiz);
         _docRepo.Setup(r => r.GetByIdIncludingDeletedAsync(1)).ReturnsAsync(doc);
 

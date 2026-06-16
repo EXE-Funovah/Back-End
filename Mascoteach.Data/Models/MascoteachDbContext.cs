@@ -23,9 +23,13 @@ public partial class MascoteachDbContext : DbContext
 
     public virtual DbSet<Quiz> Quizzes { get; set; }
 
+    public virtual DbSet<QuizAttempt> QuizAttempts { get; set; }
+
     public virtual DbSet<SessionParticipant> SessionParticipants { get; set; }
 
     public virtual DbSet<User> Users { get; set; }
+
+    public virtual DbSet<UserStat> UserStats { get; set; }
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -41,14 +45,14 @@ public partial class MascoteachDbContext : DbContext
                 .IsUnicode(false)
                 .HasColumnName("file_url");
             entity.Property(e => e.IsDeleted).HasColumnName("is_deleted");
-            entity.Property(e => e.TeacherId).HasColumnName("teacher_id");
+            entity.Property(e => e.OwnerId).HasColumnName("owner_id");
             entity.Property(e => e.UploadedAt)
                 .HasDefaultValueSql("(getdate())")
                 .HasColumnType("datetime")
                 .HasColumnName("uploaded_at");
 
-            entity.HasOne(d => d.Teacher).WithMany(p => p.Documents)
-                .HasForeignKey(d => d.TeacherId)
+            entity.HasOne(d => d.Owner).WithMany(p => p.Documents)
+                .HasForeignKey(d => d.OwnerId)
                 .OnDelete(DeleteBehavior.ClientSetNull)
                 .HasConstraintName("FK_Documents_Users");
         });
@@ -175,6 +179,38 @@ public partial class MascoteachDbContext : DbContext
                 .HasConstraintName("FK_Quizzes_Documents");
         });
 
+        modelBuilder.Entity<QuizAttempt>(entity =>
+        {
+            entity.ToTable("Quiz_Attempts");
+
+            entity.HasIndex(e => e.QuizId, "IX_QuizAttempts_quiz_id");
+
+            entity.HasIndex(e => new { e.UserId, e.CompletedAt }, "IX_QuizAttempts_user_completed");
+
+            entity.Property(e => e.Id).HasColumnName("id");
+            entity.Property(e => e.CompletedAt)
+                .HasDefaultValueSql("(getdate())")
+                .HasColumnType("datetime")
+                .HasColumnName("completed_at");
+            entity.Property(e => e.CorrectCount).HasColumnName("correct_count");
+            entity.Property(e => e.DurationSeconds).HasColumnName("duration_seconds");
+            entity.Property(e => e.IsDeleted).HasColumnName("is_deleted");
+            entity.Property(e => e.QuizId).HasColumnName("quiz_id");
+            entity.Property(e => e.TotalQuestions).HasColumnName("total_questions");
+            entity.Property(e => e.UserId).HasColumnName("user_id");
+            entity.Property(e => e.XpEarned).HasColumnName("xp_earned");
+
+            entity.HasOne(d => d.Quiz).WithMany(p => p.QuizAttempts)
+                .HasForeignKey(d => d.QuizId)
+                .OnDelete(DeleteBehavior.ClientSetNull)
+                .HasConstraintName("FK_QuizAttempts_Quizzes");
+
+            entity.HasOne(d => d.User).WithMany(p => p.QuizAttempts)
+                .HasForeignKey(d => d.UserId)
+                .OnDelete(DeleteBehavior.ClientSetNull)
+                .HasConstraintName("FK_QuizAttempts_Users");
+        });
+
         modelBuilder.Entity<SessionParticipant>(entity =>
         {
             entity.HasKey(e => e.Id).HasName("PK__Session___3213E83F637607BF");
@@ -260,6 +296,34 @@ public partial class MascoteachDbContext : DbContext
                 .HasMaxLength(50)
                 .IsUnicode(false)
                 .HasColumnName("subscription_tier");
+        });
+
+        modelBuilder.Entity<UserStat>(entity =>
+        {
+            entity.HasKey(e => e.UserId);
+
+            entity.ToTable("User_Stats");
+
+            entity.Property(e => e.UserId)
+                .ValueGeneratedNever()
+                .HasColumnName("user_id");
+            entity.Property(e => e.CurrentStreak).HasColumnName("current_streak");
+            entity.Property(e => e.IsDeleted).HasColumnName("is_deleted");
+            entity.Property(e => e.LastActiveDate).HasColumnName("last_active_date");
+            entity.Property(e => e.LongestStreak).HasColumnName("longest_streak");
+            entity.Property(e => e.TotalCorrectAnswers).HasColumnName("total_correct_answers");
+            entity.Property(e => e.TotalLearningSeconds).HasColumnName("total_learning_seconds");
+            entity.Property(e => e.TotalQuestionsAnswered).HasColumnName("total_questions_answered");
+            entity.Property(e => e.UpdatedAt)
+                .HasDefaultValueSql("(getdate())")
+                .HasColumnType("datetime")
+                .HasColumnName("updated_at");
+            entity.Property(e => e.Xp).HasColumnName("xp");
+
+            entity.HasOne(d => d.User).WithOne(p => p.UserStat)
+                .HasForeignKey<UserStat>(d => d.UserId)
+                .OnDelete(DeleteBehavior.ClientSetNull)
+                .HasConstraintName("FK_UserStats_Users");
         });
 
         OnModelCreatingPartial(modelBuilder);

@@ -29,9 +29,9 @@ public class DocumentServiceTests
         Role = "Teacher", SubscriptionTier = tier, DocumentsProcessed = docsProcessed
     };
 
-    private Document MakeDoc(int id = 1, int teacherId = 10) => new()
+    private Document MakeDoc(int id = 1, int ownerId = 10) => new()
     {
-        Id = id, TeacherId = teacherId, FileUrl = "documents/2025/01/01/test.zip"
+        Id = id, OwnerId = ownerId, FileUrl = "documents/2025/01/01/test.zip"
     };
 
     // ── UploadDocumentAsync ──
@@ -105,7 +105,7 @@ public class DocumentServiceTests
     [Fact]
     public async Task UpdateDocumentAsync_WrongTeacher_ReturnsFalse()
     {
-        _docRepo.Setup(r => r.GetByIdAsync(1)).ReturnsAsync(MakeDoc(teacherId: 99));
+        _docRepo.Setup(r => r.GetByIdAsync(1)).ReturnsAsync(MakeDoc(ownerId: 99));
 
         Assert.False(await _sut.UpdateDocumentAsync(1, 10, "new-key.zip"));
     }
@@ -124,7 +124,7 @@ public class DocumentServiceTests
     [Fact]
     public async Task DeleteDocumentAsync_WrongTeacher_ReturnsFalse()
     {
-        _docRepo.Setup(r => r.GetByIdAsync(1)).ReturnsAsync(MakeDoc(teacherId: 99));
+        _docRepo.Setup(r => r.GetByIdAsync(1)).ReturnsAsync(MakeDoc(ownerId: 99));
 
         Assert.False(await _sut.DeleteDocumentAsync(1, 10));
     }
@@ -150,7 +150,7 @@ public class DocumentServiceTests
     [Fact]
     public async Task ToggleDeleteAsync_WrongTeacher_ReturnsNull()
     {
-        _docRepo.Setup(r => r.GetByIdIncludingDeletedAsync(1)).ReturnsAsync(MakeDoc(teacherId: 99));
+        _docRepo.Setup(r => r.GetByIdIncludingDeletedAsync(1)).ReturnsAsync(MakeDoc(ownerId: 99));
 
         Assert.Null(await _sut.ToggleDeleteAsync(1, 10));
     }
