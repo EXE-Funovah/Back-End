@@ -26,8 +26,8 @@ public class BillingServiceTests
         _configuration = new ConfigurationBuilder()
             .AddInMemoryCollection(new Dictionary<string, string?>
             {
-                ["PayOS:ReturnUrl"] = "https://dev.mascoteach.com/payment/success",
-                ["PayOS:CancelUrl"] = "https://dev.mascoteach.com/payment/cancel"
+                ["PayOS:ReturnUrl"] = "https://dev.mascoteach.com/checkout",
+                ["PayOS:CancelUrl"] = "https://dev.mascoteach.com/checkout/cancel"
             })
             .Build();
 
@@ -74,10 +74,10 @@ public class BillingServiceTests
         _orderRepo.Setup(r => r.SaveChangesAsync()).ReturnsAsync(1);
         _signatureService.Setup(s => s.CreatePaymentRequestSignature(
                 119000,
-                "https://dev.mascoteach.com/payment/cancel",
+                "https://dev.mascoteach.com/checkout/cancel",
                 It.IsAny<string>(),
                 It.IsAny<long>(),
-                "https://dev.mascoteach.com/payment/success"))
+                "https://dev.mascoteach.com/checkout"))
             .Returns("signature");
         _payOsClient.Setup(c => c.CreatePaymentLinkAsync(It.IsAny<PayOsCreatePaymentLinkRequest>()))
             .ReturnsAsync(new PayOsCreatePaymentLinkResult
@@ -100,6 +100,8 @@ public class BillingServiceTests
         Assert.Equal("Pending", addedOrder.Status);
         Assert.Equal("link_123", addedOrder.PaymentLinkId);
         Assert.Equal("https://pay.payos.vn/web/link_123", result.CheckoutUrl);
+        Assert.Equal("https://dev.mascoteach.com/checkout", result.ReturnUrl);
+        Assert.Equal("https://dev.mascoteach.com/checkout/cancel", result.CancelUrl);
     }
 
     [Fact]

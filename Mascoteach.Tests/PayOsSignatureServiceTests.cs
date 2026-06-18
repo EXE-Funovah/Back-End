@@ -13,12 +13,12 @@ public class PayOsSignatureServiceTests
 
         var signature = sut.CreatePaymentRequestSignature(
             amount: 119000,
-            cancelUrl: "https://dev.mascoteach.com/payment/cancel",
+            cancelUrl: "https://dev.mascoteach.com/checkout/cancel",
             description: "MT123456",
             orderCode: 123456,
-            returnUrl: "https://dev.mascoteach.com/payment/success");
+            returnUrl: "https://dev.mascoteach.com/checkout");
 
-        Assert.Equal("a6dca63b8d39cf1f175239f3358aacfe0777866e65835ff24d5bc6207ca7a62b", signature);
+        Assert.Equal("c1056968d1c65b5f1cc2b3699b8e3428684ed79929fc5d0730710ce6e8f0159f", signature);
     }
 
     [Fact]

@@ -76,7 +76,8 @@ All billing endpoints require `[Authorize]` except `payos-webhook`, which is `[A
 4. Backend signs PayOS request with `PayOS:ChecksumKey`.
 5. Backend calls PayOS create payment link API.
 6. Backend stores `payment_link_id`, `checkout_url`, and `qr_code`.
-7. Frontend redirects user to `checkoutUrl`.
+7. Backend returns `checkoutUrl`, `returnUrl`, and `cancelUrl`.
+8. Frontend redirects user to `checkoutUrl` or embeds PayOS using `checkoutUrl`.
 
 PayOS request signature uses fields in alphabetical order:
 
@@ -85,6 +86,29 @@ amount={amount}&cancelUrl={cancelUrl}&description={description}&orderCode={order
 ```
 
 Use HMAC SHA256 with `PayOS:ChecksumKey`, lowercase hex.
+
+## Redirect vs embedded checkout
+
+Redirect flow:
+
+- Frontend opens `checkoutUrl` directly.
+- PayOS uses the `returnUrl` and `cancelUrl` backend sent when creating the payment link.
+- Frontend does not pass a separate `RETURN_URL`.
+
+Embedded flow:
+
+- Frontend uses PayOS embedded SDK/iframe inside its own checkout page.
+- Frontend must pass the same `RETURN_URL` that backend used to create the payment link.
+- Backend returns `returnUrl` in `POST /api/Billing/create-payment-link`.
+- Frontend must use this returned `returnUrl` as the source of truth.
+
+If embedded frontend passes a different `RETURN_URL` than backend used, PayOS can show:
+
+```text
+Thong tin truyen len khong hop le
+```
+
+This is a return URL mismatch, not a QR, CORS, webhook, or database issue.
 
 ## Webhook rules
 
