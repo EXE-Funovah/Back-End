@@ -8,4 +8,6 @@ public class CreatePaymentLinkResponse
     public string Status { get; set; } = null!;
     public string? CheckoutUrl { get; set; }
     public string? QrCode { get; set; }
+    public string ReturnUrl { get; set; } = null!;
+    public string CancelUrl { get; set; } = null!;
 }

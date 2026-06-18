@@ -124,7 +124,7 @@ public class BillingService : IBillingService
             throw;
         }
 
-        return ToCreatePaymentLinkResponse(order);
+        return ToCreatePaymentLinkResponse(order, returnUrl, cancelUrl);
     }
 
     public async Task<BillingStatusResponse?> GetCurrentBillingAsync(int userId)
@@ -302,14 +302,19 @@ public class BillingService : IBillingService
             && user.PremiumExpiresAt.Value > DateTime.UtcNow;
     }
 
-    private static CreatePaymentLinkResponse ToCreatePaymentLinkResponse(PaymentOrder order) => new()
+    private static CreatePaymentLinkResponse ToCreatePaymentLinkResponse(
+        PaymentOrder order,
+        string returnUrl,
+        string cancelUrl) => new()
     {
         OrderCode = order.OrderCode,
         PlanCode = order.PlanCode,
         Amount = order.Amount,
         Status = order.Status,
         CheckoutUrl = order.CheckoutUrl,
-        QrCode = order.QrCode
+        QrCode = order.QrCode,
+        ReturnUrl = returnUrl,
+        CancelUrl = cancelUrl
     };
 
     private static PaymentOrderResponse ToPaymentOrderResponse(PaymentOrder order) => new()
