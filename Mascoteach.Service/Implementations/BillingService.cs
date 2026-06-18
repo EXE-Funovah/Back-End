@@ -15,6 +15,7 @@ public class BillingService : IBillingService
     private const string PaidStatus = "Paid";
     private const string CancelledStatus = "Cancelled";
     private const string FailedStatus = "Failed";
+    private const int PaymentLinkReuseMinutes = 5;
     private static readonly BillingPlanResponse[] Plans =
     [
         new()
@@ -71,6 +72,15 @@ public class BillingService : IBillingService
 
         var returnUrl = GetRequiredConfig("PayOS:ReturnUrl");
         var cancelUrl = GetRequiredConfig("PayOS:CancelUrl");
+        var reusableCutoff = DateTime.UtcNow.AddMinutes(-PaymentLinkReuseMinutes);
+        var reusableOrder = await _orderRepository.GetReusablePendingOrderAsync(
+            userId,
+            plan.PlanCode,
+            reusableCutoff);
+
+        if (reusableOrder != null)
+            return ToCreatePaymentLinkResponse(reusableOrder, returnUrl, cancelUrl);
+
         var orderCode = await GenerateUniqueOrderCodeAsync();
         var description = CreatePayOsDescription(orderCode);
         var signature = _signatureService.CreatePaymentRequestSignature(

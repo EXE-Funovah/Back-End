@@ -105,6 +105,37 @@ public class BillingServiceTests
     }
 
     [Fact]
+    public async Task CreatePaymentLinkAsync_RecentPendingOrderForSamePlan_ReturnsExistingLink()
+    {
+        var user = MakeUser();
+        var existingOrder = MakeOrder(user.Id, "PRO_MONTHLY", 119000);
+        existingOrder.OrderCode = 987654;
+        existingOrder.PaymentLinkId = "link_existing";
+        existingOrder.CheckoutUrl = "https://pay.payos.vn/web/link_existing";
+        existingOrder.QrCode = "existing-qr";
+        existingOrder.CreatedAt = DateTime.UtcNow.AddMinutes(-2);
+        _userRepo.Setup(r => r.GetByIdAsync(user.Id)).ReturnsAsync(user);
+        _orderRepo.Setup(r => r.GetReusablePendingOrderAsync(user.Id, "PRO_MONTHLY", It.IsAny<DateTime>()))
+            .ReturnsAsync(existingOrder);
+
+        var result = await _sut.CreatePaymentLinkAsync(user.Id, new CreatePaymentLinkRequest
+        {
+            PlanCode = "PRO_MONTHLY"
+        });
+
+        Assert.Equal(987654, result.OrderCode);
+        Assert.Equal("PRO_MONTHLY", result.PlanCode);
+        Assert.Equal(119000, result.Amount);
+        Assert.Equal("Pending", result.Status);
+        Assert.Equal("https://pay.payos.vn/web/link_existing", result.CheckoutUrl);
+        Assert.Equal("existing-qr", result.QrCode);
+        Assert.Equal("https://dev.mascoteach.com/checkout", result.ReturnUrl);
+        Assert.Equal("https://dev.mascoteach.com/checkout/cancel", result.CancelUrl);
+        _orderRepo.Verify(r => r.AddAsync(It.IsAny<PaymentOrder>()), Times.Never);
+        _payOsClient.Verify(c => c.CreatePaymentLinkAsync(It.IsAny<PayOsCreatePaymentLinkRequest>()), Times.Never);
+    }
+
+    [Fact]
     public async Task HandlePayOsWebhookAsync_FreeUserWithPaidMonthlyOrder_ExtendsPremiumFromNow()
     {
         var now = DateTime.UtcNow;

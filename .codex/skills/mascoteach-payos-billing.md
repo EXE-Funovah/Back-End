@@ -72,12 +72,14 @@ All billing endpoints require `[Authorize]` except `payos-webhook`, which is `[A
 
 1. Frontend calls `POST /api/Billing/create-payment-link` with `planCode`.
 2. Backend uses `CurrentUserId`; never trust user id from request body.
-3. Backend creates a `PaymentOrder` with `Pending` status.
-4. Backend signs PayOS request with `PayOS:ChecksumKey`.
-5. Backend calls PayOS create payment link API.
-6. Backend stores `payment_link_id`, `checkout_url`, and `qr_code`.
-7. Backend returns `checkoutUrl`, `returnUrl`, and `cancelUrl`.
-8. Frontend redirects user to `checkoutUrl` or embeds PayOS using `checkoutUrl`.
+3. Backend checks for an existing reusable `Pending` order for the same user and same plan created within the last 5 minutes.
+4. If reusable order exists and has `checkout_url`, backend returns that existing `checkoutUrl`, `returnUrl`, and `cancelUrl`.
+5. If no reusable order exists, backend creates a new `PaymentOrder` with `Pending` status.
+6. Backend signs PayOS request with `PayOS:ChecksumKey`.
+7. Backend calls PayOS create payment link API.
+8. Backend stores `payment_link_id`, `checkout_url`, and `qr_code`.
+9. Backend returns `checkoutUrl`, `returnUrl`, and `cancelUrl`.
+10. Frontend redirects user to `checkoutUrl` or embeds PayOS using `checkoutUrl`.
 
 PayOS request signature uses fields in alphabetical order:
 
@@ -238,6 +240,7 @@ Important test cases:
 - Successful webhook extends active Premium from existing expiry.
 - Duplicate paid webhook does not extend Premium twice.
 - Amount mismatch does not grant Premium.
+- Repeated create-payment-link calls for the same user and plan within 5 minutes reuse the existing pending checkout URL.
 - Owner can cancel a pending order.
 - Paid order cannot be cancelled.
 - Other user's order cannot be cancelled.
@@ -252,3 +255,4 @@ Important test cases:
 - Do not leave production PayOS channel pointing to `api-dev`.
 - Do not forget PayOS GitHub Secrets before deploy.
 - Do not hardcode PayOS secrets in committed config.
+- Do not create a new PayOS payment link on every plan toggle when a same-plan pending link is still reusable.

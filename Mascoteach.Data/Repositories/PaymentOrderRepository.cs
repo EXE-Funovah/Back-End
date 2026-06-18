@@ -22,6 +22,19 @@ public class PaymentOrderRepository : GenericRepository<PaymentOrder>, IPaymentO
             .FirstOrDefaultAsync(o => o.OrderCode == orderCode && o.IsDeleted == false);
     }
 
+    public async Task<PaymentOrder?> GetReusablePendingOrderAsync(int userId, string planCode, DateTime createdAfter)
+    {
+        return await _context.PaymentOrders
+            .Where(o => o.UserId == userId
+                && o.PlanCode == planCode
+                && o.Status == "Pending"
+                && o.IsDeleted == false
+                && o.CreatedAt >= createdAfter
+                && o.CheckoutUrl != null)
+            .OrderByDescending(o => o.CreatedAt)
+            .FirstOrDefaultAsync();
+    }
+
     public async Task<IEnumerable<PaymentOrder>> GetByUserIdAsync(int userId)
     {
         return await _context.PaymentOrders
