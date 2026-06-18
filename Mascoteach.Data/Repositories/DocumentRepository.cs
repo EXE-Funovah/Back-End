@@ -27,5 +27,11 @@ namespace Mascoteach.Data.Repositories
         {
             return await _context.Documents.FindAsync(id);
         }
+
+        public async Task<int> CountActiveByOwnerIdAsync(int ownerId)
+        {
+            return await _context.Documents
+                .CountAsync(d => d.OwnerId == ownerId && d.IsDeleted == false);
+        }
     }
 }

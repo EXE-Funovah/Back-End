@@ -133,6 +133,9 @@ Current document addition:
 
 - `Documents.file_name`
 - `Documents.owner_id` replaces the old `Documents.teacher_id` column.
+- Freemium document quota uses active document count (`Documents.owner_id` + `is_deleted = 0`) and `Plans:FreemiumActiveDocumentLimit` (currently 5).
+- `Users.documents_processed` is a lifetime upload counter/analytics field, not the active quota source.
+- Premium document upload is unlimited unless a future subscription plan model explicitly changes this.
 
 Current gamification schema:
 
@@ -168,6 +171,7 @@ For develop deployments, ensure these GitHub Secrets exist when auth email/Googl
 - `DEV_FRONTEND_VERIFY_EMAIL_URL`
 - `DEV_AUTH_PASSWORD_RESET_TOKEN_MINUTES`
 - `DEV_AUTH_EMAIL_VERIFICATION_TOKEN_HOURS`
+- `DEV_FREEMIUM_ACTIVE_DOCUMENT_LIMIT`
 - `DEV_EMAIL_SMTP_HOST`
 - `DEV_EMAIL_SMTP_PORT`
 - `DEV_EMAIL_USERNAME`

@@ -4,6 +4,7 @@ using Mascoteach.Data.Models;
 using Mascoteach.Service.DTOs;
 using Mascoteach.Service.Implementations;
 using Mascoteach.Service.Interfaces;
+using Microsoft.Extensions.Configuration;
 using Microsoft.EntityFrameworkCore.Storage;
 using Moq;
 using Xunit;
@@ -16,11 +17,18 @@ public class DocumentServiceTests
     private readonly Mock<IUserRepository> _userRepo = new();
     private readonly Mock<IS3Service> _s3Service = new();
     private readonly IMapper _mapper = TestHelper.CreateMapper();
+    private readonly IConfiguration _configuration;
     private readonly DocumentService _sut;
 
     public DocumentServiceTests()
     {
-        _sut = new DocumentService(_docRepo.Object, _userRepo.Object, _mapper, _s3Service.Object);
+        _configuration = new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                ["Plans:FreemiumActiveDocumentLimit"] = "5"
+            })
+            .Build();
+        _sut = new DocumentService(_docRepo.Object, _userRepo.Object, _mapper, _s3Service.Object, _configuration);
     }
 
     private User MakeUser(int id = 10, string tier = "Freemium", int docsProcessed = 0) => new()
@@ -29,19 +37,20 @@ public class DocumentServiceTests
         Role = "Teacher", SubscriptionTier = tier, DocumentsProcessed = docsProcessed
     };
 
-    private Document MakeDoc(int id = 1, int ownerId = 10) => new()
+    private Document MakeDoc(int id = 1, int ownerId = 10, bool isDeleted = false) => new()
     {
-        Id = id, OwnerId = ownerId, FileUrl = "documents/2025/01/01/test.zip"
+        Id = id, OwnerId = ownerId, FileUrl = "documents/2025/01/01/test.zip", IsDeleted = isDeleted
     };
 
     // ── UploadDocumentAsync ──
 
     [Fact]
-    public async Task UploadDocumentAsync_UnderQuota_Succeeds()
+    public async Task UploadDocumentAsync_FreemiumWithFourActiveDocuments_Succeeds()
     {
-        var user = MakeUser(docsProcessed: 5);
+        var user = MakeUser();
         Document? addedDocument = null;
         _userRepo.Setup(r => r.GetByIdAsync(10)).ReturnsAsync(user);
+        _docRepo.Setup(r => r.CountActiveByOwnerIdAsync(10)).ReturnsAsync(4);
         var mockTx = new Mock<IDbContextTransaction>();
         _docRepo.Setup(r => r.BeginTransactionAsync()).ReturnsAsync(mockTx.Object);
         _docRepo.Setup(r => r.AddAsync(It.IsAny<Document>()))
@@ -66,13 +75,34 @@ public class DocumentServiceTests
     }
 
     [Fact]
-    public async Task UploadDocumentAsync_FreemiumQuotaExceeded_Throws()
+    public async Task UploadDocumentAsync_FreemiumWithFiveActiveDocuments_Throws()
     {
-        var user = MakeUser(docsProcessed: 50);
+        var user = MakeUser(docsProcessed: 0);
         _userRepo.Setup(r => r.GetByIdAsync(10)).ReturnsAsync(user);
+        _docRepo.Setup(r => r.CountActiveByOwnerIdAsync(10)).ReturnsAsync(5);
 
         await Assert.ThrowsAsync<InvalidOperationException>(
             () => _sut.UploadDocumentAsync(10, new DocumentCreateRequest { S3Key = "key.zip" }));
+    }
+
+    [Fact]
+    public async Task UploadDocumentAsync_PremiumWithFiveActiveDocuments_Succeeds()
+    {
+        var user = MakeUser(tier: "Premium");
+        _userRepo.Setup(r => r.GetByIdAsync(10)).ReturnsAsync(user);
+        _docRepo.Setup(r => r.CountActiveByOwnerIdAsync(10)).ReturnsAsync(5);
+        var mockTx = new Mock<IDbContextTransaction>();
+        _docRepo.Setup(r => r.BeginTransactionAsync()).ReturnsAsync(mockTx.Object);
+        _docRepo.Setup(r => r.AddAsync(It.IsAny<Document>())).Returns(Task.CompletedTask);
+        _docRepo.Setup(r => r.SaveChangesAsync()).ReturnsAsync(1);
+        _userRepo.Setup(r => r.SaveChangesAsync()).ReturnsAsync(1);
+        _s3Service.Setup(s => s.GeneratePresignedDownloadUrlAsync(It.IsAny<string>()))
+            .ReturnsAsync("https://presigned-url");
+
+        var result = await _sut.UploadDocumentAsync(10, new DocumentCreateRequest { S3Key = "key.zip" });
+
+        Assert.NotNull(result);
+        _docRepo.Verify(r => r.CountActiveByOwnerIdAsync(It.IsAny<int>()), Times.Never);
     }
 
     [Fact]
@@ -145,6 +175,35 @@ public class DocumentServiceTests
 
         Assert.NotNull(result);
         Assert.True(result!.IsDeleted);
+    }
+
+    [Fact]
+    public async Task ToggleDeleteAsync_FreemiumRestoreWithinLimit_TogglesToActive()
+    {
+        var doc = MakeDoc(isDeleted: true);
+        _docRepo.Setup(r => r.GetByIdIncludingDeletedAsync(1)).ReturnsAsync(doc);
+        _userRepo.Setup(r => r.GetByIdAsync(10)).ReturnsAsync(MakeUser());
+        _docRepo.Setup(r => r.CountActiveByOwnerIdAsync(10)).ReturnsAsync(4);
+        _docRepo.Setup(r => r.SaveChangesAsync()).ReturnsAsync(1);
+        _s3Service.Setup(s => s.GeneratePresignedDownloadUrlAsync(It.IsAny<string>()))
+            .ReturnsAsync("https://url");
+
+        var result = await _sut.ToggleDeleteAsync(1, 10);
+
+        Assert.NotNull(result);
+        Assert.False(result!.IsDeleted);
+    }
+
+    [Fact]
+    public async Task ToggleDeleteAsync_FreemiumRestoreOverLimit_Throws()
+    {
+        var doc = MakeDoc(isDeleted: true);
+        _docRepo.Setup(r => r.GetByIdIncludingDeletedAsync(1)).ReturnsAsync(doc);
+        _userRepo.Setup(r => r.GetByIdAsync(10)).ReturnsAsync(MakeUser());
+        _docRepo.Setup(r => r.CountActiveByOwnerIdAsync(10)).ReturnsAsync(5);
+
+        await Assert.ThrowsAsync<InvalidOperationException>(
+            () => _sut.ToggleDeleteAsync(1, 10));
     }
 
     [Fact]
