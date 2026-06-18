@@ -83,6 +83,21 @@ Mascoteach is DB-first. For schema changes:
 - Review `Mascoteach.Data/Models/User.cs` and `Mascoteach.Data/Models/MascoteachDbContext.cs` or any affected model/context files before editing business logic.
 - Production deployment requires the SQL rollout to happen before the new backend container starts using the new columns.
 
+## Current DB rollout state
+
+The gamification/document-owner rollout has already been applied to both dev and production:
+
+- `Documents.owner_id` exists and replaces the old `Documents.teacher_id`.
+- `User_Stats` exists.
+- `Quiz_Attempts` exists.
+- Document Freemium active upload quota is runtime-configured with `Plans:FreemiumActiveDocumentLimit`.
+- Develop deploy secret: `DEV_FREEMIUM_ACTIVE_DOCUMENT_LIMIT`.
+- Production deploy secret: `FREEMIUM_ACTIVE_DOCUMENT_LIMIT`.
+- Current expected value is `5`.
+
+Do not generate future production scripts that assume `Documents.teacher_id` still exists. `LiveSessions.teacher_id`
+is still valid and should remain unchanged unless a separate live-session schema change is requested.
+
 ## Current auth/email deployment keys
 
 Develop secrets:
@@ -92,6 +107,7 @@ Develop secrets:
 - `DEV_FRONTEND_VERIFY_EMAIL_URL`
 - `DEV_AUTH_PASSWORD_RESET_TOKEN_MINUTES`
 - `DEV_AUTH_EMAIL_VERIFICATION_TOKEN_HOURS`
+- `DEV_FREEMIUM_ACTIVE_DOCUMENT_LIMIT`
 - `DEV_EMAIL_SMTP_HOST`
 - `DEV_EMAIL_SMTP_PORT`
 - `DEV_EMAIL_USERNAME`

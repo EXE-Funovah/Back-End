@@ -39,15 +39,15 @@ description: |
   - `AuthController.ResetPassword`
   - student live-session lookup by PIN
   - student session-participant creation
-- If an endpoint creates teacher-owned data, set owner fields from `CurrentUserId`, not request body.
+- If an endpoint creates owner-scoped data, set owner fields from `CurrentUserId`, not request body.
 
 ## Ownership rules
 
-For teacher-owned resources:
+For owner-scoped resources:
 
-1. Get current teacher id from `CurrentUserId`.
+1. Get current user id from `CurrentUserId`.
 2. Fetch the resource through service/repository.
-3. Compare resource owner id to current teacher id.
+3. Compare resource owner id to current user id.
 4. Return `false`/`null` from the service when the resource is missing or not owned.
 5. Controller should return `Forbid(...)` for ownership failures when existing local pattern does so.
 

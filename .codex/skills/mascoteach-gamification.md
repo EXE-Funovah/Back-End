@@ -29,6 +29,7 @@ Gamification currently depends on:
 - Existing `Quizzes`, `Questions`, `Options`, `Documents`.
 
 `Documents.owner_id` is the document owner column. Treat it as the owner id for both teachers and students.
+Dev and production databases have already been rolled out with `Documents.owner_id`, `User_Stats`, and `Quiz_Attempts`.
 
 ## Submit quiz rules
 

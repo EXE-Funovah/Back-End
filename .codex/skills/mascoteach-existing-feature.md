@@ -61,7 +61,12 @@ Default flow:
 - Custom repository queries must explicitly filter deleted records.
 - Controllers that need current user data must inherit `BaseController`.
 - Prefer `[Authorize]` by default. Use `[AllowAnonymous]` only for public flows such as login/register, student join, or PIN lookup.
-- Use `CurrentUserId` for ownership checks when the logged-in teacher owns the resource.
+- Use `CurrentUserId` for ownership checks when the logged-in user owns the resource.
+- `Documents.owner_id` is the document owner column for both teacher and student uploads.
+- Document Freemium quota is based on active document count (`Documents.owner_id == CurrentUserId` and `is_deleted == false`), not `Users.documents_processed`.
+- `Users.documents_processed` is a lifetime upload counter/analytics field and should still increment on successful document creation.
+- `DELETE /api/Document/{id}` soft-deletes via `GenericRepository.Delete` when the model has `IsDeleted`; `PATCH /toggle-delete` toggles soft-delete state.
+- `LiveSessions.teacher_id` remains the live-session teacher/host column; do not rename it to owner.
 - Use AutoMapper for entity-to-DTO and create-request-to-entity mapping.
 - Manual field updates in service implementations are acceptable and common for update requests.
 
@@ -80,5 +85,6 @@ If dependencies changed or restore is required, run normal `dotnet build`.
 - Do not add business logic to controllers.
 - Do not hard-delete rows unless explicitly requested.
 - Do not forget `IsDeleted == false` in custom repository queries.
-- Do not return resources owned by another teacher when the endpoint is scoped to the current user.
+- Do not return resources owned by another user when the endpoint is scoped to the current user.
 - Do not store S3 presigned URLs in the database; document storage uses S3 keys.
+- Do not use `DocumentsProcessed` to decide whether Freemium can upload; use active document count and `Plans:FreemiumActiveDocumentLimit`.

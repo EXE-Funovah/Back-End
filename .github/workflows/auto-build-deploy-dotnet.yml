@@ -39,6 +39,7 @@ jobs:
       FRONTEND_VERIFY_EMAIL_URL: ${{ github.ref_name == 'develop' && secrets.DEV_FRONTEND_VERIFY_EMAIL_URL || secrets.FRONTEND_VERIFY_EMAIL_URL }}
       AUTH_PASSWORD_RESET_TOKEN_MINUTES: ${{ github.ref_name == 'develop' && secrets.DEV_AUTH_PASSWORD_RESET_TOKEN_MINUTES || secrets.AUTH_PASSWORD_RESET_TOKEN_MINUTES }}
       AUTH_EMAIL_VERIFICATION_TOKEN_HOURS: ${{ github.ref_name == 'develop' && secrets.DEV_AUTH_EMAIL_VERIFICATION_TOKEN_HOURS || secrets.AUTH_EMAIL_VERIFICATION_TOKEN_HOURS }}
+      FREEMIUM_ACTIVE_DOCUMENT_LIMIT: ${{ github.ref_name == 'develop' && secrets.DEV_FREEMIUM_ACTIVE_DOCUMENT_LIMIT || secrets.FREEMIUM_ACTIVE_DOCUMENT_LIMIT }}
       EMAIL_SMTP_HOST: ${{ github.ref_name == 'develop' && secrets.DEV_EMAIL_SMTP_HOST || secrets.EMAIL_SMTP_HOST }}
       EMAIL_SMTP_PORT: ${{ github.ref_name == 'develop' && secrets.DEV_EMAIL_SMTP_PORT || secrets.EMAIL_SMTP_PORT }}
       EMAIL_USERNAME: ${{ github.ref_name == 'develop' && secrets.DEV_EMAIL_USERNAME || secrets.EMAIL_USERNAME }}
@@ -81,6 +82,7 @@ jobs:
             -e Frontend__VerifyEmailUrl="$FRONTEND_VERIFY_EMAIL_URL" \
             -e Auth__PasswordResetTokenMinutes="$AUTH_PASSWORD_RESET_TOKEN_MINUTES" \
             -e Auth__EmailVerificationTokenHours="$AUTH_EMAIL_VERIFICATION_TOKEN_HOURS" \
+            -e Plans__FreemiumActiveDocumentLimit="$FREEMIUM_ACTIVE_DOCUMENT_LIMIT" \
             -e Email__SmtpHost="$EMAIL_SMTP_HOST" \
             -e Email__SmtpPort="$EMAIL_SMTP_PORT" \
             -e Email__Username="$EMAIL_USERNAME" \

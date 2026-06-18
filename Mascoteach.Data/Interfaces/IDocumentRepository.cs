@@ -11,5 +11,6 @@ namespace Mascoteach.Data.Interfaces
     {
         Task<IEnumerable<Document>> GetByOwnerIdAsync(int ownerId);
         Task<Document?> GetByIdIncludingDeletedAsync(int id);
+        Task<int> CountActiveByOwnerIdAsync(int ownerId);
     }
 }
