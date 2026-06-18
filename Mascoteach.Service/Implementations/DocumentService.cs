@@ -3,6 +3,7 @@ using Mascoteach.Data.Interfaces;
 using Mascoteach.Data.Models;
 using Mascoteach.Service.DTOs;
 using Mascoteach.Service.Interfaces;
+using Microsoft.Extensions.Configuration;
 
 namespace Mascoteach.Service.Implementations;
 
@@ -12,13 +13,21 @@ public class DocumentService : IDocumentService
     private readonly IUserRepository _userRepository;
     private readonly IMapper _mapper;
     private readonly IS3Service _s3Service;
+    private readonly IConfiguration _configuration;
+    private const int DefaultFreemiumActiveDocumentLimit = 5;
 
-    public DocumentService(IDocumentRepository documentRepository, IUserRepository userRepository, IMapper mapper, IS3Service s3Service)
+    public DocumentService(
+        IDocumentRepository documentRepository,
+        IUserRepository userRepository,
+        IMapper mapper,
+        IS3Service s3Service,
+        IConfiguration configuration)
     {
         _documentRepository = documentRepository;
         _userRepository = userRepository;
         _mapper = mapper;
         _s3Service = s3Service;
+        _configuration = configuration;
     }
 
     private static void EnsureZipS3Key(string s3Key)
@@ -30,6 +39,29 @@ public class DocumentService : IDocumentService
             throw new ArgumentException($"S3 key must end with .zip. Got: {s3Key}");
     }
 
+    private int GetFreemiumActiveDocumentLimit()
+    {
+        var configuredLimit = _configuration["Plans:FreemiumActiveDocumentLimit"];
+
+        if (int.TryParse(configuredLimit, out var limit) && limit > 0)
+            return limit;
+
+        return DefaultFreemiumActiveDocumentLimit;
+    }
+
+    private async Task EnsureCanActivateDocumentAsync(User user)
+    {
+        var isPremium = string.Equals(user.SubscriptionTier, "Premium", StringComparison.OrdinalIgnoreCase);
+        if (isPremium) return;
+
+        var activeDocumentCount = await _documentRepository.CountActiveByOwnerIdAsync(user.Id);
+        var activeDocumentLimit = GetFreemiumActiveDocumentLimit();
+
+        if (activeDocumentCount >= activeDocumentLimit)
+            throw new InvalidOperationException(
+                $"You have reached the limit of {activeDocumentLimit} active documents for the Freemium tier. Please upgrade to Premium.");
+    }
+
     public async Task<DocumentResponse> UploadDocumentAsync(int ownerId, DocumentCreateRequest request)
     {
         EnsureZipS3Key(request.S3Key);
@@ -37,9 +69,7 @@ public class DocumentService : IDocumentService
         var user = await _userRepository.GetByIdAsync(ownerId)
             ?? throw new KeyNotFoundException($"User with id {ownerId} not found.");
 
-        if (user.SubscriptionTier == "Freemium" && (user.DocumentsProcessed ?? 0) >= 50)
-            throw new InvalidOperationException(
-                "You have reached the limit of 50 documents for the Freemium tier. Please upgrade to Premium.");
+        await EnsureCanActivateDocumentAsync(user);
 
         using var transaction = await _documentRepository.BeginTransactionAsync();
         try
@@ -131,6 +161,14 @@ public class DocumentService : IDocumentService
         // Bypass soft-delete filter to find any doc (including already-deleted ones)
         var doc = await _documentRepository.GetByIdIncludingDeletedAsync(id);
         if (doc == null || doc.OwnerId != ownerId) return null;
+
+        if (doc.IsDeleted)
+        {
+            var user = await _userRepository.GetByIdAsync(ownerId)
+                ?? throw new KeyNotFoundException($"User with id {ownerId} not found.");
+            await EnsureCanActivateDocumentAsync(user);
+        }
+
         doc.IsDeleted = !doc.IsDeleted;
         _documentRepository.Update(doc);
         await _documentRepository.SaveChangesAsync();
