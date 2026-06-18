@@ -55,8 +55,15 @@ Apply this to all document-returning methods:
 
 - Document create/update/delete uses `CurrentUserId` from controller.
 - Only the owner teacher can update/delete/toggle a document.
-- Freemium users currently have a 50 document limit using `User.DocumentsProcessed`.
-- `UploadDocumentAsync` increments `DocumentsProcessed` in the same transaction as document creation.
+- Freemium users currently have a configurable 5 active document limit.
+- Active document quota counts rows in `Documents` where `owner_id == CurrentUserId` and `is_deleted == false`.
+- Read the quota from `Plans:FreemiumActiveDocumentLimit`; default/fallback is 5.
+- Deploy override uses `Plans__FreemiumActiveDocumentLimit`.
+- Premium users are unlimited for document uploads; do not add a Premium limit config unless the product plan changes.
+- `User.DocumentsProcessed` is a lifetime upload counter/analytics field, not the Freemium quota source.
+- `UploadDocumentAsync` still increments `DocumentsProcessed` in the same transaction as document creation.
+- `DELETE /api/Document/{id}` soft-deletes documents through `GenericRepository.Delete` because `Document` has `IsDeleted`.
+- `PATCH /api/Document/{id}/toggle-delete` toggles soft-delete state. Restoring a deleted document must also check active document quota.
 
 ## S3 service conventions
 
@@ -87,5 +94,7 @@ Remember to generate `PresignedUrl`; AutoMapper will not fill it.
 - No code saves `UploadUrl` or `PresignedUrl` to `Document.FileUrl`.
 - Response DTO exposes both `S3Key` and fresh `PresignedUrl`.
 - Owner checks use current teacher id.
+- Freemium quota checks count active documents, not `DocumentsProcessed`.
 - Transactions commit document create and processed-count update together.
+- Restore/toggle from deleted to active cannot bypass Freemium active document quota.
 - `dotnet build EXE101-Mascoteach-Backend.sln --no-restore` succeeds.
