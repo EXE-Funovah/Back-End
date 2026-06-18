@@ -7,6 +7,7 @@ public class UserResponse
     public string Email { get; set; } = null!;
     public string Role { get; set; } = null!;
     public string SubscriptionTier { get; set; } = null!;
+    public DateTime? PremiumExpiresAt { get; set; }
     public int? DocumentsProcessed { get; set; }
     public DateTime? CreatedAt { get; set; }
     public bool IsDeleted { get; set; }

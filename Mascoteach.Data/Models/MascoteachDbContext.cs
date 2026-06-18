@@ -19,6 +19,10 @@ public partial class MascoteachDbContext : DbContext
 
     public virtual DbSet<Option> Options { get; set; }
 
+    public virtual DbSet<PaymentOrder> PaymentOrders { get; set; }
+
+    public virtual DbSet<PaymentWebhookEvent> PaymentWebhookEvents { get; set; }
+
     public virtual DbSet<Question> Questions { get; set; }
 
     public virtual DbSet<Quiz> Quizzes { get; set; }
@@ -132,6 +136,96 @@ public partial class MascoteachDbContext : DbContext
                 .HasForeignKey(d => d.QuestionId)
                 .OnDelete(DeleteBehavior.ClientSetNull)
                 .HasConstraintName("FK_Options_Questions");
+        });
+
+        modelBuilder.Entity<PaymentOrder>(entity =>
+        {
+            entity.ToTable("Payment_Orders");
+
+            entity.HasIndex(e => e.UserId, "IX_Payment_Orders_user_id");
+
+            entity.HasIndex(e => e.OrderCode, "UX_Payment_Orders_order_code").IsUnique();
+
+            entity.Property(e => e.Id).HasColumnName("id");
+            entity.Property(e => e.Amount).HasColumnName("amount");
+            entity.Property(e => e.CancelledAt).HasColumnName("cancelled_at");
+            entity.Property(e => e.CheckoutUrl)
+                .HasMaxLength(1000)
+                .HasColumnName("checkout_url");
+            entity.Property(e => e.CreatedAt)
+                .HasDefaultValueSql("(sysutcdatetime())")
+                .HasColumnName("created_at");
+            entity.Property(e => e.Currency)
+                .HasMaxLength(10)
+                .IsUnicode(false)
+                .HasDefaultValue("VND")
+                .HasColumnName("currency");
+            entity.Property(e => e.IsDeleted).HasColumnName("is_deleted");
+            entity.Property(e => e.OrderCode).HasColumnName("order_code");
+            entity.Property(e => e.PaidAt).HasColumnName("paid_at");
+            entity.Property(e => e.PaymentLinkId)
+                .HasMaxLength(100)
+                .IsUnicode(false)
+                .HasColumnName("payment_link_id");
+            entity.Property(e => e.PayosReference)
+                .HasMaxLength(100)
+                .IsUnicode(false)
+                .HasColumnName("payos_reference");
+            entity.Property(e => e.PlanCode)
+                .HasMaxLength(50)
+                .IsUnicode(false)
+                .HasColumnName("plan_code");
+            entity.Property(e => e.Provider)
+                .HasMaxLength(30)
+                .IsUnicode(false)
+                .HasDefaultValue("PayOS")
+                .HasColumnName("provider");
+            entity.Property(e => e.QrCode).HasColumnName("qr_code");
+            entity.Property(e => e.Status)
+                .HasMaxLength(30)
+                .IsUnicode(false)
+                .HasDefaultValue("Pending")
+                .HasColumnName("status");
+            entity.Property(e => e.UpdatedAt).HasColumnName("updated_at");
+            entity.Property(e => e.UserId).HasColumnName("user_id");
+
+            entity.HasOne(d => d.User).WithMany(p => p.PaymentOrders)
+                .HasForeignKey(d => d.UserId)
+                .OnDelete(DeleteBehavior.ClientSetNull)
+                .HasConstraintName("FK_Payment_Orders_Users");
+        });
+
+        modelBuilder.Entity<PaymentWebhookEvent>(entity =>
+        {
+            entity.ToTable("Payment_Webhook_Events");
+
+            entity.HasIndex(e => e.OrderCode, "IX_Payment_Webhook_Events_order_code");
+
+            entity.Property(e => e.Id).HasColumnName("id");
+            entity.Property(e => e.IsProcessed).HasColumnName("is_processed");
+            entity.Property(e => e.OrderCode).HasColumnName("order_code");
+            entity.Property(e => e.Payload).HasColumnName("payload");
+            entity.Property(e => e.PaymentLinkId)
+                .HasMaxLength(100)
+                .IsUnicode(false)
+                .HasColumnName("payment_link_id");
+            entity.Property(e => e.ProcessedAt)
+                .HasDefaultValueSql("(sysutcdatetime())")
+                .HasColumnName("processed_at");
+            entity.Property(e => e.ProcessingError).HasColumnName("processing_error");
+            entity.Property(e => e.Provider)
+                .HasMaxLength(30)
+                .IsUnicode(false)
+                .HasDefaultValue("PayOS")
+                .HasColumnName("provider");
+            entity.Property(e => e.Reference)
+                .HasMaxLength(100)
+                .IsUnicode(false)
+                .HasColumnName("reference");
+            entity.Property(e => e.Signature)
+                .HasMaxLength(200)
+                .IsUnicode(false)
+                .HasColumnName("signature");
         });
 
         modelBuilder.Entity<Question>(entity =>
@@ -281,6 +375,7 @@ public partial class MascoteachDbContext : DbContext
                 .HasMaxLength(255)
                 .IsUnicode(false)
                 .HasColumnName("password_hash");
+            entity.Property(e => e.PremiumExpiresAt).HasColumnName("premium_expires_at");
             entity.Property(e => e.ResetTokenExpiresAt)
                 .HasColumnType("datetime")
                 .HasColumnName("reset_token_expires_at");
