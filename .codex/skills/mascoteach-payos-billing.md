@@ -119,7 +119,7 @@ Do not grant Premium from return URL or frontend-only data.
 When a user presses Cancel on PayOS, PayOS redirects the browser to the frontend cancel URL and appends query params similar to:
 
 ```text
-/payment/cancel?code=00&id=...&cancel=true&status=CANCELLED&orderCode=178...
+/checkout/cancel?code=00&id=...&cancel=true&status=CANCELLED&orderCode=178...
 ```
 
 Frontend must read `orderCode` and call:
@@ -142,13 +142,13 @@ Do not expose a public unauthenticated cancel endpoint.
 
 Development:
 
-- `https://dev.mascoteach.com/payment/success`
-- `https://dev.mascoteach.com/payment/cancel`
+- `https://dev.mascoteach.com/checkout`
+- `https://dev.mascoteach.com/checkout/cancel`
 
 Production:
 
-- `https://mascoteach.com/payment/success`
-- `https://mascoteach.com/payment/cancel`
+- `https://mascoteach.com/checkout`
+- `https://mascoteach.com/checkout/cancel`
 
 Return/cancel pages are UI feedback only. They must refresh backend state through Billing APIs.
 

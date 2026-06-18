@@ -139,10 +139,10 @@ Production secrets:
 
 Expected frontend URLs:
 
-- Develop return: `https://dev.mascoteach.com/payment/success`
-- Develop cancel: `https://dev.mascoteach.com/payment/cancel`
-- Production return: `https://mascoteach.com/payment/success`
-- Production cancel: `https://mascoteach.com/payment/cancel`
+- Develop return: `https://dev.mascoteach.com/checkout`
+- Develop cancel: `https://dev.mascoteach.com/checkout/cancel`
+- Production return: `https://mascoteach.com/checkout`
+- Production cancel: `https://mascoteach.com/checkout/cancel`
 
 Expected PayOS webhook URLs:
 
