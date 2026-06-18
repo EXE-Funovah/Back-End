@@ -39,6 +39,8 @@ builder.Services.AddScoped<ILiveSessionRepository, LiveSessionRepository>();
 builder.Services.AddScoped<ISessionParticipantRepository, SessionParticipantRepository>();
 builder.Services.AddScoped<IUserStatRepository, UserStatRepository>();
 builder.Services.AddScoped<IQuizAttemptRepository, QuizAttemptRepository>();
+builder.Services.AddScoped<IPaymentOrderRepository, PaymentOrderRepository>();
+builder.Services.AddScoped<IPaymentWebhookEventRepository, PaymentWebhookEventRepository>();
 
 
 
@@ -58,6 +60,9 @@ builder.Services.AddScoped<IEmailService, EmailService>();
 builder.Services.AddScoped<IUserStatService, UserStatService>();
 builder.Services.AddScoped<IQuizAttemptService, QuizAttemptService>();
 builder.Services.AddScoped<IGoogleTokenValidator, GoogleTokenValidator>();
+builder.Services.AddScoped<IBillingService, BillingService>();
+builder.Services.AddScoped<IPayOsSignatureService, PayOsSignatureService>();
+builder.Services.AddHttpClient<IPayOsClient, PayOsClient>();
 builder.Services.AddSignalR(); // signalR
 builder.Services.AddMemoryCache(); 
 

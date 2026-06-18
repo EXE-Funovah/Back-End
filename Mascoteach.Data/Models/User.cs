@@ -39,9 +39,13 @@ public partial class User
 
     public DateTime? EmailVerificationTokenExpiresAt { get; set; }
 
+    public DateTime? PremiumExpiresAt { get; set; }
+
     public virtual ICollection<Document> Documents { get; set; } = new List<Document>();
 
     public virtual ICollection<LiveSession> LiveSessions { get; set; } = new List<LiveSession>();
+
+    public virtual ICollection<PaymentOrder> PaymentOrders { get; set; } = new List<PaymentOrder>();
 
     public virtual ICollection<QuizAttempt> QuizAttempts { get; set; } = new List<QuizAttempt>();
 
