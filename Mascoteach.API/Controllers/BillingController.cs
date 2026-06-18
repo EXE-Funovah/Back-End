@@ -59,6 +59,14 @@ public class BillingController : BaseController
         return Ok(result);
     }
 
+    [HttpPatch("orders/{orderCode:long}/cancel")]
+    public async Task<IActionResult> CancelOrder(long orderCode)
+    {
+        var success = await _billingService.CancelOrderAsync(CurrentUserId, orderCode);
+        if (!success) return BadRequest("Payment order does not exist, does not belong to you, or cannot be cancelled.");
+        return Ok("Payment order cancelled.");
+    }
+
     [AllowAnonymous]
     [HttpPost("payos-webhook")]
     public async Task<IActionResult> PayOsWebhook([FromBody] PayOsWebhookRequest request)

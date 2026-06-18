@@ -192,6 +192,50 @@ public class BillingServiceTests
         Assert.NotEqual("Paid", order.Status);
     }
 
+    [Fact]
+    public async Task CancelOrderAsync_OwnerPendingOrder_MarksOrderCancelled()
+    {
+        var order = MakeOrder(userId: 10, planCode: "PRO_MONTHLY", amount: 119000);
+        _orderRepo.Setup(r => r.GetByOrderCodeAsync(order.OrderCode)).ReturnsAsync(order);
+        _orderRepo.Setup(r => r.SaveChangesAsync()).ReturnsAsync(1);
+
+        var result = await _sut.CancelOrderAsync(10, order.OrderCode);
+
+        Assert.True(result);
+        Assert.Equal("Cancelled", order.Status);
+        Assert.NotNull(order.CancelledAt);
+        Assert.NotNull(order.UpdatedAt);
+        _orderRepo.Verify(r => r.Update(order), Times.Once);
+    }
+
+    [Fact]
+    public async Task CancelOrderAsync_PaidOrder_ReturnsFalseAndDoesNotChangeStatus()
+    {
+        var order = MakeOrder(userId: 10, planCode: "PRO_MONTHLY", amount: 119000);
+        order.Status = "Paid";
+        _orderRepo.Setup(r => r.GetByOrderCodeAsync(order.OrderCode)).ReturnsAsync(order);
+
+        var result = await _sut.CancelOrderAsync(10, order.OrderCode);
+
+        Assert.False(result);
+        Assert.Equal("Paid", order.Status);
+        Assert.Null(order.CancelledAt);
+        _orderRepo.Verify(r => r.Update(It.IsAny<PaymentOrder>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task CancelOrderAsync_OtherUsersOrder_ReturnsFalse()
+    {
+        var order = MakeOrder(userId: 99, planCode: "PRO_MONTHLY", amount: 119000);
+        _orderRepo.Setup(r => r.GetByOrderCodeAsync(order.OrderCode)).ReturnsAsync(order);
+
+        var result = await _sut.CancelOrderAsync(10, order.OrderCode);
+
+        Assert.False(result);
+        Assert.Equal("Pending", order.Status);
+        _orderRepo.Verify(r => r.Update(It.IsAny<PaymentOrder>()), Times.Never);
+    }
+
     private static User MakeUser(
         int id = 10,
         string subscriptionTier = "Freemium",

@@ -13,6 +13,7 @@ public class BillingService : IBillingService
     private const string Provider = "PayOS";
     private const string PendingStatus = "Pending";
     private const string PaidStatus = "Paid";
+    private const string CancelledStatus = "Cancelled";
     private const string FailedStatus = "Failed";
     private static readonly BillingPlanResponse[] Plans =
     [
@@ -156,6 +157,23 @@ public class BillingService : IBillingService
     {
         var orders = await _orderRepository.GetByUserIdAsync(userId);
         return orders.Select(ToPaymentOrderResponse);
+    }
+
+    public async Task<bool> CancelOrderAsync(int userId, long orderCode)
+    {
+        var order = await _orderRepository.GetByOrderCodeAsync(orderCode);
+        if (order == null || order.UserId != userId) return false;
+
+        if (order.Status == CancelledStatus) return true;
+        if (order.Status != PendingStatus) return false;
+
+        var now = DateTime.UtcNow;
+        order.Status = CancelledStatus;
+        order.CancelledAt = now;
+        order.UpdatedAt = now;
+        _orderRepository.Update(order);
+
+        return await _orderRepository.SaveChangesAsync() > 0;
     }
 
     public async Task HandlePayOsWebhookAsync(PayOsWebhookRequest request)
