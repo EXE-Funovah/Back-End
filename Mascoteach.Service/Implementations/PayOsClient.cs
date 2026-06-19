@@ -54,6 +54,55 @@ public class PayOsClient : IPayOsClient
         };
     }
 
+    public async Task<PayOsCancelPaymentLinkResult> CancelPaymentLinkAsync(
+        long orderCode,
+        string cancellationReason)
+    {
+        var clientId = _configuration["PayOS:ClientId"];
+        var apiKey = _configuration["PayOS:ApiKey"];
+        var baseUrl = _configuration["PayOS:BaseUrl"] ?? "https://api-merchant.payos.vn";
+
+        if (string.IsNullOrWhiteSpace(clientId) || string.IsNullOrWhiteSpace(apiKey))
+            throw new InvalidOperationException("PayOS client id or api key is not configured.");
+
+        using var httpRequest = new HttpRequestMessage(
+            HttpMethod.Post,
+            $"{baseUrl.TrimEnd('/')}/v2/payment-requests/{orderCode}/cancel");
+        httpRequest.Headers.Add("x-client-id", clientId);
+        httpRequest.Headers.Add("x-api-key", apiKey);
+        httpRequest.Content = JsonContent.Create(
+            new { cancellationReason },
+            options: JsonOptions);
+
+        using var response = await _httpClient.SendAsync(httpRequest);
+        var body = await response.Content.ReadAsStringAsync();
+
+        if (!response.IsSuccessStatusCode)
+            throw new InvalidOperationException(
+                $"PayOS cancel payment link failed: {(int)response.StatusCode} {body}");
+
+        var payOsResponse = JsonSerializer.Deserialize<PayOsApiResponse<PayOsCancelPaymentLinkData>>(
+                body,
+                JsonOptions)
+            ?? throw new InvalidOperationException("PayOS returned an empty cancel response.");
+
+        if (payOsResponse.Code != "00" || payOsResponse.Data == null)
+            throw new InvalidOperationException(
+                $"PayOS cancel payment link failed: {payOsResponse.Desc}");
+
+        if (!string.Equals(
+                payOsResponse.Data.Status,
+                "CANCELLED",
+                StringComparison.OrdinalIgnoreCase))
+            throw new InvalidOperationException(
+                $"PayOS did not cancel payment link {orderCode}. Current status: {payOsResponse.Data.Status}.");
+
+        return new PayOsCancelPaymentLinkResult
+        {
+            Status = payOsResponse.Data.Status
+        };
+    }
+
     private class PayOsApiResponse<T>
     {
         [JsonPropertyName("code")]
@@ -77,6 +126,12 @@ public class PayOsClient : IPayOsClient
         [JsonPropertyName("qrCode")]
         public string? QrCode { get; set; }
 
+        [JsonPropertyName("status")]
+        public string Status { get; set; } = null!;
+    }
+
+    private class PayOsCancelPaymentLinkData
+    {
         [JsonPropertyName("status")]
         public string Status { get; set; } = null!;
     }

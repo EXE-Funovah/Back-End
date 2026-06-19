@@ -62,9 +62,17 @@ public class BillingController : BaseController
     [HttpPatch("orders/{orderCode:long}/cancel")]
     public async Task<IActionResult> CancelOrder(long orderCode)
     {
-        var success = await _billingService.CancelOrderAsync(CurrentUserId, orderCode);
-        if (!success) return BadRequest("Payment order does not exist, does not belong to you, or cannot be cancelled.");
-        return Ok("Payment order cancelled.");
+        try
+        {
+            var success = await _billingService.CancelOrderAsync(CurrentUserId, orderCode);
+            if (!success)
+                return BadRequest("Payment order does not exist, does not belong to you, or cannot be cancelled.");
+            return Ok("Payment order cancelled.");
+        }
+        catch (InvalidOperationException ex)
+        {
+            return StatusCode(StatusCodes.Status502BadGateway, ex.Message);
+        }
     }
 
     [AllowAnonymous]

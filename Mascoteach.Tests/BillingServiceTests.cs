@@ -31,11 +31,18 @@ public class BillingServiceTests
             })
             .Build();
 
-        _orderRepo.Setup(r => r.GetExpiredPendingOrdersAsync(
+        _orderRepo.Setup(r => r.ExpirePendingOrdersAsync(
                 It.IsAny<int>(),
                 It.IsAny<string>(),
+                It.IsAny<DateTime>(),
                 It.IsAny<DateTime>()))
-            .ReturnsAsync([]);
+            .ReturnsAsync(0);
+        _orderRepo.Setup(r => r.TryMarkPaidAsync(
+                It.IsAny<int>(),
+                It.IsAny<DateTime>(),
+                It.IsAny<string?>(),
+                It.IsAny<string?>()))
+            .ReturnsAsync(true);
 
         _sut = new BillingService(
             _orderRepo.Object,
@@ -202,15 +209,15 @@ public class BillingServiceTests
     public async Task CreatePaymentLinkAsync_ExpiredPendingOrder_MarksItExpiredAndCreatesNewLink()
     {
         var user = MakeUser();
-        var expiredOrder = MakeOrder(user.Id, "PRO_MONTHLY", 119000);
-        expiredOrder.CreatedAt = DateTime.UtcNow.AddMinutes(-6);
-        expiredOrder.CheckoutUrl = "https://pay.payos.vn/web/expired";
-
         _userRepo.Setup(r => r.GetByIdAsync(user.Id)).ReturnsAsync(user);
         _orderRepo.Setup(r => r.GetReusablePendingOrderAsync(user.Id, "PRO_MONTHLY", It.IsAny<DateTime>()))
             .ReturnsAsync((PaymentOrder?)null);
-        _orderRepo.Setup(r => r.GetExpiredPendingOrdersAsync(user.Id, "PRO_MONTHLY", It.IsAny<DateTime>()))
-            .ReturnsAsync([expiredOrder]);
+        _orderRepo.Setup(r => r.ExpirePendingOrdersAsync(
+                user.Id,
+                "PRO_MONTHLY",
+                It.IsAny<DateTime>(),
+                It.IsAny<DateTime>()))
+            .ReturnsAsync(1);
         _orderRepo.Setup(r => r.ExistsByOrderCodeAsync(It.IsAny<long>())).ReturnsAsync(false);
         _orderRepo.Setup(r => r.AddAsync(It.IsAny<PaymentOrder>())).Returns(Task.CompletedTask);
         _orderRepo.Setup(r => r.SaveChangesAsync()).ReturnsAsync(1);
@@ -235,10 +242,12 @@ public class BillingServiceTests
             PlanCode = "PRO_MONTHLY"
         });
 
-        Assert.Equal("Expired", expiredOrder.Status);
-        Assert.NotNull(expiredOrder.UpdatedAt);
         Assert.Equal("https://pay.payos.vn/web/link_new", result.CheckoutUrl);
-        _orderRepo.Verify(r => r.Update(expiredOrder), Times.Once);
+        _orderRepo.Verify(r => r.ExpirePendingOrdersAsync(
+            user.Id,
+            "PRO_MONTHLY",
+            It.IsAny<DateTime>(),
+            It.IsAny<DateTime>()), Times.Once);
     }
 
     [Fact]
@@ -259,11 +268,15 @@ public class BillingServiceTests
 
         await _sut.HandlePayOsWebhookAsync(MakeWebhookRequest(123456, 119000, "valid-signature"));
 
-        Assert.Equal("Paid", order.Status);
         Assert.Equal("Premium", user.SubscriptionTier);
         Assert.NotNull(user.PremiumExpiresAt);
         Assert.True(user.PremiumExpiresAt >= now.AddDays(30).AddMinutes(-1));
         Assert.True(user.PremiumExpiresAt <= DateTime.UtcNow.AddDays(30).AddMinutes(1));
+        _orderRepo.Verify(r => r.TryMarkPaidAsync(
+            order.Id,
+            It.IsAny<DateTime>(),
+            "TF230204212323",
+            "link_123"), Times.Once);
         mockTx.Verify(t => t.CommitAsync(default), Times.Once);
     }
 
@@ -314,23 +327,59 @@ public class BillingServiceTests
     [InlineData("Expired")]
     [InlineData("Cancelled")]
     [InlineData("Failed")]
-    public async Task HandlePayOsWebhookAsync_NonPendingOrder_DoesNotGrantPremium(string status)
+    public async Task HandlePayOsWebhookAsync_ProviderConfirmedPayment_OverridesLocalNonPaidStatus(string status)
     {
         var order = MakeOrder(userId: 10, planCode: "PRO_MONTHLY", amount: 119000);
         order.Status = status;
+        var user = MakeUser(id: order.UserId);
         var mockTx = new Mock<IDbContextTransaction>();
         _orderRepo.Setup(r => r.BeginTransactionAsync()).ReturnsAsync(mockTx.Object);
         _signatureService.Setup(s => s.IsValidWebhookData(It.IsAny<JsonElement>(), "valid-signature"))
             .Returns(true);
         _orderRepo.Setup(r => r.GetByOrderCodeAsync(123456)).ReturnsAsync(order);
+        _userRepo.Setup(r => r.GetByIdAsync(order.UserId)).ReturnsAsync(user);
         _webhookRepo.Setup(r => r.AddAsync(It.IsAny<PaymentWebhookEvent>())).Returns(Task.CompletedTask);
+        _webhookRepo.Setup(r => r.SaveChangesAsync()).ReturnsAsync(1);
+        _userRepo.Setup(r => r.SaveChangesAsync()).ReturnsAsync(1);
+
+        await _sut.HandlePayOsWebhookAsync(MakeWebhookRequest(123456, 119000, "valid-signature"));
+
+        Assert.Equal("Premium", user.SubscriptionTier);
+        Assert.NotNull(user.PremiumExpiresAt);
+        _orderRepo.Verify(r => r.TryMarkPaidAsync(
+            order.Id,
+            It.IsAny<DateTime>(),
+            "TF230204212323",
+            "link_123"), Times.Once);
+        mockTx.Verify(t => t.CommitAsync(default), Times.Once);
+    }
+
+    [Fact]
+    public async Task HandlePayOsWebhookAsync_ConcurrentDuplicate_DoesNotExtendPremiumAgain()
+    {
+        var order = MakeOrder(userId: 10, planCode: "PRO_MONTHLY", amount: 119000);
+        var mockTx = new Mock<IDbContextTransaction>();
+        PaymentWebhookEvent? webhookEvent = null;
+        _orderRepo.Setup(r => r.BeginTransactionAsync()).ReturnsAsync(mockTx.Object);
+        _signatureService.Setup(s => s.IsValidWebhookData(It.IsAny<JsonElement>(), "valid-signature"))
+            .Returns(true);
+        _orderRepo.Setup(r => r.GetByOrderCodeAsync(123456)).ReturnsAsync(order);
+        _orderRepo.Setup(r => r.TryMarkPaidAsync(
+                order.Id,
+                It.IsAny<DateTime>(),
+                It.IsAny<string?>(),
+                It.IsAny<string?>()))
+            .ReturnsAsync(false);
+        _webhookRepo.Setup(r => r.AddAsync(It.IsAny<PaymentWebhookEvent>()))
+            .Callback<PaymentWebhookEvent>(value => webhookEvent = value)
+            .Returns(Task.CompletedTask);
         _webhookRepo.Setup(r => r.SaveChangesAsync()).ReturnsAsync(1);
 
         await _sut.HandlePayOsWebhookAsync(MakeWebhookRequest(123456, 119000, "valid-signature"));
 
-        Assert.Equal(status, order.Status);
+        Assert.NotNull(webhookEvent);
+        Assert.True(webhookEvent!.IsProcessed);
         _userRepo.Verify(r => r.Update(It.IsAny<User>()), Times.Never);
-        _orderRepo.Verify(r => r.Update(It.IsAny<PaymentOrder>()), Times.Never);
         mockTx.Verify(t => t.CommitAsync(default), Times.Once);
     }
 
@@ -356,19 +405,94 @@ public class BillingServiceTests
     }
 
     [Fact]
+    public async Task HandlePayOsWebhookAsync_CurrencyMismatch_DoesNotGrantPremium()
+    {
+        var order = MakeOrder(userId: 10, planCode: "PRO_MONTHLY", amount: 119000);
+        var mockTx = new Mock<IDbContextTransaction>();
+        _orderRepo.Setup(r => r.BeginTransactionAsync()).ReturnsAsync(mockTx.Object);
+        _signatureService.Setup(s => s.IsValidWebhookData(It.IsAny<JsonElement>(), "valid-signature"))
+            .Returns(true);
+        _orderRepo.Setup(r => r.GetByOrderCodeAsync(123456)).ReturnsAsync(order);
+        _webhookRepo.Setup(r => r.AddAsync(It.IsAny<PaymentWebhookEvent>())).Returns(Task.CompletedTask);
+        _webhookRepo.Setup(r => r.SaveChangesAsync()).ReturnsAsync(1);
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() => _sut.HandlePayOsWebhookAsync(
+            MakeWebhookRequest(123456, 119000, "valid-signature", currency: "USD")));
+
+        _orderRepo.Verify(r => r.TryMarkPaidAsync(
+            It.IsAny<int>(), It.IsAny<DateTime>(), It.IsAny<string?>(), It.IsAny<string?>()), Times.Never);
+        _userRepo.Verify(r => r.Update(It.IsAny<User>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task HandlePayOsWebhookAsync_PaymentLinkMismatch_DoesNotGrantPremium()
+    {
+        var order = MakeOrder(userId: 10, planCode: "PRO_MONTHLY", amount: 119000);
+        order.PaymentLinkId = "link_original";
+        var mockTx = new Mock<IDbContextTransaction>();
+        _orderRepo.Setup(r => r.BeginTransactionAsync()).ReturnsAsync(mockTx.Object);
+        _signatureService.Setup(s => s.IsValidWebhookData(It.IsAny<JsonElement>(), "valid-signature"))
+            .Returns(true);
+        _orderRepo.Setup(r => r.GetByOrderCodeAsync(123456)).ReturnsAsync(order);
+        _webhookRepo.Setup(r => r.AddAsync(It.IsAny<PaymentWebhookEvent>())).Returns(Task.CompletedTask);
+        _webhookRepo.Setup(r => r.SaveChangesAsync()).ReturnsAsync(1);
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() => _sut.HandlePayOsWebhookAsync(
+            MakeWebhookRequest(123456, 119000, "valid-signature", paymentLinkId: "link_other")));
+
+        _orderRepo.Verify(r => r.TryMarkPaidAsync(
+            It.IsAny<int>(), It.IsAny<DateTime>(), It.IsAny<string?>(), It.IsAny<string?>()), Times.Never);
+        _userRepo.Verify(r => r.Update(It.IsAny<User>()), Times.Never);
+    }
+
+    [Fact]
     public async Task CancelOrderAsync_OwnerPendingOrder_MarksOrderCancelled()
     {
         var order = MakeOrder(userId: 10, planCode: "PRO_MONTHLY", amount: 119000);
         _orderRepo.Setup(r => r.GetByOrderCodeAsync(order.OrderCode)).ReturnsAsync(order);
-        _orderRepo.Setup(r => r.SaveChangesAsync()).ReturnsAsync(1);
+        _payOsClient.Setup(c => c.CancelPaymentLinkAsync(order.OrderCode, "Cancelled by user"))
+            .ReturnsAsync(new PayOsCancelPaymentLinkResult { Status = "CANCELLED" });
+        _orderRepo.Setup(r => r.TryMarkCancelledAsync(order.Id, It.IsAny<DateTime>()))
+            .ReturnsAsync(true);
 
         var result = await _sut.CancelOrderAsync(10, order.OrderCode);
 
         Assert.True(result);
-        Assert.Equal("Cancelled", order.Status);
-        Assert.NotNull(order.CancelledAt);
-        Assert.NotNull(order.UpdatedAt);
-        _orderRepo.Verify(r => r.Update(order), Times.Once);
+        _payOsClient.Verify(c => c.CancelPaymentLinkAsync(
+            order.OrderCode,
+            "Cancelled by user"), Times.Once);
+        _orderRepo.Verify(r => r.TryMarkCancelledAsync(order.Id, It.IsAny<DateTime>()), Times.Once);
+    }
+
+    [Fact]
+    public async Task CancelOrderAsync_PayOsFailure_DoesNotCancelLocalOrder()
+    {
+        var order = MakeOrder(userId: 10, planCode: "PRO_MONTHLY", amount: 119000);
+        _orderRepo.Setup(r => r.GetByOrderCodeAsync(order.OrderCode)).ReturnsAsync(order);
+        _payOsClient.Setup(c => c.CancelPaymentLinkAsync(order.OrderCode, "Cancelled by user"))
+            .ThrowsAsync(new InvalidOperationException("PayOS cancel failed."));
+
+        await Assert.ThrowsAsync<InvalidOperationException>(
+            () => _sut.CancelOrderAsync(order.UserId, order.OrderCode));
+
+        _orderRepo.Verify(r => r.TryMarkCancelledAsync(
+            It.IsAny<int>(), It.IsAny<DateTime>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task CancelOrderAsync_WebhookWinsRace_DoesNotOverwritePaidStatus()
+    {
+        var order = MakeOrder(userId: 10, planCode: "PRO_MONTHLY", amount: 119000);
+        _orderRepo.Setup(r => r.GetByOrderCodeAsync(order.OrderCode)).ReturnsAsync(order);
+        _payOsClient.Setup(c => c.CancelPaymentLinkAsync(order.OrderCode, "Cancelled by user"))
+            .ReturnsAsync(new PayOsCancelPaymentLinkResult { Status = "CANCELLED" });
+        _orderRepo.Setup(r => r.TryMarkCancelledAsync(order.Id, It.IsAny<DateTime>()))
+            .ReturnsAsync(false);
+
+        var result = await _sut.CancelOrderAsync(order.UserId, order.OrderCode);
+
+        Assert.False(result);
+        _orderRepo.Verify(r => r.TryMarkCancelledAsync(order.Id, It.IsAny<DateTime>()), Times.Once);
     }
 
     [Fact]
@@ -383,6 +507,8 @@ public class BillingServiceTests
         Assert.False(result);
         Assert.Equal("Paid", order.Status);
         Assert.Null(order.CancelledAt);
+        _payOsClient.Verify(c => c.CancelPaymentLinkAsync(
+            It.IsAny<long>(), It.IsAny<string>()), Times.Never);
         _orderRepo.Verify(r => r.Update(It.IsAny<PaymentOrder>()), Times.Never);
     }
 
@@ -396,6 +522,8 @@ public class BillingServiceTests
 
         Assert.False(result);
         Assert.Equal("Pending", order.Status);
+        _payOsClient.Verify(c => c.CancelPaymentLinkAsync(
+            It.IsAny<long>(), It.IsAny<string>()), Times.Never);
         _orderRepo.Verify(r => r.Update(It.IsAny<PaymentOrder>()), Times.Never);
     }
 
@@ -427,7 +555,12 @@ public class BillingServiceTests
         IsDeleted = false
     };
 
-    private static PayOsWebhookRequest MakeWebhookRequest(long orderCode, int amount, string signature)
+    private static PayOsWebhookRequest MakeWebhookRequest(
+        long orderCode,
+        int amount,
+        string signature,
+        string currency = "VND",
+        string paymentLinkId = "link_123")
     {
         using var document = JsonDocument.Parse($$"""
         {
@@ -437,8 +570,8 @@ public class BillingServiceTests
           "accountNumber": "12345678",
           "reference": "TF230204212323",
           "transactionDateTime": "2026-06-18 10:00:00",
-          "currency": "VND",
-          "paymentLinkId": "link_123",
+          "currency": "{{currency}}",
+          "paymentLinkId": "{{paymentLinkId}}",
           "code": "00",
           "desc": "Thanh cong"
         }

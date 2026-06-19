@@ -137,11 +137,12 @@ Backend must:
 1. Verify `signature` against the `data` object using `PayOS:ChecksumKey`.
 2. Require successful payment payload before granting Premium.
 3. Find the order by `orderCode`.
-4. Validate amount matches the order amount.
+4. Validate amount, currency, and stored payment link id against the order.
 5. If the order is already `Paid`, do not extend Premium again.
-6. Only `Pending` orders can be changed to `Paid`; ignore successful webhooks for `Expired`, `Cancelled`, or `Failed` orders.
-7. Mark order `Paid`, set `paid_at`, store reference/payment link id.
-8. Extend Premium in the same transaction.
+6. Atomically claim the order as `Paid` before extending Premium so concurrent duplicate webhooks cannot grant twice.
+7. A valid PayOS success webhook is the final source of truth that money was received. It may override a local `Expired`, `Cancelled`, or `Failed` state when a payment and local state change raced.
+8. Mark order `Paid`, set `paid_at`, store reference/payment link id.
+9. Extend Premium in the same transaction.
 
 Premium extension rule:
 
@@ -171,7 +172,10 @@ Backend must:
 
 - Use `CurrentUserId`.
 - Only cancel orders owned by the current user.
-- Only change `Pending` orders to `Cancelled`.
+- Only attempt to cancel local `Pending` orders.
+- Call `POST /v2/payment-requests/{orderCode}/cancel` with PayOS credentials before changing local state.
+- Require PayOS to return `CANCELLED`; provider failure must leave the local order unchanged and return an upstream error.
+- Atomically change local `Pending` to `Cancelled` after PayOS succeeds so a concurrent paid webhook cannot be overwritten.
 - Never cancel `Paid` orders.
 - Set `cancelled_at` and `updated_at`.
 
@@ -257,8 +261,13 @@ Important test cases:
 - Reused links return the original `expiresAt` instead of restarting the five-minute countdown.
 - New PayOS requests include `expiredAt` and selected-plan `items`.
 - Pending links older than five minutes are marked `Expired` when the frontend requests a replacement link.
-- Successful webhooks for non-pending orders do not grant Premium.
+- A valid successful webhook can recover a non-paid local state when PayOS confirms money was received.
+- Concurrent duplicate webhooks extend Premium only once.
+- Currency and payment-link mismatches do not grant Premium.
 - Owner can cancel a pending order.
+- Cancelling an order calls PayOS before changing local state.
+- PayOS cancel failure leaves the local order unchanged.
+- A concurrent paid webhook cannot be overwritten by local cancellation.
 - Paid order cannot be cancelled.
 - Other user's order cannot be cancelled.
 - Expired Premium uses Freemium document quota.
@@ -268,6 +277,8 @@ Important test cases:
 - Do not use `POST` for cancel; use `PATCH /api/Billing/orders/{orderCode}/cancel`.
 - Do not trust PayOS return URL to grant Premium.
 - Do not expose cancel without JWT.
+- Do not treat local cancellation as complete until PayOS confirms the payment link is `CANCELLED`.
+- Do not ignore a valid successful PayOS webhook solely because local state is `Expired`, `Cancelled`, or `Failed`; receiving money without granting the purchased service is worse than repairing the local state.
 - Do not forget webhook signature verification.
 - Do not leave production PayOS channel pointing to `api-dev`.
 - Do not forget PayOS GitHub Secrets before deploy.

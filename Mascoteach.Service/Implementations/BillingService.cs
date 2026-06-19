@@ -14,7 +14,6 @@ public class BillingService : IBillingService
     private const string PendingStatus = "Pending";
     private const string PaidStatus = "Paid";
     private const string CancelledStatus = "Cancelled";
-    private const string ExpiredStatus = "Expired";
     private const string FailedStatus = "Failed";
     private const int PaymentLinkReuseMinutes = 5;
     private static readonly BillingPlanResponse[] Plans =
@@ -190,13 +189,9 @@ public class BillingService : IBillingService
         if (order.Status == CancelledStatus) return true;
         if (order.Status != PendingStatus) return false;
 
-        var now = DateTime.UtcNow;
-        order.Status = CancelledStatus;
-        order.CancelledAt = now;
-        order.UpdatedAt = now;
-        _orderRepository.Update(order);
+        await _payOsClient.CancelPaymentLinkAsync(orderCode, "Cancelled by user");
 
-        return await _orderRepository.SaveChangesAsync() > 0;
+        return await _orderRepository.TryMarkCancelledAsync(order.Id, DateTime.UtcNow);
     }
 
     public async Task HandlePayOsWebhookAsync(PayOsWebhookRequest request)
@@ -209,6 +204,7 @@ public class BillingService : IBillingService
         var dataCode = GetString(request.Data, "code");
         var reference = GetString(request.Data, "reference");
         var paymentLinkId = GetString(request.Data, "paymentLinkId");
+        var currency = GetString(request.Data, "currency");
         var payload = JsonSerializer.Serialize(request);
 
         using var transaction = await _orderRepository.BeginTransactionAsync();
@@ -251,14 +247,6 @@ public class BillingService : IBillingService
             return;
         }
 
-        if (order.Status != PendingStatus)
-        {
-            webhookEvent.ProcessingError = $"Payment order {orderCode} is {order.Status}, not pending.";
-            await _webhookEventRepository.SaveChangesAsync();
-            await transaction.CommitAsync();
-            return;
-        }
-
         if (order.Amount != amount)
         {
             webhookEvent.ProcessingError = $"Amount mismatch. Expected {order.Amount}, got {amount}.";
@@ -267,11 +255,44 @@ public class BillingService : IBillingService
             throw new InvalidOperationException(webhookEvent.ProcessingError);
         }
 
+        if (!string.Equals(order.Currency, currency, StringComparison.OrdinalIgnoreCase))
+        {
+            webhookEvent.ProcessingError = $"Currency mismatch. Expected {order.Currency}, got {currency}.";
+            await _webhookEventRepository.SaveChangesAsync();
+            await transaction.CommitAsync();
+            throw new InvalidOperationException(webhookEvent.ProcessingError);
+        }
+
+        if (!string.IsNullOrWhiteSpace(order.PaymentLinkId)
+            && !string.IsNullOrWhiteSpace(paymentLinkId)
+            && !string.Equals(order.PaymentLinkId, paymentLinkId, StringComparison.Ordinal))
+        {
+            webhookEvent.ProcessingError =
+                $"Payment link mismatch. Expected {order.PaymentLinkId}, got {paymentLinkId}.";
+            await _webhookEventRepository.SaveChangesAsync();
+            await transaction.CommitAsync();
+            throw new InvalidOperationException(webhookEvent.ProcessingError);
+        }
+
+        var now = DateTime.UtcNow;
+        var paymentClaimed = await _orderRepository.TryMarkPaidAsync(
+            order.Id,
+            now,
+            reference,
+            order.PaymentLinkId ?? paymentLinkId);
+
+        if (!paymentClaimed)
+        {
+            webhookEvent.IsProcessed = true;
+            await _webhookEventRepository.SaveChangesAsync();
+            await transaction.CommitAsync();
+            return;
+        }
+
         var user = await _userRepository.GetByIdAsync(order.UserId)
             ?? throw new KeyNotFoundException($"User with id {order.UserId} not found.");
         var plan = GetPlanOrThrow(order.PlanCode);
 
-        var now = DateTime.UtcNow;
         var baseDate = user.PremiumExpiresAt.HasValue && user.PremiumExpiresAt.Value > now
             ? user.PremiumExpiresAt.Value
             : now;
@@ -280,17 +301,9 @@ public class BillingService : IBillingService
         user.PremiumExpiresAt = baseDate.AddDays(plan.DurationDays);
         _userRepository.Update(user);
 
-        order.Status = PaidStatus;
-        order.PaidAt = now;
-        order.PayosReference = reference;
-        order.PaymentLinkId ??= paymentLinkId;
-        order.UpdatedAt = now;
-        _orderRepository.Update(order);
-
         webhookEvent.IsProcessed = true;
 
         await _webhookEventRepository.SaveChangesAsync();
-        await _orderRepository.SaveChangesAsync();
         await _userRepository.SaveChangesAsync();
         await transaction.CommitAsync();
     }
@@ -317,22 +330,11 @@ public class BillingService : IBillingService
 
     private async Task ExpireOldPendingOrdersAsync(int userId, string planCode, DateTime createdBefore)
     {
-        var expiredOrders = (await _orderRepository.GetExpiredPendingOrdersAsync(
-                userId,
-                planCode,
-                createdBefore))
-            .ToList();
-        if (expiredOrders.Count == 0) return;
-
-        var now = DateTime.UtcNow;
-        foreach (var order in expiredOrders)
-        {
-            order.Status = ExpiredStatus;
-            order.UpdatedAt = now;
-            _orderRepository.Update(order);
-        }
-
-        await _orderRepository.SaveChangesAsync();
+        await _orderRepository.ExpirePendingOrdersAsync(
+            userId,
+            planCode,
+            createdBefore,
+            DateTime.UtcNow);
     }
 
     private string GetRequiredConfig(string key)

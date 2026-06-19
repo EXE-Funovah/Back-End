@@ -7,6 +7,12 @@ public interface IPaymentOrderRepository : IGenericRepository<PaymentOrder>
     Task<bool> ExistsByOrderCodeAsync(long orderCode);
     Task<PaymentOrder?> GetByOrderCodeAsync(long orderCode);
     Task<PaymentOrder?> GetReusablePendingOrderAsync(int userId, string planCode, DateTime createdAfter);
-    Task<IEnumerable<PaymentOrder>> GetExpiredPendingOrdersAsync(int userId, string planCode, DateTime createdBefore);
+    Task<int> ExpirePendingOrdersAsync(int userId, string planCode, DateTime createdBefore, DateTime updatedAt);
+    Task<bool> TryMarkCancelledAsync(int orderId, DateTime cancelledAt);
+    Task<bool> TryMarkPaidAsync(
+        int orderId,
+        DateTime paidAt,
+        string? payOsReference,
+        string? paymentLinkId);
     Task<IEnumerable<PaymentOrder>> GetByUserIdAsync(int userId);
 }

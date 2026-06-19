@@ -35,10 +35,11 @@ public class PaymentOrderRepository : GenericRepository<PaymentOrder>, IPaymentO
             .FirstOrDefaultAsync();
     }
 
-    public async Task<IEnumerable<PaymentOrder>> GetExpiredPendingOrdersAsync(
+    public async Task<int> ExpirePendingOrdersAsync(
         int userId,
         string planCode,
-        DateTime createdBefore)
+        DateTime createdBefore,
+        DateTime updatedAt)
     {
         return await _context.PaymentOrders
             .Where(o => o.UserId == userId
@@ -46,7 +47,43 @@ public class PaymentOrderRepository : GenericRepository<PaymentOrder>, IPaymentO
                 && o.Status == "Pending"
                 && o.IsDeleted == false
                 && o.CreatedAt < createdBefore)
-            .ToListAsync();
+            .ExecuteUpdateAsync(setters => setters
+                .SetProperty(o => o.Status, "Expired")
+                .SetProperty(o => o.UpdatedAt, updatedAt));
+    }
+
+    public async Task<bool> TryMarkCancelledAsync(int orderId, DateTime cancelledAt)
+    {
+        var updatedRows = await _context.PaymentOrders
+            .Where(o => o.Id == orderId
+                && o.Status == "Pending"
+                && o.IsDeleted == false)
+            .ExecuteUpdateAsync(setters => setters
+                .SetProperty(o => o.Status, "Cancelled")
+                .SetProperty(o => o.CancelledAt, cancelledAt)
+                .SetProperty(o => o.UpdatedAt, cancelledAt));
+
+        return updatedRows == 1;
+    }
+
+    public async Task<bool> TryMarkPaidAsync(
+        int orderId,
+        DateTime paidAt,
+        string? payOsReference,
+        string? paymentLinkId)
+    {
+        var updatedRows = await _context.PaymentOrders
+            .Where(o => o.Id == orderId
+                && o.Status != "Paid"
+                && o.IsDeleted == false)
+            .ExecuteUpdateAsync(setters => setters
+                .SetProperty(o => o.Status, "Paid")
+                .SetProperty(o => o.PaidAt, paidAt)
+                .SetProperty(o => o.PayosReference, payOsReference)
+                .SetProperty(o => o.PaymentLinkId, paymentLinkId)
+                .SetProperty(o => o.UpdatedAt, paidAt));
+
+        return updatedRows == 1;
     }
 
     public async Task<IEnumerable<PaymentOrder>> GetByUserIdAsync(int userId)

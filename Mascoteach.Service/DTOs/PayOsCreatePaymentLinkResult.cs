@@ -7,3 +7,8 @@ public class PayOsCreatePaymentLinkResult
     public string? QrCode { get; set; }
     public string Status { get; set; } = null!;
 }
+
+public class PayOsCancelPaymentLinkResult
+{
+    public string Status { get; set; } = null!;
+}
