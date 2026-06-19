@@ -31,6 +31,12 @@ public class BillingServiceTests
             })
             .Build();
 
+        _orderRepo.Setup(r => r.GetExpiredPendingOrdersAsync(
+                It.IsAny<int>(),
+                It.IsAny<string>(),
+                It.IsAny<DateTime>()))
+            .ReturnsAsync([]);
+
         _sut = new BillingService(
             _orderRepo.Object,
             _webhookRepo.Object,
@@ -64,8 +70,10 @@ public class BillingServiceTests
     [Fact]
     public async Task CreatePaymentLinkAsync_MonthlyPlan_CreatesPendingOrderWithCorrectAmount()
     {
+        var beforeCreate = DateTime.UtcNow;
         var user = MakeUser();
         PaymentOrder? addedOrder = null;
+        PayOsCreatePaymentLinkRequest? payOsRequest = null;
         _userRepo.Setup(r => r.GetByIdAsync(user.Id)).ReturnsAsync(user);
         _orderRepo.Setup(r => r.ExistsByOrderCodeAsync(It.IsAny<long>())).ReturnsAsync(false);
         _orderRepo.Setup(r => r.AddAsync(It.IsAny<PaymentOrder>()))
@@ -80,6 +88,7 @@ public class BillingServiceTests
                 "https://dev.mascoteach.com/checkout"))
             .Returns("signature");
         _payOsClient.Setup(c => c.CreatePaymentLinkAsync(It.IsAny<PayOsCreatePaymentLinkRequest>()))
+            .Callback<PayOsCreatePaymentLinkRequest>(request => payOsRequest = request)
             .ReturnsAsync(new PayOsCreatePaymentLinkResult
             {
                 PaymentLinkId = "link_123",
@@ -99,7 +108,17 @@ public class BillingServiceTests
         Assert.Equal(119000, addedOrder.Amount);
         Assert.Equal("Pending", addedOrder.Status);
         Assert.Equal("link_123", addedOrder.PaymentLinkId);
+        Assert.NotNull(payOsRequest);
+        Assert.InRange(
+            payOsRequest!.ExpiredAt,
+            new DateTimeOffset(beforeCreate.AddMinutes(5)).ToUnixTimeSeconds(),
+            new DateTimeOffset(DateTime.UtcNow.AddMinutes(5)).ToUnixTimeSeconds());
+        var item = Assert.Single(payOsRequest.Items);
+        Assert.Equal("Mascoteach Pro - Goi thang", item.Name);
+        Assert.Equal(1, item.Quantity);
+        Assert.Equal(119000, item.Price);
         Assert.Equal("https://pay.payos.vn/web/link_123", result.CheckoutUrl);
+        Assert.Equal(addedOrder.CreatedAt.AddMinutes(5), result.ExpiresAt);
         Assert.Equal("https://dev.mascoteach.com/checkout", result.ReturnUrl);
         Assert.Equal("https://dev.mascoteach.com/checkout/cancel", result.CancelUrl);
     }
@@ -113,7 +132,9 @@ public class BillingServiceTests
         existingOrder.PaymentLinkId = "link_existing";
         existingOrder.CheckoutUrl = "https://pay.payos.vn/web/link_existing";
         existingOrder.QrCode = "existing-qr";
-        existingOrder.CreatedAt = DateTime.UtcNow.AddMinutes(-2);
+        existingOrder.CreatedAt = DateTime.SpecifyKind(
+            DateTime.UtcNow.AddMinutes(-2),
+            DateTimeKind.Unspecified);
         _userRepo.Setup(r => r.GetByIdAsync(user.Id)).ReturnsAsync(user);
         _orderRepo.Setup(r => r.GetReusablePendingOrderAsync(user.Id, "PRO_MONTHLY", It.IsAny<DateTime>()))
             .ReturnsAsync(existingOrder);
@@ -129,10 +150,55 @@ public class BillingServiceTests
         Assert.Equal("Pending", result.Status);
         Assert.Equal("https://pay.payos.vn/web/link_existing", result.CheckoutUrl);
         Assert.Equal("existing-qr", result.QrCode);
+        Assert.Equal(existingOrder.CreatedAt.AddMinutes(5), result.ExpiresAt);
+        Assert.Equal(DateTimeKind.Utc, result.ExpiresAt.Kind);
         Assert.Equal("https://dev.mascoteach.com/checkout", result.ReturnUrl);
         Assert.Equal("https://dev.mascoteach.com/checkout/cancel", result.CancelUrl);
         _orderRepo.Verify(r => r.AddAsync(It.IsAny<PaymentOrder>()), Times.Never);
         _payOsClient.Verify(c => c.CreatePaymentLinkAsync(It.IsAny<PayOsCreatePaymentLinkRequest>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task CreatePaymentLinkAsync_ExpiredPendingOrder_MarksItExpiredAndCreatesNewLink()
+    {
+        var user = MakeUser();
+        var expiredOrder = MakeOrder(user.Id, "PRO_MONTHLY", 119000);
+        expiredOrder.CreatedAt = DateTime.UtcNow.AddMinutes(-6);
+        expiredOrder.CheckoutUrl = "https://pay.payos.vn/web/expired";
+
+        _userRepo.Setup(r => r.GetByIdAsync(user.Id)).ReturnsAsync(user);
+        _orderRepo.Setup(r => r.GetReusablePendingOrderAsync(user.Id, "PRO_MONTHLY", It.IsAny<DateTime>()))
+            .ReturnsAsync((PaymentOrder?)null);
+        _orderRepo.Setup(r => r.GetExpiredPendingOrdersAsync(user.Id, "PRO_MONTHLY", It.IsAny<DateTime>()))
+            .ReturnsAsync([expiredOrder]);
+        _orderRepo.Setup(r => r.ExistsByOrderCodeAsync(It.IsAny<long>())).ReturnsAsync(false);
+        _orderRepo.Setup(r => r.AddAsync(It.IsAny<PaymentOrder>())).Returns(Task.CompletedTask);
+        _orderRepo.Setup(r => r.SaveChangesAsync()).ReturnsAsync(1);
+        _signatureService.Setup(s => s.CreatePaymentRequestSignature(
+                119000,
+                "https://dev.mascoteach.com/checkout/cancel",
+                It.IsAny<string>(),
+                It.IsAny<long>(),
+                "https://dev.mascoteach.com/checkout"))
+            .Returns("signature");
+        _payOsClient.Setup(c => c.CreatePaymentLinkAsync(It.IsAny<PayOsCreatePaymentLinkRequest>()))
+            .ReturnsAsync(new PayOsCreatePaymentLinkResult
+            {
+                PaymentLinkId = "link_new",
+                CheckoutUrl = "https://pay.payos.vn/web/link_new",
+                QrCode = "new-qr",
+                Status = "PENDING"
+            });
+
+        var result = await _sut.CreatePaymentLinkAsync(user.Id, new CreatePaymentLinkRequest
+        {
+            PlanCode = "PRO_MONTHLY"
+        });
+
+        Assert.Equal("Expired", expiredOrder.Status);
+        Assert.NotNull(expiredOrder.UpdatedAt);
+        Assert.Equal("https://pay.payos.vn/web/link_new", result.CheckoutUrl);
+        _orderRepo.Verify(r => r.Update(expiredOrder), Times.Once);
     }
 
     [Fact]
@@ -202,6 +268,30 @@ public class BillingServiceTests
 
         Assert.Equal(existingExpiry, user.PremiumExpiresAt);
         _userRepo.Verify(r => r.Update(It.IsAny<User>()), Times.Never);
+    }
+
+    [Theory]
+    [InlineData("Expired")]
+    [InlineData("Cancelled")]
+    [InlineData("Failed")]
+    public async Task HandlePayOsWebhookAsync_NonPendingOrder_DoesNotGrantPremium(string status)
+    {
+        var order = MakeOrder(userId: 10, planCode: "PRO_MONTHLY", amount: 119000);
+        order.Status = status;
+        var mockTx = new Mock<IDbContextTransaction>();
+        _orderRepo.Setup(r => r.BeginTransactionAsync()).ReturnsAsync(mockTx.Object);
+        _signatureService.Setup(s => s.IsValidWebhookData(It.IsAny<JsonElement>(), "valid-signature"))
+            .Returns(true);
+        _orderRepo.Setup(r => r.GetByOrderCodeAsync(123456)).ReturnsAsync(order);
+        _webhookRepo.Setup(r => r.AddAsync(It.IsAny<PaymentWebhookEvent>())).Returns(Task.CompletedTask);
+        _webhookRepo.Setup(r => r.SaveChangesAsync()).ReturnsAsync(1);
+
+        await _sut.HandlePayOsWebhookAsync(MakeWebhookRequest(123456, 119000, "valid-signature"));
+
+        Assert.Equal(status, order.Status);
+        _userRepo.Verify(r => r.Update(It.IsAny<User>()), Times.Never);
+        _orderRepo.Verify(r => r.Update(It.IsAny<PaymentOrder>()), Times.Never);
+        mockTx.Verify(t => t.CommitAsync(default), Times.Once);
     }
 
     [Fact]

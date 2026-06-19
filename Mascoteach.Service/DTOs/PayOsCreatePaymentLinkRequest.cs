@@ -8,4 +8,13 @@ public class PayOsCreatePaymentLinkRequest
     public string CancelUrl { get; set; } = null!;
     public string ReturnUrl { get; set; } = null!;
     public string Signature { get; set; } = null!;
+    public long ExpiredAt { get; set; }
+    public IEnumerable<PayOsPaymentItem> Items { get; set; } = [];
+}
+
+public class PayOsPaymentItem
+{
+    public string Name { get; set; } = null!;
+    public int Quantity { get; set; }
+    public int Price { get; set; }
 }

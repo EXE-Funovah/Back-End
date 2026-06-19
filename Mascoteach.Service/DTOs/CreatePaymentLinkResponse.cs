@@ -10,4 +10,5 @@ public class CreatePaymentLinkResponse
     public string? QrCode { get; set; }
     public string ReturnUrl { get; set; } = null!;
     public string CancelUrl { get; set; } = null!;
+    public DateTime ExpiresAt { get; set; }
 }

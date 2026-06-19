@@ -73,13 +73,16 @@ All billing endpoints require `[Authorize]` except `payos-webhook`, which is `[A
 1. Frontend calls `POST /api/Billing/create-payment-link` with `planCode`.
 2. Backend uses `CurrentUserId`; never trust user id from request body.
 3. Backend checks for an existing reusable `Pending` order for the same user and same plan created within the last 5 minutes.
-4. If reusable order exists and has `checkout_url`, backend returns that existing `checkoutUrl`, `returnUrl`, and `cancelUrl`.
-5. If no reusable order exists, backend creates a new `PaymentOrder` with `Pending` status.
-6. Backend signs PayOS request with `PayOS:ChecksumKey`.
-7. Backend calls PayOS create payment link API.
-8. Backend stores `payment_link_id`, `checkout_url`, and `qr_code`.
-9. Backend returns `checkoutUrl`, `returnUrl`, and `cancelUrl`.
-10. Frontend redirects user to `checkoutUrl` or embeds PayOS using `checkoutUrl`.
+4. If reusable order exists and has `checkout_url`, backend returns that existing link and its original `expiresAt`; reusing must not restart the countdown.
+5. If no reusable order exists, backend marks same-user same-plan `Pending` orders older than 5 minutes as `Expired`.
+6. Backend creates a new `PaymentOrder` with `Pending` status.
+7. Backend sends PayOS `expiredAt = PaymentOrder.CreatedAt + 5 minutes` as Unix seconds.
+8. Backend sends one PayOS `items` entry describing the selected Mascoteach Pro plan.
+9. Backend signs PayOS request with `PayOS:ChecksumKey`.
+10. Backend calls PayOS create payment link API.
+11. Backend stores `payment_link_id`, `checkout_url`, and `qr_code`.
+12. Backend returns `checkoutUrl`, `returnUrl`, `cancelUrl`, and `expiresAt`.
+13. Frontend displays a countdown from `expiresAt` and calls create-payment-link again when it reaches zero.
 
 PayOS request signature uses fields in alphabetical order:
 
@@ -127,8 +130,9 @@ Backend must:
 3. Find the order by `orderCode`.
 4. Validate amount matches the order amount.
 5. If the order is already `Paid`, do not extend Premium again.
-6. Mark order `Paid`, set `paid_at`, store reference/payment link id.
-7. Extend Premium in the same transaction.
+6. Only `Pending` orders can be changed to `Paid`; ignore successful webhooks for `Expired`, `Cancelled`, or `Failed` orders.
+7. Mark order `Paid`, set `paid_at`, store reference/payment link id.
+8. Extend Premium in the same transaction.
 
 Premium extension rule:
 
@@ -241,6 +245,10 @@ Important test cases:
 - Duplicate paid webhook does not extend Premium twice.
 - Amount mismatch does not grant Premium.
 - Repeated create-payment-link calls for the same user and plan within 5 minutes reuse the existing pending checkout URL.
+- Reused links return the original `expiresAt` instead of restarting the five-minute countdown.
+- New PayOS requests include `expiredAt` and selected-plan `items`.
+- Pending links older than five minutes are marked `Expired` when the frontend requests a replacement link.
+- Successful webhooks for non-pending orders do not grant Premium.
 - Owner can cancel a pending order.
 - Paid order cannot be cancelled.
 - Other user's order cannot be cancelled.
@@ -256,3 +264,4 @@ Important test cases:
 - Do not forget PayOS GitHub Secrets before deploy.
 - Do not hardcode PayOS secrets in committed config.
 - Do not create a new PayOS payment link on every plan toggle when a same-plan pending link is still reusable.
+- Do not calculate a fresh `expiresAt` when returning a reused link; always derive it from the order's original `created_at`.

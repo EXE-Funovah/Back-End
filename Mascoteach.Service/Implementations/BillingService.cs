@@ -14,6 +14,7 @@ public class BillingService : IBillingService
     private const string PendingStatus = "Pending";
     private const string PaidStatus = "Paid";
     private const string CancelledStatus = "Cancelled";
+    private const string ExpiredStatus = "Expired";
     private const string FailedStatus = "Failed";
     private const int PaymentLinkReuseMinutes = 5;
     private static readonly BillingPlanResponse[] Plans =
@@ -81,6 +82,8 @@ public class BillingService : IBillingService
         if (reusableOrder != null)
             return ToCreatePaymentLinkResponse(reusableOrder, returnUrl, cancelUrl);
 
+        await ExpireOldPendingOrdersAsync(userId, plan.PlanCode, reusableCutoff);
+
         var orderCode = await GenerateUniqueOrderCodeAsync();
         var description = CreatePayOsDescription(orderCode);
         var signature = _signatureService.CreatePaymentRequestSignature(
@@ -115,7 +118,17 @@ public class BillingService : IBillingService
                 Description = description,
                 CancelUrl = cancelUrl,
                 ReturnUrl = returnUrl,
-                Signature = signature
+                Signature = signature,
+                ExpiredAt = new DateTimeOffset(GetPaymentLinkExpiresAtUtc(order)).ToUnixTimeSeconds(),
+                Items =
+                [
+                    new PayOsPaymentItem
+                    {
+                        Name = GetPayOsItemName(plan.PlanCode),
+                        Quantity = 1,
+                        Price = plan.Amount
+                    }
+                ]
             });
 
             order.PaymentLinkId = payOsResult.PaymentLinkId;
@@ -238,6 +251,14 @@ public class BillingService : IBillingService
             return;
         }
 
+        if (order.Status != PendingStatus)
+        {
+            webhookEvent.ProcessingError = $"Payment order {orderCode} is {order.Status}, not pending.";
+            await _webhookEventRepository.SaveChangesAsync();
+            await transaction.CommitAsync();
+            return;
+        }
+
         if (order.Amount != amount)
         {
             webhookEvent.ProcessingError = $"Amount mismatch. Expected {order.Amount}, got {amount}.";
@@ -294,6 +315,26 @@ public class BillingService : IBillingService
         throw new InvalidOperationException("Could not generate a unique PayOS order code.");
     }
 
+    private async Task ExpireOldPendingOrdersAsync(int userId, string planCode, DateTime createdBefore)
+    {
+        var expiredOrders = (await _orderRepository.GetExpiredPendingOrdersAsync(
+                userId,
+                planCode,
+                createdBefore))
+            .ToList();
+        if (expiredOrders.Count == 0) return;
+
+        var now = DateTime.UtcNow;
+        foreach (var order in expiredOrders)
+        {
+            order.Status = ExpiredStatus;
+            order.UpdatedAt = now;
+            _orderRepository.Update(order);
+        }
+
+        await _orderRepository.SaveChangesAsync();
+    }
+
     private string GetRequiredConfig(string key)
     {
         return _configuration[key]
@@ -303,6 +344,22 @@ public class BillingService : IBillingService
     private static string CreatePayOsDescription(long orderCode)
     {
         return $"MT{orderCode % 10000000:D7}";
+    }
+
+    private static string GetPayOsItemName(string planCode)
+    {
+        return planCode == "PRO_MONTHLY"
+            ? "Mascoteach Pro - Goi thang"
+            : "Mascoteach Pro - Goi nam";
+    }
+
+    private static DateTime GetPaymentLinkExpiresAtUtc(PaymentOrder order)
+    {
+        var createdAtUtc = order.CreatedAt.Kind == DateTimeKind.Utc
+            ? order.CreatedAt
+            : DateTime.SpecifyKind(order.CreatedAt, DateTimeKind.Utc);
+
+        return createdAtUtc.AddMinutes(PaymentLinkReuseMinutes);
     }
 
     private static bool IsPremiumActive(User user)
@@ -324,7 +381,8 @@ public class BillingService : IBillingService
         CheckoutUrl = order.CheckoutUrl,
         QrCode = order.QrCode,
         ReturnUrl = returnUrl,
-        CancelUrl = cancelUrl
+        CancelUrl = cancelUrl,
+        ExpiresAt = GetPaymentLinkExpiresAtUtc(order)
     };
 
     private static PaymentOrderResponse ToPaymentOrderResponse(PaymentOrder order) => new()

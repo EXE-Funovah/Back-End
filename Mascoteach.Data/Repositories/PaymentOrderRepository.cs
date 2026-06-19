@@ -35,6 +35,20 @@ public class PaymentOrderRepository : GenericRepository<PaymentOrder>, IPaymentO
             .FirstOrDefaultAsync();
     }
 
+    public async Task<IEnumerable<PaymentOrder>> GetExpiredPendingOrdersAsync(
+        int userId,
+        string planCode,
+        DateTime createdBefore)
+    {
+        return await _context.PaymentOrders
+            .Where(o => o.UserId == userId
+                && o.PlanCode == planCode
+                && o.Status == "Pending"
+                && o.IsDeleted == false
+                && o.CreatedAt < createdBefore)
+            .ToListAsync();
+    }
+
     public async Task<IEnumerable<PaymentOrder>> GetByUserIdAsync(int userId)
     {
         return await _context.PaymentOrders
