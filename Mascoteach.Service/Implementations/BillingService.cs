@@ -3,6 +3,7 @@ using Mascoteach.Data.Models;
 using Mascoteach.Service.DTOs;
 using Mascoteach.Service.Interfaces;
 using Microsoft.Extensions.Configuration;
+using System.Collections.Concurrent;
 using System.Security.Cryptography;
 using System.Text.Json;
 
@@ -16,6 +17,7 @@ public class BillingService : IBillingService
     private const string CancelledStatus = "Cancelled";
     private const string FailedStatus = "Failed";
     private const int PaymentLinkReuseMinutes = 5;
+    private static readonly ConcurrentDictionary<string, SemaphoreSlim> PaymentLinkLocks = new();
     private static readonly BillingPlanResponse[] Plans =
     [
         new()
@@ -70,6 +72,22 @@ public class BillingService : IBillingService
         _ = await _userRepository.GetByIdAsync(userId)
             ?? throw new KeyNotFoundException($"User with id {userId} not found.");
 
+        var lockKey = $"{userId}:{plan.PlanCode}";
+        var paymentLinkLock = PaymentLinkLocks.GetOrAdd(lockKey, _ => new SemaphoreSlim(1, 1));
+        await paymentLinkLock.WaitAsync();
+
+        try
+        {
+            return await CreatePaymentLinkCoreAsync(userId, plan);
+        }
+        finally
+        {
+            paymentLinkLock.Release();
+        }
+    }
+
+    private async Task<CreatePaymentLinkResponse> CreatePaymentLinkCoreAsync(int userId, BillingPlanResponse plan)
+    {
         var returnUrl = GetRequiredConfig("PayOS:ReturnUrl");
         var cancelUrl = GetRequiredConfig("PayOS:CancelUrl");
         var reusableCutoff = DateTime.UtcNow.AddMinutes(-PaymentLinkReuseMinutes);
