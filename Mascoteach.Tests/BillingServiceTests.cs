@@ -117,10 +117,50 @@ public class BillingServiceTests
         Assert.Equal("Mascoteach Pro - Goi thang", item.Name);
         Assert.Equal(1, item.Quantity);
         Assert.Equal(119000, item.Price);
+        Assert.Equal(
+            $"MT PRO THANG {payOsRequest.OrderCode % 10000000:D7}",
+            payOsRequest.Description);
         Assert.Equal("https://pay.payos.vn/web/link_123", result.CheckoutUrl);
         Assert.Equal(addedOrder.CreatedAt.AddMinutes(5), result.ExpiresAt);
         Assert.Equal("https://dev.mascoteach.com/checkout", result.ReturnUrl);
         Assert.Equal("https://dev.mascoteach.com/checkout/cancel", result.CancelUrl);
+    }
+
+    [Fact]
+    public async Task CreatePaymentLinkAsync_YearlyPlan_UsesYearlyBankDescription()
+    {
+        var user = MakeUser();
+        PayOsCreatePaymentLinkRequest? payOsRequest = null;
+        _userRepo.Setup(r => r.GetByIdAsync(user.Id)).ReturnsAsync(user);
+        _orderRepo.Setup(r => r.ExistsByOrderCodeAsync(It.IsAny<long>())).ReturnsAsync(false);
+        _orderRepo.Setup(r => r.AddAsync(It.IsAny<PaymentOrder>())).Returns(Task.CompletedTask);
+        _orderRepo.Setup(r => r.SaveChangesAsync()).ReturnsAsync(1);
+        _signatureService.Setup(s => s.CreatePaymentRequestSignature(
+                1188000,
+                "https://dev.mascoteach.com/checkout/cancel",
+                It.IsAny<string>(),
+                It.IsAny<long>(),
+                "https://dev.mascoteach.com/checkout"))
+            .Returns("signature");
+        _payOsClient.Setup(c => c.CreatePaymentLinkAsync(It.IsAny<PayOsCreatePaymentLinkRequest>()))
+            .Callback<PayOsCreatePaymentLinkRequest>(request => payOsRequest = request)
+            .ReturnsAsync(new PayOsCreatePaymentLinkResult
+            {
+                PaymentLinkId = "link_yearly",
+                CheckoutUrl = "https://pay.payos.vn/web/link_yearly",
+                QrCode = "yearly-qr",
+                Status = "PENDING"
+            });
+
+        await _sut.CreatePaymentLinkAsync(user.Id, new CreatePaymentLinkRequest
+        {
+            PlanCode = "PRO_YEARLY"
+        });
+
+        Assert.NotNull(payOsRequest);
+        Assert.Equal(
+            $"MT PRO NAM {payOsRequest!.OrderCode % 10000000:D7}",
+            payOsRequest.Description);
     }
 
     [Fact]

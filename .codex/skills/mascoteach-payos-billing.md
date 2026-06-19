@@ -92,6 +92,15 @@ amount={amount}&cancelUrl={cancelUrl}&description={description}&orderCode={order
 
 Use HMAC SHA256 with `PayOS:ChecksumKey`, lowercase hex.
 
+PayOS transfer descriptions are plan-aware and remain under 25 characters:
+
+```text
+PRO_MONTHLY -> MT PRO THANG {last 7 digits of orderCode}
+PRO_YEARLY  -> MT PRO NAM {last 7 digits of orderCode}
+```
+
+Keep transfer descriptions ASCII, short, and unique enough for reconciliation. The same description must be used when generating the PayOS request signature.
+
 ## Redirect vs embedded checkout
 
 Redirect flow:

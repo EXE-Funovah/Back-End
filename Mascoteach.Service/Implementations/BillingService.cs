@@ -85,7 +85,7 @@ public class BillingService : IBillingService
         await ExpireOldPendingOrdersAsync(userId, plan.PlanCode, reusableCutoff);
 
         var orderCode = await GenerateUniqueOrderCodeAsync();
-        var description = CreatePayOsDescription(orderCode);
+        var description = CreatePayOsDescription(plan.PlanCode, orderCode);
         var signature = _signatureService.CreatePaymentRequestSignature(
             plan.Amount,
             cancelUrl,
@@ -341,9 +341,10 @@ public class BillingService : IBillingService
             ?? throw new InvalidOperationException($"{key} is not configured.");
     }
 
-    private static string CreatePayOsDescription(long orderCode)
+    private static string CreatePayOsDescription(string planCode, long orderCode)
     {
-        return $"MT{orderCode % 10000000:D7}";
+        var planLabel = planCode == "PRO_MONTHLY" ? "THANG" : "NAM";
+        return $"MT PRO {planLabel} {orderCode % 10000000:D7}";
     }
 
     private static string GetPayOsItemName(string planCode)
