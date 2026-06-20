@@ -348,6 +348,10 @@ public partial class MascoteachDbContext : DbContext
             entity.HasIndex(e => e.Email, "UQ__Users__AB6E616426BBBC00").IsUnique();
 
             entity.Property(e => e.Id).HasColumnName("id");
+            entity.Property(e => e.AvatarUrl)
+                .HasMaxLength(500)
+                .IsUnicode(false)
+                .HasColumnName("avatar_url");
             entity.Property(e => e.Authenticator)
                 .HasMaxLength(50)
                 .IsUnicode(false)
