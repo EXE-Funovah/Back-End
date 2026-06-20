@@ -9,6 +9,9 @@ description: |
 
 # Mascoteach - Existing Feature Skill
 
+When changing Quiz/Question/Option behavior for flashcards, also read
+`.codex/skills/mascoteach-flashcards.md`.
+
 ## Current architecture
 
 Mascoteach is a 3-layer ASP.NET Core 9 backend:
@@ -69,6 +72,10 @@ Default flow:
 - `LiveSessions.teacher_id` remains the live-session teacher/host column; do not rename it to owner.
 - Use AutoMapper for entity-to-DTO and create-request-to-entity mapping.
 - Manual field updates in service implementations are acceptable and common for update requests.
+- `Quizzes.activity_type` distinguishes `Quiz` from `Flashcard`; do not infer it by loading questions.
+- `Questions.position` is zero-based and must be preserved in ordered reads and publish requests.
+- Whole activity creation uses `POST /api/Quiz/publish` so Quiz, Questions, and Options commit or roll back together.
+- Owner-scoped library reads use `GET /api/Quiz/me`; full nested reads use `GET /api/Quiz/{id}/detail`.
 
 ## Validation
 

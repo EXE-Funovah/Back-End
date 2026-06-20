@@ -142,6 +142,15 @@ Current gamification schema:
 - `User_Stats`
 - `Quiz_Attempts`
 
+Current flashcard schema:
+
+- `Quizzes.activity_type` is non-null and supports `Quiz` / `Flashcard`.
+- `Questions.question_type` is non-null and supports `MultipleChoice` / `Flashcard`.
+- `Questions.position` stores zero-based ordering.
+- Development DB has been rolled out and scaffolded.
+- Production must run the same idempotent rollout before the production backend uses these columns.
+- `Quiz`, `Question`, and `MascoteachDbContext` must retain `ActivityType` / `Position` after future scaffolds.
+
 Dev and production have both been rolled out for `Documents.owner_id`, `User_Stats`, and `Quiz_Attempts`.
 Do not write new code against `Documents.teacher_id`; only `LiveSessions.teacher_id` remains intentional.
 
@@ -157,6 +166,9 @@ After scaffold, review that:
 - `MascoteachDbContext` maps `Documents.owner_id`.
 - `LiveSession` still has `TeacherId` mapped to `LiveSessions.teacher_id`.
 - Gamification mappings for `User_Stats` and `Quiz_Attempts` are not duplicated in partial DbContext files.
+- `Quiz` has `ActivityType` mapped to `Quizzes.activity_type`.
+- `Question` has non-null `QuestionType` and `Position` mapped to `Questions.position`.
+- Flashcard indexes remain represented in `MascoteachDbContext` after scaffold.
 
 ### Docker/GitHub Actions deploy config
 

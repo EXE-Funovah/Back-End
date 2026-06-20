@@ -98,6 +98,15 @@ The gamification/document-owner rollout has already been applied to both dev and
 Do not generate future production scripts that assume `Documents.teacher_id` still exists. `LiveSessions.teacher_id`
 is still valid and should remain unchanged unless a separate live-session schema change is requested.
 
+Flashcard rollout state:
+
+- Development has `Quizzes.activity_type`, non-null `Questions.question_type`, `Questions.position`, related check
+  constraints, and query indexes.
+- Production rollout is still required unless separately confirmed as completed.
+- Run the same idempotent, environment-neutral SQL before deploying a production backend that reads these columns.
+- After rollout, scaffold from dev and review only `Quiz`, `Question`, and `MascoteachDbContext` changes before
+  implementing or deploying flashcard behavior.
+
 ## Current auth/email deployment keys
 
 Develop secrets:
