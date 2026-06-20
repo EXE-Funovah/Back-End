@@ -40,6 +40,11 @@ jobs:
       AUTH_PASSWORD_RESET_TOKEN_MINUTES: ${{ github.ref_name == 'develop' && secrets.DEV_AUTH_PASSWORD_RESET_TOKEN_MINUTES || secrets.AUTH_PASSWORD_RESET_TOKEN_MINUTES }}
       AUTH_EMAIL_VERIFICATION_TOKEN_HOURS: ${{ github.ref_name == 'develop' && secrets.DEV_AUTH_EMAIL_VERIFICATION_TOKEN_HOURS || secrets.AUTH_EMAIL_VERIFICATION_TOKEN_HOURS }}
       FREEMIUM_ACTIVE_DOCUMENT_LIMIT: ${{ github.ref_name == 'develop' && secrets.DEV_FREEMIUM_ACTIVE_DOCUMENT_LIMIT || secrets.FREEMIUM_ACTIVE_DOCUMENT_LIMIT }}
+      PAYOS_CLIENT_ID: ${{ github.ref_name == 'develop' && secrets.DEV_PAYOS_CLIENT_ID || secrets.PAYOS_CLIENT_ID }}
+      PAYOS_API_KEY: ${{ github.ref_name == 'develop' && secrets.DEV_PAYOS_API_KEY || secrets.PAYOS_API_KEY }}
+      PAYOS_CHECKSUM_KEY: ${{ github.ref_name == 'develop' && secrets.DEV_PAYOS_CHECKSUM_KEY || secrets.PAYOS_CHECKSUM_KEY }}
+      PAYOS_RETURN_URL: ${{ github.ref_name == 'develop' && secrets.DEV_PAYOS_RETURN_URL || secrets.PAYOS_RETURN_URL }}
+      PAYOS_CANCEL_URL: ${{ github.ref_name == 'develop' && secrets.DEV_PAYOS_CANCEL_URL || secrets.PAYOS_CANCEL_URL }}
       EMAIL_SMTP_HOST: ${{ github.ref_name == 'develop' && secrets.DEV_EMAIL_SMTP_HOST || secrets.EMAIL_SMTP_HOST }}
       EMAIL_SMTP_PORT: ${{ github.ref_name == 'develop' && secrets.DEV_EMAIL_SMTP_PORT || secrets.EMAIL_SMTP_PORT }}
       EMAIL_USERNAME: ${{ github.ref_name == 'develop' && secrets.DEV_EMAIL_USERNAME || secrets.EMAIL_USERNAME }}
@@ -83,6 +88,11 @@ jobs:
             -e Auth__PasswordResetTokenMinutes="$AUTH_PASSWORD_RESET_TOKEN_MINUTES" \
             -e Auth__EmailVerificationTokenHours="$AUTH_EMAIL_VERIFICATION_TOKEN_HOURS" \
             -e Plans__FreemiumActiveDocumentLimit="$FREEMIUM_ACTIVE_DOCUMENT_LIMIT" \
+            -e PayOS__ClientId="$PAYOS_CLIENT_ID" \
+            -e PayOS__ApiKey="$PAYOS_API_KEY" \
+            -e PayOS__ChecksumKey="$PAYOS_CHECKSUM_KEY" \
+            -e PayOS__ReturnUrl="$PAYOS_RETURN_URL" \
+            -e PayOS__CancelUrl="$PAYOS_CANCEL_URL" \
             -e Email__SmtpHost="$EMAIL_SMTP_HOST" \
             -e Email__SmtpPort="$EMAIL_SMTP_PORT" \
             -e Email__Username="$EMAIL_USERNAME" \

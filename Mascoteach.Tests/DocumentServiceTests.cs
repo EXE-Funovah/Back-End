@@ -31,10 +31,15 @@ public class DocumentServiceTests
         _sut = new DocumentService(_docRepo.Object, _userRepo.Object, _mapper, _s3Service.Object, _configuration);
     }
 
-    private User MakeUser(int id = 10, string tier = "Freemium", int docsProcessed = 0) => new()
+    private User MakeUser(
+        int id = 10,
+        string tier = "Freemium",
+        int docsProcessed = 0,
+        DateTime? premiumExpiresAt = null) => new()
     {
         Id = id, FullName = "Teacher", Email = "t@t.com", PasswordHash = "h",
-        Role = "Teacher", SubscriptionTier = tier, DocumentsProcessed = docsProcessed
+        Role = "Teacher", SubscriptionTier = tier, DocumentsProcessed = docsProcessed,
+        PremiumExpiresAt = premiumExpiresAt
     };
 
     private Document MakeDoc(int id = 1, int ownerId = 10, bool isDeleted = false) => new()
@@ -88,7 +93,7 @@ public class DocumentServiceTests
     [Fact]
     public async Task UploadDocumentAsync_PremiumWithFiveActiveDocuments_Succeeds()
     {
-        var user = MakeUser(tier: "Premium");
+        var user = MakeUser(tier: "Premium", premiumExpiresAt: DateTime.UtcNow.AddDays(1));
         _userRepo.Setup(r => r.GetByIdAsync(10)).ReturnsAsync(user);
         _docRepo.Setup(r => r.CountActiveByOwnerIdAsync(10)).ReturnsAsync(5);
         var mockTx = new Mock<IDbContextTransaction>();
@@ -103,6 +108,17 @@ public class DocumentServiceTests
 
         Assert.NotNull(result);
         _docRepo.Verify(r => r.CountActiveByOwnerIdAsync(It.IsAny<int>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task UploadDocumentAsync_ExpiredPremiumUsesFreemiumActiveDocumentLimit()
+    {
+        var user = MakeUser(tier: "Premium", premiumExpiresAt: DateTime.UtcNow.AddDays(-1));
+        _userRepo.Setup(r => r.GetByIdAsync(10)).ReturnsAsync(user);
+        _docRepo.Setup(r => r.CountActiveByOwnerIdAsync(10)).ReturnsAsync(5);
+
+        await Assert.ThrowsAsync<InvalidOperationException>(
+            () => _sut.UploadDocumentAsync(10, new DocumentCreateRequest { S3Key = "key.zip" }));
     }
 
     [Fact]

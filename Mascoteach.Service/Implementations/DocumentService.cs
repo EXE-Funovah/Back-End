@@ -51,7 +51,9 @@ public class DocumentService : IDocumentService
 
     private async Task EnsureCanActivateDocumentAsync(User user)
     {
-        var isPremium = string.Equals(user.SubscriptionTier, "Premium", StringComparison.OrdinalIgnoreCase);
+        var isPremium = string.Equals(user.SubscriptionTier, "Premium", StringComparison.OrdinalIgnoreCase)
+            && user.PremiumExpiresAt.HasValue
+            && user.PremiumExpiresAt.Value > DateTime.UtcNow;
         if (isPremium) return;
 
         var activeDocumentCount = await _documentRepository.CountActiveByOwnerIdAsync(user.Id);

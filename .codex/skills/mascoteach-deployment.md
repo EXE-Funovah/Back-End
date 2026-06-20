@@ -117,6 +117,40 @@ Develop secrets:
 
 Production secrets use the same names without `DEV_`.
 
+## Current PayOS deployment keys
+
+PayOS billing uses branch-specific runtime config. Also read `.codex/skills/mascoteach-payos-billing.md` when changing payment deployment.
+
+Develop secrets:
+
+- `DEV_PAYOS_CLIENT_ID`
+- `DEV_PAYOS_API_KEY`
+- `DEV_PAYOS_CHECKSUM_KEY`
+- `DEV_PAYOS_RETURN_URL`
+- `DEV_PAYOS_CANCEL_URL`
+
+Production secrets:
+
+- `PAYOS_CLIENT_ID`
+- `PAYOS_API_KEY`
+- `PAYOS_CHECKSUM_KEY`
+- `PAYOS_RETURN_URL`
+- `PAYOS_CANCEL_URL`
+
+Expected frontend URLs:
+
+- Develop return: `https://dev.mascoteach.com/checkout`
+- Develop cancel: `https://dev.mascoteach.com/checkout/cancel`
+- Production return: `https://mascoteach.com/checkout`
+- Production cancel: `https://mascoteach.com/checkout/cancel`
+
+Expected PayOS webhook URLs:
+
+- Develop: `https://api-dev.mascoteach.com/api/Billing/payos-webhook`
+- Production: `https://api.mascoteach.com/api/Billing/payos-webhook`
+
+If PayOS has separate payment channels, use one channel for dev and one for production so webhooks do not need to be swapped manually.
+
 ## Common mistakes
 
 - Adding a key to `appsettings.Development.json` but forgetting `docker run -e`.
@@ -127,3 +161,4 @@ Production secrets use the same names without `DEV_`.
 - Adding dev secrets only, then later merging to `main` without production secret names.
 - Scaffold before running the DB script.
 - Starting the deployed app before production DB has the new columns.
+- Forgetting to update PayOS webhook URL/channel when switching between dev and production.
