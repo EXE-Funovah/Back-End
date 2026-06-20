@@ -9,6 +9,10 @@ namespace Mascoteach.Service.Interfaces
         Task<UserResponse?> GetByIdAsync(int id);
         Task<UserResponse?> GetCurrentUserAsync(int userId);
         Task<bool> UpdateAsync(int id, UserUpdateRequest request);
+
+        /// <summary>Lưu S3 key ảnh đại diện cho user hiện tại (null = gỡ avatar).</summary>
+        Task<UserResponse?> UpdateAvatarAsync(int userId, string? avatarKey);
+
         Task<bool> DeleteAsync(int id);
         Task<UserResponse?> ToggleDeleteAsync(int id);
 

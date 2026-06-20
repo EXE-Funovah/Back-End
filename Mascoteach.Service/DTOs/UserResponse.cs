@@ -11,4 +11,7 @@ public class UserResponse
     public int? DocumentsProcessed { get; set; }
     public DateTime? CreatedAt { get; set; }
     public bool IsDeleted { get; set; }
+
+    /// <summary>Presigned download URL của ảnh đại diện (null nếu chưa đặt).</summary>
+    public string? AvatarUrl { get; set; }
 }

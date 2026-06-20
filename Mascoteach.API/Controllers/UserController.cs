@@ -10,10 +10,36 @@ namespace Mascoteach.API.Controllers
     public class UserController : BaseController
     {
         private readonly IUserService _userService;
+        private readonly IS3Service _s3Service;
 
-        public UserController(IUserService userService)
+        public UserController(IUserService userService, IS3Service s3Service)
         {
             _userService = userService;
+            _s3Service = s3Service;
+        }
+
+        // POST: api/User/avatar-upload-url — presign upload ảnh đại diện (ảnh, không zip)
+        [HttpPost("avatar-upload-url")]
+        public async Task<IActionResult> GenerateAvatarUploadUrl([FromBody] PresignedUrlRequest request)
+        {
+            try
+            {
+                var result = await _s3Service.GeneratePresignedAvatarUploadUrlAsync(request.FileName, request.ContentType);
+                return Ok(result);
+            }
+            catch (Exception ex)
+            {
+                return BadRequest(new { message = "Failed to generate avatar upload URL", error = ex.Message });
+            }
+        }
+
+        // PATCH: api/User/avatar — lưu S3 key avatar cho user hiện tại
+        [HttpPatch("avatar")]
+        public async Task<IActionResult> UpdateAvatar([FromBody] AvatarUpdateRequest request)
+        {
+            var result = await _userService.UpdateAvatarAsync(CurrentUserId, request.AvatarUrl);
+            if (result == null) return NotFound("User does not exist.");
+            return Ok(result);
         }
 
         // GET: api/User
