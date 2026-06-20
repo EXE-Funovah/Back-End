@@ -10,29 +10,58 @@ namespace Mascoteach.Service.Implementations
     {
         private readonly IUserRepository _userRepository;
         private readonly IMapper _mapper;
+        private readonly IS3Service _s3Service;
 
-        public UserService(IUserRepository userRepository, IMapper mapper)
+        public UserService(IUserRepository userRepository, IMapper mapper, IS3Service s3Service)
         {
             _userRepository = userRepository;
             _mapper = mapper;
+            _s3Service = s3Service;
+        }
+
+        /// <summary>Map User → UserResponse và đổi AvatarUrl (S3 key) thành presigned URL.</summary>
+        private async Task<UserResponse?> ToResponseAsync(User? user)
+        {
+            if (user == null) return null;
+            var res = _mapper.Map<UserResponse>(user);
+            if (!string.IsNullOrWhiteSpace(user.AvatarUrl))
+                res.AvatarUrl = await _s3Service.GeneratePresignedDownloadUrlAsync(user.AvatarUrl);
+            return res;
         }
 
         public async Task<IEnumerable<UserResponse>> GetAllUsersAsync()
         {
             var users = await _userRepository.GetAllAsync();
-            return _mapper.Map<IEnumerable<UserResponse>>(users);
+            var list = new List<UserResponse>();
+            foreach (var u in users)
+            {
+                var r = await ToResponseAsync(u);
+                if (r != null) list.Add(r);
+            }
+            return list;
         }
 
         public async Task<UserResponse?> GetByIdAsync(int id)
         {
             var user = await _userRepository.GetByIdAsync(id);
-            return _mapper.Map<UserResponse>(user);
+            return await ToResponseAsync(user);
         }
 
         public async Task<UserResponse?> GetCurrentUserAsync(int userId)
         {
             var user = await _userRepository.GetByIdAsync(userId);
-            return _mapper.Map<UserResponse>(user);
+            return await ToResponseAsync(user);
+        }
+
+        public async Task<UserResponse?> UpdateAvatarAsync(int userId, string? avatarKey)
+        {
+            var user = await _userRepository.GetByIdAsync(userId);
+            if (user == null) return null;
+
+            user.AvatarUrl = string.IsNullOrWhiteSpace(avatarKey) ? null : avatarKey.Trim();
+            _userRepository.Update(user);
+            await _userRepository.SaveChangesAsync();
+            return await ToResponseAsync(user);
         }
 
         public async Task<bool> UpdateAsync(int id, UserUpdateRequest request)

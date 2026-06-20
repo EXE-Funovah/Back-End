@@ -47,6 +47,33 @@ public class S3Service : IS3Service
         };
     }
 
+    public async Task<PresignedUrlResponse> GeneratePresignedAvatarUploadUrlAsync(string fileName, string contentType)
+    {
+        var ext = System.IO.Path.GetExtension(fileName);
+        if (string.IsNullOrWhiteSpace(ext)) ext = ".jpg";
+
+        var s3Key = $"avatars/{Guid.NewGuid()}{ext}";
+
+        var request = new GetPreSignedUrlRequest
+        {
+            BucketName = _bucketName,
+            Key = s3Key,
+            Verb = HttpVerb.PUT,
+            Expires = DateTime.UtcNow.AddMinutes(_urlExpirationMinutes),
+            ContentType = string.IsNullOrWhiteSpace(contentType) ? "image/jpeg" : contentType
+        };
+
+        var uploadUrl = await Task.Run(() => _s3Client.GetPreSignedURL(request));
+
+        return new PresignedUrlResponse
+        {
+            UploadUrl = uploadUrl,
+            S3Key = s3Key,
+            FileUrl = $"https://{_bucketName}.s3.amazonaws.com/{s3Key}",
+            ExpiresAt = DateTime.UtcNow.AddMinutes(_urlExpirationMinutes)
+        };
+    }
+
     public async Task<string> GeneratePresignedDownloadUrlAsync(string s3Key)
     {
         var request = new GetPreSignedUrlRequest
