@@ -7,4 +7,7 @@ public class QuestionUpdateRequest
     [Required]
     public string QuestionText { get; set; } = null!;
     public string QuestionType { get; set; } = "MultipleChoice";
+
+    [Range(0, int.MaxValue)]
+    public int? Position { get; set; }
 }

@@ -126,6 +126,8 @@ public partial class MascoteachDbContext : DbContext
         {
             entity.HasKey(e => e.Id).HasName("PK__Options__3213E83F65D587A0");
 
+            entity.HasIndex(e => new { e.QuestionId, e.IsDeleted }, "IX_Options_Question_Deleted");
+
             entity.Property(e => e.Id).HasColumnName("id");
             entity.Property(e => e.IsCorrect).HasColumnName("is_correct");
             entity.Property(e => e.IsDeleted).HasColumnName("is_deleted");
@@ -232,8 +234,11 @@ public partial class MascoteachDbContext : DbContext
         {
             entity.HasKey(e => e.Id).HasName("PK__Question__3213E83F183DEF03");
 
+            entity.HasIndex(e => new { e.QuizId, e.IsDeleted, e.Position }, "IX_Questions_Quiz_Deleted_Position");
+
             entity.Property(e => e.Id).HasColumnName("id");
             entity.Property(e => e.IsDeleted).HasColumnName("is_deleted");
+            entity.Property(e => e.Position).HasColumnName("position");
             entity.Property(e => e.QuestionText).HasColumnName("question_text");
             entity.Property(e => e.QuestionType)
                 .HasMaxLength(50)
@@ -252,7 +257,14 @@ public partial class MascoteachDbContext : DbContext
         {
             entity.HasKey(e => e.Id).HasName("PK__Quizzes__3213E83FB6D49418");
 
+            entity.HasIndex(e => new { e.DocumentId, e.ActivityType, e.IsDeleted, e.CreatedAt }, "IX_Quizzes_Document_Activity_Deleted_Created").IsDescending(false, false, false, true);
+
             entity.Property(e => e.Id).HasColumnName("id");
+            entity.Property(e => e.ActivityType)
+                .HasMaxLength(50)
+                .IsUnicode(false)
+                .HasDefaultValue("Quiz")
+                .HasColumnName("activity_type");
             entity.Property(e => e.CreatedAt)
                 .HasDefaultValueSql("(getdate())")
                 .HasColumnType("datetime")

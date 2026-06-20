@@ -9,6 +9,8 @@
   </PropertyGroup>
 
   <ItemGroup>
+	<FrameworkReference Include="Microsoft.AspNetCore.App" />
+
     <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.12.0" />
     <PackageReference Include="xunit" Version="2.9.3" />
     <PackageReference Include="xunit.runner.visualstudio" Version="2.8.2" />
@@ -19,6 +21,7 @@
   </ItemGroup>
 
   <ItemGroup>
+	<ProjectReference Include="..\Mascoteach.API\Mascoteach.API.csproj" />
     <ProjectReference Include="..\Mascoteach.Service\Mascoteach.Service.csproj" />
     <ProjectReference Include="..\Mascoteach.Data\Mascoteach.Data.csproj" />
   </ItemGroup>

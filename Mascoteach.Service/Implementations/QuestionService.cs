@@ -73,6 +73,8 @@ namespace Mascoteach.Service.Implementations
             try
             {
                 var question = _mapper.Map<Question>(request);
+                question.Position = request.Position
+                    ?? await _questionRepository.GetNextPositionAsync(request.QuizId);
                 await _questionRepository.AddAsync(question);
                 await _questionRepository.SaveChangesAsync();
 
@@ -110,6 +112,8 @@ namespace Mascoteach.Service.Implementations
 
             question.QuestionText = request.QuestionText;
             question.QuestionType = request.QuestionType;
+            if (request.Position.HasValue)
+                question.Position = request.Position.Value;
 
             _questionRepository.Update(question);
             return await _questionRepository.SaveChangesAsync() > 0;

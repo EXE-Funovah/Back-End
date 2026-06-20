@@ -17,6 +17,38 @@ namespace Mascoteach.Data.Repositories
                 .ToListAsync();
         }
 
+        public async Task<IEnumerable<Quiz>> GetMineAsync(int ownerId, string? activityType)
+        {
+            var query = _context.Quizzes
+                .AsNoTracking()
+                .Where(q => q.IsDeleted == false
+                    && q.Document.IsDeleted == false
+                    && q.Document.OwnerId == ownerId);
+
+            if (!string.IsNullOrWhiteSpace(activityType))
+                query = query.Where(q => q.ActivityType == activityType);
+
+            return await query
+                .Include(q => q.Questions.Where(question => question.IsDeleted == false))
+                .OrderByDescending(q => q.CreatedAt)
+                .ToListAsync();
+        }
+
+        public async Task<Quiz?> GetDetailByIdAsync(int id, int ownerId)
+        {
+            return await _context.Quizzes
+                .AsNoTracking()
+                .Where(q => q.Id == id
+                    && q.IsDeleted == false
+                    && q.Document.IsDeleted == false
+                    && q.Document.OwnerId == ownerId)
+                .Include(q => q.Questions
+                    .Where(question => question.IsDeleted == false)
+                    .OrderBy(question => question.Position))
+                .ThenInclude(question => question.Options.Where(option => option.IsDeleted == false))
+                .FirstOrDefaultAsync();
+        }
+
         public async Task<Quiz?> GetByIdIncludingDeletedAsync(int id)
         {
             return await _context.Quizzes.FindAsync(id);

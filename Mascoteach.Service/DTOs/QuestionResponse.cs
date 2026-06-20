@@ -6,6 +6,7 @@ public class QuestionResponse
     public int QuizId { get; set; }
     public string QuestionText { get; set; } = null!;
     public string QuestionType { get; set; } = null!;
+    public int Position { get; set; }
     public bool IsDeleted { get; set; }
     public List<OptionResponse> Options { get; set; } = new();
 }
