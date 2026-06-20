@@ -35,6 +35,22 @@ public class PaymentOrderRepository : GenericRepository<PaymentOrder>, IPaymentO
             .FirstOrDefaultAsync();
     }
 
+    public async Task<IReadOnlyList<DateTime>> GetRecentPaymentLinkCreationTimesAsync(
+        int userId,
+        DateTime createdAfter,
+        int limit)
+    {
+        return await _context.PaymentOrders
+            .Where(o => o.UserId == userId
+                && o.IsDeleted == false
+                && o.CheckoutUrl != null
+                && o.CreatedAt > createdAfter)
+            .OrderBy(o => o.CreatedAt)
+            .Select(o => o.CreatedAt)
+            .Take(limit)
+            .ToListAsync();
+    }
+
     public async Task<int> ExpirePendingOrdersAsync(
         int userId,
         string planCode,
@@ -46,7 +62,7 @@ public class PaymentOrderRepository : GenericRepository<PaymentOrder>, IPaymentO
                 && o.PlanCode == planCode
                 && o.Status == "Pending"
                 && o.IsDeleted == false
-                && o.CreatedAt < createdBefore)
+                && o.CreatedAt <= createdBefore)
             .ExecuteUpdateAsync(setters => setters
                 .SetProperty(o => o.Status, "Expired")
                 .SetProperty(o => o.UpdatedAt, updatedAt));

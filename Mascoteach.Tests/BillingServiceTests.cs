@@ -43,6 +43,13 @@ public class BillingServiceTests
                 It.IsAny<string?>(),
                 It.IsAny<string?>()))
             .ReturnsAsync(true);
+        _orderRepo.Setup(r => r.GetByUserIdAsync(It.IsAny<int>()))
+            .ReturnsAsync(Array.Empty<PaymentOrder>());
+        _orderRepo.Setup(r => r.GetRecentPaymentLinkCreationTimesAsync(
+                It.IsAny<int>(),
+                It.IsAny<DateTime>(),
+                It.IsAny<int>()))
+            .ReturnsAsync(Array.Empty<DateTime>());
 
         _sut = new BillingService(
             _orderRepo.Object,
@@ -203,6 +210,86 @@ public class BillingServiceTests
         Assert.Equal("https://dev.mascoteach.com/checkout/cancel", result.CancelUrl);
         _orderRepo.Verify(r => r.AddAsync(It.IsAny<PaymentOrder>()), Times.Never);
         _payOsClient.Verify(c => c.CreatePaymentLinkAsync(It.IsAny<PayOsCreatePaymentLinkRequest>()), Times.Never);
+        _orderRepo.Verify(r => r.GetRecentPaymentLinkCreationTimesAsync(
+            It.IsAny<int>(), It.IsAny<DateTime>(), It.IsAny<int>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task CreatePaymentLinkAsync_ThreeRecentlyCreatedLinks_RejectsNewLink()
+    {
+        var user = MakeUser();
+        var recentOrders = Enumerable.Range(1, 3)
+            .Select(index =>
+            {
+                var order = MakeOrder(user.Id, "PRO_MONTHLY", 119000);
+                order.Id = index;
+                order.OrderCode += index;
+                order.CheckoutUrl = $"https://pay.payos.vn/web/link_{index}";
+                order.CreatedAt = DateTime.UtcNow.AddMinutes(-index);
+                order.Status = index == 1 ? "Cancelled" : "Expired";
+                return order;
+            })
+            .ToArray();
+        _userRepo.Setup(r => r.GetByIdAsync(user.Id)).ReturnsAsync(user);
+        _orderRepo.Setup(r => r.GetReusablePendingOrderAsync(user.Id, "PRO_YEARLY", It.IsAny<DateTime>()))
+            .ReturnsAsync((PaymentOrder?)null);
+        _orderRepo.Setup(r => r.GetRecentPaymentLinkCreationTimesAsync(
+                user.Id,
+                It.IsAny<DateTime>(),
+                3))
+            .ReturnsAsync(recentOrders.Select(order => order.CreatedAt).OrderBy(value => value).ToArray());
+        _orderRepo.Setup(r => r.ExistsByOrderCodeAsync(It.IsAny<long>())).ReturnsAsync(false);
+        _orderRepo.Setup(r => r.AddAsync(It.IsAny<PaymentOrder>())).Returns(Task.CompletedTask);
+        _orderRepo.Setup(r => r.SaveChangesAsync()).ReturnsAsync(1);
+        _signatureService.Setup(s => s.CreatePaymentRequestSignature(
+                It.IsAny<int>(),
+                It.IsAny<string>(),
+                It.IsAny<string>(),
+                It.IsAny<long>(),
+                It.IsAny<string>()))
+            .Returns("signature");
+        _payOsClient.Setup(c => c.CreatePaymentLinkAsync(It.IsAny<PayOsCreatePaymentLinkRequest>()))
+            .ReturnsAsync(new PayOsCreatePaymentLinkResult
+            {
+                PaymentLinkId = "link_fourth",
+                CheckoutUrl = "https://pay.payos.vn/web/link_fourth",
+                QrCode = "qr-fourth",
+                Status = "PENDING"
+            });
+
+        var exception = await Assert.ThrowsAnyAsync<InvalidOperationException>(() =>
+            _sut.CreatePaymentLinkAsync(user.Id, new CreatePaymentLinkRequest
+            {
+                PlanCode = "PRO_YEARLY"
+            }));
+
+        Assert.Contains("3", exception.Message);
+        Assert.Contains("10", exception.Message);
+        _orderRepo.Verify(r => r.AddAsync(It.IsAny<PaymentOrder>()), Times.Never);
+        _payOsClient.Verify(c => c.CreatePaymentLinkAsync(It.IsAny<PayOsCreatePaymentLinkRequest>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task GetMyOrdersAsync_ExpiresOverduePendingOrdersForEveryPlanBeforeReturningHistory()
+    {
+        var beforeCall = DateTime.UtcNow;
+        _orderRepo.Setup(r => r.GetByUserIdAsync(10))
+            .ReturnsAsync(Array.Empty<PaymentOrder>());
+
+        await _sut.GetMyOrdersAsync(10);
+
+        var afterCall = DateTime.UtcNow;
+        foreach (var planCode in new[] { "PRO_MONTHLY", "PRO_YEARLY" })
+        {
+            _orderRepo.Verify(r => r.ExpirePendingOrdersAsync(
+                10,
+                planCode,
+                It.Is<DateTime>(value =>
+                    value >= beforeCall.AddMinutes(-5)
+                    && value <= afterCall.AddMinutes(-5)),
+                It.Is<DateTime>(value => value >= beforeCall && value <= afterCall)), Times.Once);
+        }
+        _orderRepo.Verify(r => r.GetByUserIdAsync(10), Times.Once);
     }
 
     [Fact]

@@ -72,17 +72,21 @@ All billing endpoints require `[Authorize]` except `payos-webhook`, which is `[A
 
 1. Frontend calls `POST /api/Billing/create-payment-link` with `planCode`.
 2. Backend uses `CurrentUserId`; never trust user id from request body.
-3. Backend checks for an existing reusable `Pending` order for the same user and same plan created within the last 5 minutes.
-4. If reusable order exists and has `checkout_url`, backend returns that existing link and its original `expiresAt`; reusing must not restart the countdown.
-5. If no reusable order exists, backend marks same-user same-plan `Pending` orders older than 5 minutes as `Expired`.
-6. Backend creates a new `PaymentOrder` with `Pending` status.
-7. Backend sends PayOS `expiredAt = PaymentOrder.CreatedAt + 5 minutes` as Unix seconds.
-8. Backend sends one PayOS `items` entry describing the selected Mascoteach Pro plan.
-9. Backend signs PayOS request with `PayOS:ChecksumKey`.
-10. Backend calls PayOS create payment link API.
-11. Backend stores `payment_link_id`, `checkout_url`, and `qr_code`.
-12. Backend returns `checkoutUrl`, `returnUrl`, `cancelUrl`, and `expiresAt`.
-13. Frontend displays a countdown from `expiresAt` and calls create-payment-link again when it reaches zero.
+3. Backend marks all same-user `Pending` orders older than 5 minutes as `Expired`, regardless of plan.
+4. Backend checks for an existing reusable `Pending` order for the same user and same plan created within the last 5 minutes.
+5. If reusable order exists and has `checkout_url`, backend returns that existing link and its original `expiresAt`; reusing must not restart the countdown or consume rate-limit quota.
+6. Before creating a new PayOS link, backend allows at most 3 successfully created links per user in a rolling 10-minute window. Cancelled and expired links still count; failed attempts without a `checkout_url` do not.
+7. When the limit is reached, backend returns HTTP `429`, a `Retry-After` header, and `retryAfterSeconds` in the response body.
+8. Backend creates a new `PaymentOrder` with `Pending` status.
+9. Backend sends PayOS `expiredAt = PaymentOrder.CreatedAt + 5 minutes` as Unix seconds.
+10. Backend sends one PayOS `items` entry describing the selected Mascoteach Pro plan.
+11. Backend signs PayOS request with `PayOS:ChecksumKey`.
+12. Backend calls PayOS create payment link API.
+13. Backend stores `payment_link_id`, `checkout_url`, and `qr_code`.
+14. Backend returns `checkoutUrl`, `returnUrl`, `cancelUrl`, and `expiresAt`.
+15. Frontend displays a countdown from `expiresAt`. At zero it hides/disables the old QR and waits for an explicit user action before requesting a new link.
+
+`GET /api/Billing/orders/me` performs lazy expiration before returning history: it marks all same-user `Pending` orders older than 5 minutes as `Expired`. The create-payment-link flow performs the same cleanup. There is no recurring background expiration job.
 
 PayOS request signature uses fields in alphabetical order:
 
@@ -261,6 +265,10 @@ Important test cases:
 - Reused links return the original `expiresAt` instead of restarting the five-minute countdown.
 - New PayOS requests include `expiredAt` and selected-plan `items`.
 - Pending links older than five minutes are marked `Expired` when the frontend requests a replacement link.
+- Reading payment history marks all same-user overdue pending links `Expired`, regardless of plan.
+- Creating a payment link also expires all same-user overdue pending links before reuse and rate-limit checks.
+- Three successfully created PayOS links within ten minutes block a fourth link with HTTP `429`.
+- Reusing an existing same-plan link does not consume rate-limit quota.
 - A valid successful webhook can recover a non-paid local state when PayOS confirms money was received.
 - Concurrent duplicate webhooks extend Premium only once.
 - Currency and payment-link mismatches do not grant Premium.
@@ -285,3 +293,5 @@ Important test cases:
 - Do not hardcode PayOS secrets in committed config.
 - Do not create a new PayOS payment link on every plan toggle when a same-plan pending link is still reusable.
 - Do not calculate a fresh `expiresAt` when returning a reused link; always derive it from the order's original `created_at`.
+- Do not count reuse or failed PayOS creation attempts toward the 3-links-per-10-minutes rate limit.
+- Do not auto-create payment links forever when the frontend countdown reaches zero.

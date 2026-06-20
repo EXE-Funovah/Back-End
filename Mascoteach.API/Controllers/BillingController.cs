@@ -1,4 +1,5 @@
 using Mascoteach.Service.DTOs;
+using Mascoteach.Service.Exceptions;
 using Mascoteach.Service.Interfaces;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -37,6 +38,15 @@ public class BillingController : BaseController
         catch (KeyNotFoundException ex)
         {
             return NotFound(ex.Message);
+        }
+        catch (PaymentLinkRateLimitException ex)
+        {
+            Response.Headers.RetryAfter = ex.RetryAfterSeconds.ToString();
+            return StatusCode(StatusCodes.Status429TooManyRequests, new
+            {
+                message = ex.Message,
+                retryAfterSeconds = ex.RetryAfterSeconds
+            });
         }
         catch (InvalidOperationException ex)
         {
