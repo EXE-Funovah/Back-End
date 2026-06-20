@@ -12,6 +12,9 @@ public class QuestionCreateRequest
 
     public string QuestionType { get; set; } = "MultipleChoice";
 
+    [Range(0, int.MaxValue)]
+    public int? Position { get; set; }
+
     /// <summary>
     /// Danh sách options đi kèm khi tạo question
     /// </summary>

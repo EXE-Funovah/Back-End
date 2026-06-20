@@ -1,6 +1,6 @@
 namespace Mascoteach.Service.DTOs;
 
-public class QuizResponse
+public class QuizDetailResponse
 {
     public int Id { get; set; }
     public int DocumentId { get; set; }
@@ -8,6 +8,5 @@ public class QuizResponse
     public string ActivityType { get; set; } = null!;
     public string Status { get; set; } = null!;
     public DateTime? CreatedAt { get; set; }
-    public int QuestionCount { get; set; }
-    public bool IsDeleted { get; set; }
+    public List<QuestionResponse> Questions { get; set; } = new();
 }

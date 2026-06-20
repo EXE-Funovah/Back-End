@@ -8,7 +8,9 @@ public class QuizProfile : Profile
 {
     public QuizProfile()
     {
-        CreateMap<Quiz, QuizResponse>();
+        CreateMap<Quiz, QuizResponse>()
+            .ForMember(dest => dest.QuestionCount, opt => opt.MapFrom(src => src.Questions.Count));
+        CreateMap<Quiz, QuizDetailResponse>();
         CreateMap<QuizCreateRequest, Quiz>();
     }
 }
