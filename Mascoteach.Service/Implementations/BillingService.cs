@@ -1,6 +1,7 @@
 using Mascoteach.Data.Interfaces;
 using Mascoteach.Data.Models;
 using Mascoteach.Service.DTOs;
+using Mascoteach.Service.Exceptions;
 using Mascoteach.Service.Interfaces;
 using Microsoft.Extensions.Configuration;
 using System.Collections.Concurrent;
@@ -17,6 +18,8 @@ public class BillingService : IBillingService
     private const string CancelledStatus = "Cancelled";
     private const string FailedStatus = "Failed";
     private const int PaymentLinkReuseMinutes = 5;
+    private const int PaymentLinkRateLimitCount = 3;
+    private const int PaymentLinkRateLimitMinutes = 10;
     private static readonly ConcurrentDictionary<string, SemaphoreSlim> PaymentLinkLocks = new();
     private static readonly BillingPlanResponse[] Plans =
     [
@@ -72,7 +75,7 @@ public class BillingService : IBillingService
         _ = await _userRepository.GetByIdAsync(userId)
             ?? throw new KeyNotFoundException($"User with id {userId} not found.");
 
-        var lockKey = $"{userId}:{plan.PlanCode}";
+        var lockKey = userId.ToString();
         var paymentLinkLock = PaymentLinkLocks.GetOrAdd(lockKey, _ => new SemaphoreSlim(1, 1));
         await paymentLinkLock.WaitAsync();
 
@@ -90,7 +93,10 @@ public class BillingService : IBillingService
     {
         var returnUrl = GetRequiredConfig("PayOS:ReturnUrl");
         var cancelUrl = GetRequiredConfig("PayOS:CancelUrl");
-        var reusableCutoff = DateTime.UtcNow.AddMinutes(-PaymentLinkReuseMinutes);
+        var now = DateTime.UtcNow;
+        var reusableCutoff = now.AddMinutes(-PaymentLinkReuseMinutes);
+        await ExpireOldPendingOrdersAsync(userId, reusableCutoff, now);
+
         var reusableOrder = await _orderRepository.GetReusablePendingOrderAsync(
             userId,
             plan.PlanCode,
@@ -99,7 +105,7 @@ public class BillingService : IBillingService
         if (reusableOrder != null)
             return ToCreatePaymentLinkResponse(reusableOrder, returnUrl, cancelUrl);
 
-        await ExpireOldPendingOrdersAsync(userId, plan.PlanCode, reusableCutoff);
+        await EnforcePaymentLinkRateLimitAsync(userId, now);
 
         var orderCode = await GenerateUniqueOrderCodeAsync();
         var description = CreatePayOsDescription(plan.PlanCode, orderCode);
@@ -119,7 +125,7 @@ public class BillingService : IBillingService
             Currency = plan.Currency,
             Status = PendingStatus,
             Provider = Provider,
-            CreatedAt = DateTime.UtcNow,
+            CreatedAt = now,
             IsDeleted = false
         };
 
@@ -195,6 +201,12 @@ public class BillingService : IBillingService
 
     public async Task<IEnumerable<PaymentOrderResponse>> GetMyOrdersAsync(int userId)
     {
+        var now = DateTime.UtcNow;
+        await ExpireOldPendingOrdersAsync(
+            userId,
+            now.AddMinutes(-PaymentLinkReuseMinutes),
+            now);
+
         var orders = await _orderRepository.GetByUserIdAsync(userId);
         return orders.Select(ToPaymentOrderResponse);
     }
@@ -346,13 +358,31 @@ public class BillingService : IBillingService
         throw new InvalidOperationException("Could not generate a unique PayOS order code.");
     }
 
-    private async Task ExpireOldPendingOrdersAsync(int userId, string planCode, DateTime createdBefore)
+    private async Task ExpireOldPendingOrdersAsync(int userId, DateTime createdBefore, DateTime updatedAt)
     {
-        await _orderRepository.ExpirePendingOrdersAsync(
+        foreach (var plan in Plans)
+        {
+            await _orderRepository.ExpirePendingOrdersAsync(
+                userId,
+                plan.PlanCode,
+                createdBefore,
+                updatedAt);
+        }
+    }
+
+    private async Task EnforcePaymentLinkRateLimitAsync(int userId, DateTime now)
+    {
+        var createdAfter = now.AddMinutes(-PaymentLinkRateLimitMinutes);
+        var recentCreationTimes = await _orderRepository.GetRecentPaymentLinkCreationTimesAsync(
             userId,
-            planCode,
-            createdBefore,
-            DateTime.UtcNow);
+            createdAfter,
+            PaymentLinkRateLimitCount);
+
+        if (recentCreationTimes.Count < PaymentLinkRateLimitCount) return;
+
+        var retryAt = recentCreationTimes[0].AddMinutes(PaymentLinkRateLimitMinutes);
+        var retryAfterSeconds = Math.Max(1, (int)Math.Ceiling((retryAt - now).TotalSeconds));
+        throw new PaymentLinkRateLimitException(retryAfterSeconds);
     }
 
     private string GetRequiredConfig(string key)

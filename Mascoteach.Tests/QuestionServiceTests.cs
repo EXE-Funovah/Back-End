@@ -66,6 +66,30 @@ public class QuestionServiceTests
             () => _sut.CreateAsync(10, new QuestionCreateRequest { QuizId = 1, QuestionText = "What?" }));
     }
 
+    [Fact]
+    public async Task CreateAsync_PositionMissing_AssignsNextPosition()
+    {
+        Question? savedQuestion = null;
+        SetupOwnership();
+        var transaction = new Mock<IDbContextTransaction>();
+        _questionRepo.Setup(r => r.BeginTransactionAsync()).ReturnsAsync(transaction.Object);
+        _questionRepo.Setup(r => r.GetNextPositionAsync(1)).ReturnsAsync(4);
+        _questionRepo.Setup(r => r.AddAsync(It.IsAny<Question>()))
+            .Callback<Question>(question => savedQuestion = question)
+            .Returns(Task.CompletedTask);
+        _questionRepo.Setup(r => r.SaveChangesAsync()).ReturnsAsync(1);
+        _questionRepo.Setup(r => r.GetByIdAsync(It.IsAny<int>())).ReturnsAsync((Question?)null);
+
+        await _sut.CreateAsync(10, new QuestionCreateRequest
+        {
+            QuizId = 1,
+            QuestionText = "What?"
+        });
+
+        Assert.NotNull(savedQuestion);
+        Assert.Equal(4, savedQuestion!.Position);
+    }
+
     // ── UpdateAsync ──
 
     [Fact]
@@ -93,6 +117,25 @@ public class QuestionServiceTests
         _questionRepo.Setup(r => r.GetByIdAsync(1)).ReturnsAsync((Question?)null);
 
         Assert.False(await _sut.UpdateAsync(1, 10, new QuestionUpdateRequest { QuestionText = "New?" }));
+    }
+
+    [Fact]
+    public async Task UpdateAsync_ExplicitPosition_UpdatesPosition()
+    {
+        var question = MakeQuestion();
+        SetupOwnership();
+        _questionRepo.Setup(r => r.GetByIdAsync(1)).ReturnsAsync(question);
+        _questionRepo.Setup(r => r.SaveChangesAsync()).ReturnsAsync(1);
+
+        var result = await _sut.UpdateAsync(1, 10, new QuestionUpdateRequest
+        {
+            QuestionText = "New?",
+            QuestionType = "MultipleChoice",
+            Position = 3
+        });
+
+        Assert.True(result);
+        Assert.Equal(3, question.Position);
     }
 
     // ── DeleteAsync ──

@@ -8,6 +8,9 @@ public class UserProfile : Profile
 {
     public UserProfile()
     {
-        CreateMap<User, UserResponse>();
+        // AvatarUrl (entity = S3 key) KHÔNG map thẳng — service tự set thành
+        // presigned download URL sau khi map.
+        CreateMap<User, UserResponse>()
+            .ForMember(d => d.AvatarUrl, o => o.Ignore());
     }
 }

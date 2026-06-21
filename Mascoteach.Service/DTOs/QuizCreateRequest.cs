@@ -9,4 +9,6 @@ public class QuizCreateRequest
 
     [Required]
     public string Title { get; set; } = null!;
+
+    public string ActivityType { get; set; } = "Quiz";
 }

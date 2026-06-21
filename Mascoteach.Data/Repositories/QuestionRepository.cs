@@ -14,7 +14,17 @@ namespace Mascoteach.Data.Repositories
         {
             return await _context.Questions
                 .Where(q => q.QuizId == quizId && q.IsDeleted == false)
+                .OrderBy(q => q.Position)
                 .ToListAsync();
+        }
+
+        public async Task<int> GetNextPositionAsync(int quizId)
+        {
+            var positions = _context.Questions
+                .Where(question => question.QuizId == quizId)
+                .Select(question => (int?)question.Position);
+
+            return (await positions.MaxAsync() ?? -1) + 1;
         }
 
         public async Task<Question?> GetByIdIncludingDeletedAsync(int id)

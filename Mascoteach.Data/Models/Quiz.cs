@@ -17,6 +17,8 @@ public partial class Quiz
 
     public bool IsDeleted { get; set; }
 
+    public string ActivityType { get; set; } = null!;
+
     public virtual Document Document { get; set; } = null!;
 
     public virtual ICollection<LiveSession> LiveSessions { get; set; } = new List<LiveSession>();
