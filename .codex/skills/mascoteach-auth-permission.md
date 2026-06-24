@@ -125,6 +125,7 @@ When adding role restrictions:
 
 - Local config lives in `appsettings.Development.json`; do not commit secrets.
 - Deploy config should come from environment variables / GitHub Secrets:
+  - `Jwt__Key`
   - `Google__ClientId`
   - `Frontend__ResetPasswordUrl`
   - `Frontend__VerifyEmailUrl`
