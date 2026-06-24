@@ -64,6 +64,8 @@ Apply this to all document-returning methods:
 - `UploadDocumentAsync` still increments `DocumentsProcessed` in the same transaction as document creation.
 - `DELETE /api/Document/{id}` soft-deletes documents through `GenericRepository.Delete` because `Document` has `IsDeleted`.
 - `PATCH /api/Document/{id}/toggle-delete` toggles soft-delete state. Restoring a deleted document must also check active document quota.
+- Account deletion through `DELETE /api/User/{id}` is different: it hard-deletes the account graph and permanently removes the user's document rows along with dependent quiz data.
+- After the account hard-delete transaction commits, backend best-effort deletes the related S3 objects for document keys and avatar key. If S3 cleanup fails, the database account deletion still stands.
 
 ## S3 service conventions
 

@@ -59,7 +59,7 @@ Default flow:
 ## Project conventions
 
 - Use `int Id` for model identity.
-- Use `bool IsDeleted` soft delete.
+- Use `bool IsDeleted` soft delete for normal entity lifecycle unless a route explicitly implements hard delete.
 - `GenericRepository<T>.GetAllAsync` and `GetByIdAsync` hide deleted records.
 - Custom repository queries must explicitly filter deleted records.
 - Controllers that need current user data must inherit `BaseController`.
@@ -69,6 +69,8 @@ Default flow:
 - Document Freemium quota is based on active document count (`Documents.owner_id == CurrentUserId` and `is_deleted == false`), not `Users.documents_processed`.
 - `Users.documents_processed` is a lifetime upload counter/analytics field and should still increment on successful document creation.
 - `DELETE /api/Document/{id}` soft-deletes via `GenericRepository.Delete` when the model has `IsDeleted`; `PATCH /toggle-delete` toggles soft-delete state.
+- `DELETE /api/User/{id}` is the explicit hard-delete exception: it permanently deletes the user plus the owned account graph currently including documents, quizzes, questions, options, live sessions, session participants, quiz attempts, payment orders, and user stats.
+- After account hard-delete commits, backend performs best-effort S3 cleanup for the user's avatar key and document S3 keys. Database deletion must not be rolled back because S3 cleanup fails.
 - `LiveSessions.teacher_id` remains the live-session teacher/host column; do not rename it to owner.
 - Use AutoMapper for entity-to-DTO and create-request-to-entity mapping.
 - Manual field updates in service implementations are acceptable and common for update requests.
@@ -90,7 +92,7 @@ If dependencies changed or restore is required, run normal `dotnet build`.
 ## Common mistakes to avoid
 
 - Do not add business logic to controllers.
-- Do not hard-delete rows unless explicitly requested.
+- Do not hard-delete rows unless explicitly requested. Current explicit exception: account deletion through `DELETE /api/User/{id}`.
 - Do not forget `IsDeleted == false` in custom repository queries.
 - Do not return resources owned by another user when the endpoint is scoped to the current user.
 - Do not store S3 presigned URLs in the database; document storage uses S3 keys.

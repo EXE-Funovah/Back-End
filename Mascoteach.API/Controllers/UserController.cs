@@ -80,7 +80,7 @@ namespace Mascoteach.API.Controllers
             return Ok("Update successfully.");
         }
 
-        // DELETE: api/User/{id} — only owner or admin
+        // DELETE: api/User/{id} — only owner or admin; hard-delete account and associated data
         [HttpDelete("{id}")]
         public async Task<IActionResult> Delete(int id)
         {

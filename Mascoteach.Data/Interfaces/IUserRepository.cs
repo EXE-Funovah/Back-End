@@ -9,5 +9,7 @@ namespace Mascoteach.Data.Interfaces
         Task<User?> GetByResetTokenHashAsync(string resetTokenHash);
         Task<User?> GetByEmailVerificationTokenHashAsync(string emailVerificationTokenHash);
         Task<User?> GetByIdIncludingDeletedAsync(int id);
+        Task<User?> GetAccountDeletionGraphAsync(int id);
+        void HardDeleteAccountGraph(User user);
     }
 }

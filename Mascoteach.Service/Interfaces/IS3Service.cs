@@ -13,4 +13,6 @@ public interface IS3Service
     Task<PresignedUrlResponse> GeneratePresignedAvatarUploadUrlAsync(string fileName, string contentType);
 
     Task<string> GeneratePresignedDownloadUrlAsync(string s3Key);
+    Task DeleteObjectAsync(string s3Key);
+    Task DeleteObjectsAsync(IEnumerable<string> s3Keys);
 }
