@@ -25,6 +25,7 @@ Do not assume adding `appsettings` is enough. Docker deploy reads values from en
 - Pull requests must validate only; they must never stop/remove/run deployment containers.
 - Deploy containers only on `push` events after code is merged into `develop` or `main`.
 - Runtime .NET environment variable names use double underscores, for example:
+  - `Jwt__Key`
   - `Frontend__ResetPasswordUrl`
   - `Frontend__VerifyEmailUrl`
   - `Auth__PasswordResetTokenMinutes`
@@ -111,6 +112,7 @@ Flashcard rollout state:
 
 Develop secrets:
 
+- `DEV_JWT_KEY`
 - `DEV_GOOGLE_CLIENT_ID`
 - `DEV_FRONTEND_RESET_PASSWORD_URL`
 - `DEV_FRONTEND_VERIFY_EMAIL_URL`
@@ -125,6 +127,9 @@ Develop secrets:
 - `DEV_EMAIL_FROM_NAME`
 
 Production secrets use the same names without `DEV_`.
+
+JWT signing keys must be random secrets supplied through GitHub Secrets and passed as `Jwt__Key`.
+Do not rely on `appsettings.json` placeholders or `appsettings.Development.json` inside Docker images.
 
 ## Current PayOS deployment keys
 
