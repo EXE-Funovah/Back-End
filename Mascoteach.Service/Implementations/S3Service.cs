@@ -86,4 +86,38 @@ public class S3Service : IS3Service
 
         return await Task.Run(() => _s3Client.GetPreSignedURL(request));
     }
+
+    public async Task DeleteObjectAsync(string s3Key)
+    {
+        if (string.IsNullOrWhiteSpace(s3Key)) return;
+
+        await _s3Client.DeleteObjectAsync(new DeleteObjectRequest
+        {
+            BucketName = _bucketName,
+            Key = s3Key.Trim(),
+        });
+    }
+
+    public async Task DeleteObjectsAsync(IEnumerable<string> s3Keys)
+    {
+        var keys = s3Keys
+            .Where(key => !string.IsNullOrWhiteSpace(key))
+            .Select(key => key.Trim())
+            .Distinct(StringComparer.Ordinal)
+            .ToList();
+
+        if (keys.Count == 0) return;
+
+        if (keys.Count == 1)
+        {
+            await DeleteObjectAsync(keys[0]);
+            return;
+        }
+
+        await _s3Client.DeleteObjectsAsync(new DeleteObjectsRequest
+        {
+            BucketName = _bucketName,
+            Objects = keys.Select(key => new KeyVersion { Key = key }).ToList(),
+        });
+    }
 }

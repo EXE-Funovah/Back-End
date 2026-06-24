@@ -80,11 +80,41 @@ namespace Mascoteach.Service.Implementations
 
         public async Task<bool> DeleteAsync(int id)
         {
-            var user = await _userRepository.GetByIdAsync(id);
+            var user = await _userRepository.GetAccountDeletionGraphAsync(id);
             if (user == null) return false;
 
-            _userRepository.Delete(user);
-            return await _userRepository.SaveChangesAsync() > 0;
+            var s3KeysToDelete = user.Documents
+                .Select(document => document.FileUrl)
+                .Append(user.AvatarUrl)
+                .Where(key => !string.IsNullOrWhiteSpace(key))
+                .Select(key => key!.Trim())
+                .Distinct(StringComparer.Ordinal)
+                .ToArray();
+
+            await using var transaction = await _userRepository.BeginTransactionAsync();
+
+            try
+            {
+                _userRepository.HardDeleteAccountGraph(user);
+                var changed = await _userRepository.SaveChangesAsync() > 0;
+                await transaction.CommitAsync();
+
+                try
+                {
+                    await _s3Service.DeleteObjectsAsync(s3KeysToDelete);
+                }
+                catch
+                {
+                    // Best-effort cleanup: the account is already deleted from the database.
+                }
+
+                return changed;
+            }
+            catch
+            {
+                await transaction.RollbackAsync();
+                throw;
+            }
         }
 
         public async Task<UserResponse?> ToggleDeleteAsync(int id)
