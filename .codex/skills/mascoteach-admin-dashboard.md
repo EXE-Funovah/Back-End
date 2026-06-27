@@ -105,21 +105,35 @@ request DTOs are designed.
 GET /api/Admin/overview?range=7d|30d|12m
 ```
 
-- Default range is `30d`.
-- `7d`, `30d`, and `12m` map to 7, 30, and 365 days.
-- An unknown value currently falls back to 30 days instead of returning validation error.
-- Returns `AdminOverviewResponse` with `kpis`, a 12-month `mrrSeries`, and `featureUsage`.
+- Default range is `30d`; values are normalized case-insensitively.
+- `7d` and `30d` use exact day windows; `12m` uses `DateTime.AddMonths(-12)`.
+- Unknown values return HTTP 400.
+- Response includes `range`, `from`, `to`, KPI cards, role/subscription/content/payment distributions, and
+  `paidRevenueSeries`.
 
 Current KPI keys:
 
-- `users`: all non-deleted accounts and growth relative to accounts created by the beginning of the range.
-- `mau`: non-deleted `User_Stats` rows active during the last 30 days; this remains 30 days regardless of `range`.
-- `mrr`: current approximate recurring revenue from the active Premium plan mix.
-- `conv`: active Premium accounts divided by all non-deleted accounts.
+- `totalUsers`: all non-deleted accounts; delta is new users divided by users that existed before the range.
+- `newUsers`: non-deleted accounts created inside the selected range.
+- `activeUsers`: non-deleted `User_Stats` with `LastActiveDate` inside the selected range.
+- `paidRevenue`: sum of non-deleted `Paid` Payment Orders whose `PaidAt` is inside the selected range.
 
-Feature usage currently counts non-deleted Questions, Documents, and LiveSessions. The response labels these as
-AI-created questions, uploaded documents, and Treasure Hunt sessions; the database only provides aggregate row
-counts and does not prove a question was AI-created or a live session used one specific template.
+Distributions:
+
+- Users: exact stored roles `Teacher`, `Student`, `Parent`, `Admin`.
+- Subscription: `Freemium`, active `Premium`, and expired/missing-expiry stored Premium.
+- Content: active Documents, Quiz activities, Flashcard activities, LiveSessions, and participant join rows.
+- Payment statuses: `Pending`, `Paid`, `Cancelled`, `Expired`, `Failed`.
+
+`ParticipantJoinCount` counts active `Session_Participants` rows. Participants currently store names without user
+ids, so this is not a unique-student metric.
+
+`PaidRevenueSeries` is actual paid-order revenue grouped over the current month and previous 11 months. It is not
+normalized MRR.
+
+Overview excludes soft-deleted users and related Documents, Quizzes, LiveSessions, SessionParticipants, and
+PaymentOrders. AI failures, processing stalls, realtime reconnects, and quota-abuse alerts are excluded because
+the current schema has no reliable telemetry for them.
 
 ### Revenue
 
@@ -134,15 +148,15 @@ GET /api/Admin/revenue?range=7d|30d|12m
 
 ## Revenue and Premium calculations
 
-Admin analytics currently treats Premium as active when:
+Admin analytics treats Premium as active when:
 
 ```text
-PremiumExpiresAt != null AND PremiumExpiresAt > DateTime.UtcNow
+SubscriptionTier == "Premium"
+AND PremiumExpiresAt != null
+AND PremiumExpiresAt > DateTime.UtcNow
 ```
 
-This does not also require `SubscriptionTier == "Premium"`, unlike the canonical Billing/document-quota invariant.
-Do not copy the Admin-only definition into Billing or quota code. If Admin is aligned with Billing later, update
-dashboard expectations and tests together.
+This matches the canonical Billing/document-quota invariant.
 
 Plan attribution for an active Premium user:
 
@@ -165,15 +179,16 @@ Despite its name, `mrrSeries` is the actual sum of `Payment_Orders.amount` with 
 month for the current month and previous 11 months. Missing months are returned as zero and labels use `T{month}`.
 The overview MRR delta compares the last two values from this paid-revenue series.
 
-Payment aggregate queries currently filter `Status == "Paid"` and `PaidAt`, but do not filter
-`PaymentOrder.IsDeleted`.
+Payment aggregate queries filter `Status == "Paid"`, require `PaidAt`, and exclude soft-deleted payment orders
+and their soft-deleted users.
 
 ## DTO contracts
 
 - `AdminKpiDto`: `key`, `label`, `value`, `format`, `deltaPercent`, `up`.
 - `AdminNamedValueDto`: `label`, `value`, optional `color`.
 - `AdminMonthPointDto`: `label`, `value`.
-- `AdminOverviewResponse`: `kpis`, `mrrSeries`, `featureUsage`.
+- `AdminOverviewResponse`: range window, `kpis`, `userDistribution`, `subscriptionDistribution`,
+  `contentTotals`, `paymentStatusDistribution`, and `paidRevenueSeries`.
 - `AdminRevenueResponse`: recurring metrics, series, plan distribution, funnel, and Phase 2 placeholders.
 - `AdminUsersResponse`: pagination metadata, filtered total, and Admin user list items.
 - `AdminUserDetailResponse`: user-list fields plus learning and non-sensitive payment summary.

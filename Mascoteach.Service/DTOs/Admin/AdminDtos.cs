@@ -26,9 +26,15 @@ public class AdminMonthPointDto
 
 public class AdminOverviewResponse
 {
+    public string Range { get; set; } = null!;
+    public DateTime From { get; set; }
+    public DateTime To { get; set; }
     public List<AdminKpiDto> Kpis { get; set; } = new();
-    public List<AdminMonthPointDto> MrrSeries { get; set; } = new();
-    public List<AdminNamedValueDto> FeatureUsage { get; set; } = new();
+    public List<AdminNamedValueDto> UserDistribution { get; set; } = new();
+    public List<AdminNamedValueDto> SubscriptionDistribution { get; set; } = new();
+    public List<AdminNamedValueDto> ContentTotals { get; set; } = new();
+    public List<AdminNamedValueDto> PaymentStatusDistribution { get; set; } = new();
+    public List<AdminMonthPointDto> PaidRevenueSeries { get; set; } = new();
 }
 
 public class AdminRevenueResponse

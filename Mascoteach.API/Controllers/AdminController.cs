@@ -17,7 +17,16 @@ public class AdminController : BaseController
     // GET: api/Admin/overview?range=7d|30d|12m
     [HttpGet("overview")]
     public async Task<IActionResult> Overview([FromQuery] string range = "30d")
-        => Ok(await _admin.GetOverviewAsync(range));
+    {
+        try
+        {
+            return Ok(await _admin.GetOverviewAsync(range));
+        }
+        catch (ArgumentException ex)
+        {
+            return BadRequest(ex.Message);
+        }
+    }
 
     // GET: api/Admin/revenue?range=
     [HttpGet("revenue")]

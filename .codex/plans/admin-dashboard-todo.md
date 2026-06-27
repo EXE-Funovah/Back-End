@@ -845,6 +845,20 @@ Admin Dashboard nên mang cảm giác vận hành, rõ ràng, scan nhanh:
 
 ### Giai đoạn 2 - Overview
 
+#### Backend Admin Overview v2
+
+- [x] Hoàn thiện `GET /api/Admin/overview?range=7d|30d|12m`.
+  - Status: Completed
+  - Range không hợp lệ trả HTTP 400; response ghi rõ `range`, `from`, `to`.
+- [x] Thống kê user/role/subscription/content/session/participant/payment bằng dữ liệu DB hiện có.
+  - Status: Completed
+  - Participant là tổng lượt join bằng PIN, không phải số học sinh duy nhất.
+  - Revenue là tổng Payment Order `Paid` trong kỳ; series là doanh thu Paid 12 tháng.
+- [x] Không đưa AI/realtime/quota alerts vào response khi chưa có telemetry.
+  - Status: Confirmed scope
+- Verification: focused Overview/Admin Controller tests `10/10`, full suite `153/153`, Release build thành công.
+- Remaining check: smoke test aggregate queries trên SQL Server dev vì unit tests hiện mock repository.
+
 - [ ] Tạo `AdminOverviewPage`.
 - [ ] Hiển thị user count.
 - [ ] Hiển thị document count.

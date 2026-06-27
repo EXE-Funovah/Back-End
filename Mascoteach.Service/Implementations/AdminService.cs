@@ -14,49 +14,68 @@ public class AdminService : IAdminService
     private readonly IAdminRepository _repo;
     public AdminService(IAdminRepository repo) => _repo = repo;
 
-    private static int RangeDays(string range) => range switch
-    {
-        "7d" => 7,
-        "12m" => 365,
-        _ => 30,
-    };
-
     public async Task<AdminOverviewResponse> GetOverviewAsync(string range)
     {
-        var now = DateTime.UtcNow;
-        var from = now.AddDays(-RangeDays(range));
-
-        var totalUsers = await _repo.CountUsersAsync();
-        var prevUsers = await _repo.CountUsersCreatedBeforeAsync(from);
-        var mau = await _repo.CountActiveSinceAsync(DateOnly.FromDateTime(now.AddDays(-30)));
-        var (monthly, yearly) = await _repo.PremiumActiveByPlanAsync(now);
-        var premium = monthly + yearly;
-        long mrr = (long)monthly * MonthlyPrice + (long)yearly * YearlyMonthlyEquivalent;
-        double conversion = totalUsers > 0 ? (double)premium / totalUsers * 100 : 0;
-        double userDelta = prevUsers > 0 ? (double)(totalUsers - prevUsers) / prevUsers * 100 : 0;
-
-        var series = await BuildRevenueSeriesAsync(now);
-        double mrrDelta = 0;
-        if (series.Count >= 2 && series[^2].Value > 0)
-            mrrDelta = (double)(series[^1].Value - series[^2].Value) / series[^2].Value * 100;
+        var normalizedRange = NormalizeOverviewRange(range);
+        var to = DateTime.UtcNow;
+        var from = normalizedRange switch
+        {
+            "7d" => to.AddDays(-7),
+            "30d" => to.AddDays(-30),
+            "12m" => to.AddMonths(-12),
+            _ => throw new InvalidOperationException("Unreachable range.")
+        };
+        var overview = await _repo.GetOverviewAsync(from, to);
+        var usersBeforeRange = Math.Max(0, overview.TotalUsers - overview.NewUsers);
+        var userDelta = usersBeforeRange > 0
+            ? (double)overview.NewUsers / usersBeforeRange * 100
+            : overview.NewUsers > 0 ? 100 : 0;
 
         var kpis = new List<AdminKpiDto>
         {
-            new() { Key = "users", Label = "Tổng tài khoản", Value = totalUsers, Format = "int", DeltaPercent = Math.Round(userDelta, 1), Up = userDelta >= 0 },
-            new() { Key = "mau", Label = "Hoạt động tháng (MAU)", Value = mau, Format = "int", DeltaPercent = 0, Up = true },
-            new() { Key = "mrr", Label = "Doanh thu tháng (MRR)", Value = mrr, Format = "currency", DeltaPercent = Math.Round(mrrDelta, 1), Up = mrrDelta >= 0 },
-            new() { Key = "conv", Label = "Chuyển đổi Premium", Value = Math.Round(conversion, 1), Format = "percent", DeltaPercent = 0, Up = true },
+            new() { Key = "totalUsers", Label = "Tổng tài khoản", Value = overview.TotalUsers, Format = "int", DeltaPercent = Math.Round(userDelta, 1), Up = userDelta >= 0 },
+            new() { Key = "newUsers", Label = "Tài khoản mới", Value = overview.NewUsers, Format = "int", Up = overview.NewUsers >= 0 },
+            new() { Key = "activeUsers", Label = "Hoạt động trong kỳ", Value = overview.ActiveUsers, Format = "int", Up = overview.ActiveUsers >= 0 },
+            new() { Key = "paidRevenue", Label = "Doanh thu đã thanh toán", Value = overview.PaidRevenueInRange, Format = "currency", Up = overview.PaidRevenueInRange >= 0 }
         };
 
-        var feature = new List<AdminNamedValueDto>
+        return new AdminOverviewResponse
         {
-            new() { Label = "Câu hỏi AI đã tạo", Value = await _repo.CountQuestionsAsync(), Color = "#2B7AB5" },
-            new() { Label = "Tài liệu tải lên", Value = await _repo.CountDocumentsAsync(), Color = "#5BAED4" },
-            new() { Label = "Phiên Treasure Hunt", Value = await _repo.CountLiveSessionsAsync(), Color = "#7A5AD9" },
-            // "Phút luyện nói" cần tracking voice (Phase 2) — tạm bỏ.
+            Range = normalizedRange,
+            From = from,
+            To = to,
+            Kpis = kpis,
+            UserDistribution =
+            [
+                new() { Label = "Giáo viên", Value = overview.TeacherCount },
+                new() { Label = "Học sinh", Value = overview.StudentCount },
+                new() { Label = "Phụ huynh", Value = overview.ParentCount },
+                new() { Label = "Admin", Value = overview.AdminCount }
+            ],
+            SubscriptionDistribution =
+            [
+                new() { Label = "Freemium", Value = overview.FreemiumCount },
+                new() { Label = "Premium", Value = overview.PremiumCount },
+                new() { Label = "Premium hết hạn", Value = overview.ExpiredPremiumCount }
+            ],
+            ContentTotals =
+            [
+                new() { Label = "Tài liệu", Value = overview.DocumentCount },
+                new() { Label = "Quiz", Value = overview.QuizCount },
+                new() { Label = "Flashcard", Value = overview.FlashcardCount },
+                new() { Label = "Phiên live", Value = overview.LiveSessionCount },
+                new() { Label = "Lượt tham gia bằng PIN", Value = overview.ParticipantJoinCount }
+            ],
+            PaymentStatusDistribution =
+            [
+                new() { Label = "Pending", Value = overview.PendingPaymentCount },
+                new() { Label = "Paid", Value = overview.PaidPaymentCount },
+                new() { Label = "Cancelled", Value = overview.CancelledPaymentCount },
+                new() { Label = "Expired", Value = overview.ExpiredPaymentCount },
+                new() { Label = "Failed", Value = overview.FailedPaymentCount }
+            ],
+            PaidRevenueSeries = await BuildRevenueSeriesAsync(to)
         };
-
-        return new AdminOverviewResponse { Kpis = kpis, MrrSeries = series, FeatureUsage = feature };
     }
 
     public async Task<AdminRevenueResponse> GetRevenueAsync(string range)
@@ -166,6 +185,15 @@ public class AdminService : IAdminService
             throw new ArgumentException($"Unknown {filterName} filter.");
 
         return normalized;
+    }
+
+    private static string NormalizeOverviewRange(string range)
+    {
+        var normalized = range?.Trim().ToLowerInvariant();
+        if (normalized is "7d" or "30d" or "12m")
+            return normalized;
+
+        throw new ArgumentException("Range must be one of: 7d, 30d, 12m.");
     }
 
     private static AdminUserListItemDto ToUserListItem(

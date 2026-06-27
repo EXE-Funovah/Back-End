@@ -14,28 +14,106 @@ public class AdminRepository : IAdminRepository
 
     public Task<int> CountUsersAsync() => ActiveUsers.CountAsync();
 
-    public Task<int> CountUsersCreatedBeforeAsync(DateTime cutoff) =>
-        ActiveUsers.Where(u => u.CreatedAt != null && u.CreatedAt <= cutoff).CountAsync();
+    public async Task<AdminOverviewProjection> GetOverviewAsync(DateTime from, DateTime to)
+    {
+        var activeUsers = ActiveUsers.AsNoTracking();
+        var roleCounts = await activeUsers
+            .GroupBy(user => user.Role)
+            .Select(group => new { Role = group.Key, Count = group.Count() })
+            .ToDictionaryAsync(item => item.Role, item => item.Count);
+        var activityCounts = await _ctx.Quizzes
+            .AsNoTracking()
+            .Where(quiz =>
+                !quiz.IsDeleted
+                && !quiz.Document.IsDeleted
+                && !quiz.Document.Owner.IsDeleted)
+            .GroupBy(quiz => quiz.ActivityType)
+            .Select(group => new { ActivityType = group.Key, Count = group.Count() })
+            .ToDictionaryAsync(item => item.ActivityType, item => item.Count);
+        var paymentCounts = await _ctx.PaymentOrders
+            .AsNoTracking()
+            .Where(order => !order.IsDeleted && !order.User.IsDeleted)
+            .GroupBy(order => order.Status)
+            .Select(group => new { Status = group.Key, Count = group.Count() })
+            .ToDictionaryAsync(item => item.Status, item => item.Count);
+        var activeSince = DateOnly.FromDateTime(from);
 
-    public Task<int> CountPremiumActiveAsync(DateTime now) =>
-        ActiveUsers.Where(u => u.PremiumExpiresAt != null && u.PremiumExpiresAt > now).CountAsync();
-
-    public Task<int> CountActiveSinceAsync(DateOnly since) =>
-        _ctx.UserStats
-            .Where(s => !s.IsDeleted && s.LastActiveDate != null && s.LastActiveDate >= since)
-            .CountAsync();
+        return new AdminOverviewProjection
+        {
+            TotalUsers = await activeUsers.CountAsync(),
+            NewUsers = await activeUsers.CountAsync(user =>
+                user.CreatedAt != null && user.CreatedAt >= from && user.CreatedAt < to),
+            ActiveUsers = await _ctx.UserStats
+                .AsNoTracking()
+                .CountAsync(stat =>
+                    !stat.IsDeleted
+                    && !stat.User.IsDeleted
+                    && stat.LastActiveDate != null
+                    && stat.LastActiveDate >= activeSince),
+            TeacherCount = GetCount(roleCounts, "Teacher"),
+            StudentCount = GetCount(roleCounts, "Student"),
+            ParentCount = GetCount(roleCounts, "Parent"),
+            AdminCount = GetCount(roleCounts, "Admin"),
+            FreemiumCount = await activeUsers.CountAsync(user =>
+                user.SubscriptionTier != "Premium"),
+            PremiumCount = await activeUsers.CountAsync(user =>
+                user.SubscriptionTier == "Premium"
+                && user.PremiumExpiresAt != null
+                && user.PremiumExpiresAt > to),
+            ExpiredPremiumCount = await activeUsers.CountAsync(user =>
+                user.SubscriptionTier == "Premium"
+                && (user.PremiumExpiresAt == null || user.PremiumExpiresAt <= to)),
+            DocumentCount = await _ctx.Documents
+                .AsNoTracking()
+                .CountAsync(document => !document.IsDeleted && !document.Owner.IsDeleted),
+            QuizCount = GetCount(activityCounts, "Quiz"),
+            FlashcardCount = GetCount(activityCounts, "Flashcard"),
+            LiveSessionCount = await _ctx.LiveSessions
+                .AsNoTracking()
+                .CountAsync(session => !session.IsDeleted && !session.Teacher.IsDeleted),
+            ParticipantJoinCount = await _ctx.SessionParticipants
+                .AsNoTracking()
+                .CountAsync(participant =>
+                    !participant.IsDeleted
+                    && !participant.Session.IsDeleted
+                    && !participant.Session.Teacher.IsDeleted),
+            PendingPaymentCount = GetCount(paymentCounts, "Pending"),
+            PaidPaymentCount = GetCount(paymentCounts, "Paid"),
+            CancelledPaymentCount = GetCount(paymentCounts, "Cancelled"),
+            ExpiredPaymentCount = GetCount(paymentCounts, "Expired"),
+            FailedPaymentCount = GetCount(paymentCounts, "Failed"),
+            PaidRevenueInRange = await _ctx.PaymentOrders
+                .AsNoTracking()
+                .Where(order =>
+                    !order.IsDeleted
+                    && !order.User.IsDeleted
+                    && order.Status == "Paid"
+                    && order.PaidAt != null
+                    && order.PaidAt >= from
+                    && order.PaidAt < to)
+                .SumAsync(order => (long)order.Amount)
+        };
+    }
 
     public async Task<(int Monthly, int Yearly)> PremiumActiveByPlanAsync(DateTime now)
     {
         var premiumIds = await ActiveUsers
-            .Where(u => u.PremiumExpiresAt != null && u.PremiumExpiresAt > now)
+            .Where(u =>
+                u.SubscriptionTier == "Premium"
+                && u.PremiumExpiresAt != null
+                && u.PremiumExpiresAt > now)
             .Select(u => u.Id)
             .ToListAsync();
         if (premiumIds.Count == 0) return (0, 0);
 
         // Order trả phí của các user premium → lấy plan của order MỚI NHẤT mỗi user.
         var paid = await _ctx.PaymentOrders
-            .Where(o => o.Status == "Paid" && o.PaidAt != null && premiumIds.Contains(o.UserId))
+            .Where(o =>
+                !o.IsDeleted
+                && !o.User.IsDeleted
+                && o.Status == "Paid"
+                && o.PaidAt != null
+                && premiumIds.Contains(o.UserId))
             .Select(o => new { o.UserId, o.PlanCode, o.PaidAt })
             .ToListAsync();
 
@@ -51,24 +129,20 @@ public class AdminRepository : IAdminRepository
         return (monthly, yearly);
     }
 
-    public async Task<long> SumPaidRevenueBetweenAsync(DateTime from, DateTime to) =>
-        await _ctx.PaymentOrders
-            .Where(o => o.Status == "Paid" && o.PaidAt != null && o.PaidAt >= from && o.PaidAt < to)
-            .SumAsync(o => (long)o.Amount);
-
     public async Task<List<(int Year, int Month, long Total)>> PaidRevenueByMonthAsync(DateTime fromInclusive)
     {
         var rows = await _ctx.PaymentOrders
-            .Where(o => o.Status == "Paid" && o.PaidAt != null && o.PaidAt >= fromInclusive)
+            .Where(o =>
+                !o.IsDeleted
+                && !o.User.IsDeleted
+                && o.Status == "Paid"
+                && o.PaidAt != null
+                && o.PaidAt >= fromInclusive)
             .GroupBy(o => new { o.PaidAt!.Value.Year, o.PaidAt!.Value.Month })
             .Select(g => new { g.Key.Year, g.Key.Month, Total = (long)g.Sum(o => o.Amount) })
             .ToListAsync();
         return rows.Select(r => (r.Year, r.Month, r.Total)).ToList();
     }
-
-    public Task<int> CountDocumentsAsync() => _ctx.Documents.Where(d => !d.IsDeleted).CountAsync();
-    public Task<int> CountQuestionsAsync() => _ctx.Questions.Where(q => !q.IsDeleted).CountAsync();
-    public Task<int> CountLiveSessionsAsync() => _ctx.LiveSessions.Where(l => !l.IsDeleted).CountAsync();
 
     public async Task<(List<AdminUserProjection> Items, int Total)> GetUsersPageAsync(
         string? search,
@@ -197,4 +271,9 @@ public class AdminRepository : IAdminRepository
                 .FirstOrDefault()
         });
     }
+
+    private static int GetCount(
+        IReadOnlyDictionary<string, int> counts,
+        string key) =>
+        counts.TryGetValue(key, out var count) ? count : 0;
 }
