@@ -1,5 +1,6 @@
 using Mascoteach.Data.Interfaces;
 using Mascoteach.Data.Models;
+using Mascoteach.Data.Projections;
 using Microsoft.EntityFrameworkCore;
 
 namespace Mascoteach.Data.Repositories;
@@ -69,25 +70,131 @@ public class AdminRepository : IAdminRepository
     public Task<int> CountQuestionsAsync() => _ctx.Questions.Where(q => !q.IsDeleted).CountAsync();
     public Task<int> CountLiveSessionsAsync() => _ctx.LiveSessions.Where(l => !l.IsDeleted).CountAsync();
 
-    public async Task<(List<User> Items, int Total)> GetAccountsPageAsync(
-        string? search, string? tier, int page, int pageSize)
+    public async Task<(List<AdminUserProjection> Items, int Total)> GetUsersPageAsync(
+        string? search,
+        string? role,
+        string? subscription,
+        DateTime now,
+        int page,
+        int pageSize)
     {
-        var q = ActiveUsers.Include(u => u.UserStat).AsQueryable();
-
-        if (!string.IsNullOrWhiteSpace(search))
-        {
-            var s = search.Trim();
-            q = q.Where(u => u.FullName.Contains(s) || u.Email.Contains(s));
-        }
-        if (!string.IsNullOrWhiteSpace(tier))
-            q = q.Where(u => u.SubscriptionTier == tier);
-
-        var total = await q.CountAsync();
-        var items = await q
-            .OrderByDescending(u => u.UserStat!.LastActiveDate)
+        var query = BuildUsersQuery(search, role, subscription, now);
+        var total = await query.CountAsync();
+        var items = await ProjectUsers(query, now)
+            .OrderByDescending(user => user.CreatedAt)
+            .ThenByDescending(user => user.Id)
             .Skip((page - 1) * pageSize)
             .Take(pageSize)
             .ToListAsync();
+
         return (items, total);
+    }
+
+    public Task<AdminUserProjection?> GetUserDetailAsync(int userId, DateTime now)
+    {
+        var query = ActiveUsers
+            .AsNoTracking()
+            .Where(user => user.Id == userId);
+
+        return ProjectUsers(query, now).FirstOrDefaultAsync();
+    }
+
+    private IQueryable<User> BuildUsersQuery(
+        string? search,
+        string? role,
+        string? subscription,
+        DateTime now)
+    {
+        var query = ActiveUsers.AsNoTracking();
+
+        if (!string.IsNullOrWhiteSpace(search))
+            query = query.Where(user =>
+                user.FullName.Contains(search) || user.Email.Contains(search));
+
+        if (role != null)
+            query = query.Where(user => user.Role == role);
+
+        query = subscription switch
+        {
+            "Premium" => query.Where(user =>
+                user.SubscriptionTier == "Premium"
+                && user.PremiumExpiresAt != null
+                && user.PremiumExpiresAt > now),
+            "Expired" => query.Where(user =>
+                user.SubscriptionTier == "Premium"
+                && (user.PremiumExpiresAt == null || user.PremiumExpiresAt <= now)),
+            "Freemium" => query.Where(user => user.SubscriptionTier != "Premium"),
+            _ => query
+        };
+
+        return query;
+    }
+
+    private static IQueryable<AdminUserProjection> ProjectUsers(
+        IQueryable<User> query,
+        DateTime now)
+    {
+        return query.Select(user => new AdminUserProjection
+        {
+            Id = user.Id,
+            FullName = user.FullName,
+            Email = user.Email,
+            Role = user.Role,
+            SubscriptionTier = user.SubscriptionTier,
+            SubscriptionStatus =
+                user.SubscriptionTier == "Premium"
+                && user.PremiumExpiresAt != null
+                && user.PremiumExpiresAt > now
+                    ? "Premium"
+                    : user.SubscriptionTier == "Premium"
+                      && (user.PremiumExpiresAt == null || user.PremiumExpiresAt <= now)
+                        ? "Expired"
+                        : "Freemium",
+            PremiumExpiresAt = user.PremiumExpiresAt,
+            CreatedAt = user.CreatedAt,
+            LastActiveDate = user.UserStat != null && !user.UserStat.IsDeleted
+                ? user.UserStat.LastActiveDate
+                : null,
+            DocumentCount = user.Documents.Count(document => !document.IsDeleted),
+            QuizCount = user.Documents
+                .Where(document => !document.IsDeleted)
+                .SelectMany(document => document.Quizzes)
+                .Count(quiz => !quiz.IsDeleted && quiz.ActivityType == "Quiz"),
+            FlashcardCount = user.Documents
+                .Where(document => !document.IsDeleted)
+                .SelectMany(document => document.Quizzes)
+                .Count(quiz => !quiz.IsDeleted && quiz.ActivityType == "Flashcard"),
+            LiveSessionCount = user.LiveSessions.Count(session => !session.IsDeleted),
+            DocumentsProcessed = user.DocumentsProcessed ?? 0,
+            Xp = user.UserStat != null && !user.UserStat.IsDeleted ? user.UserStat.Xp : 0,
+            CurrentStreak = user.UserStat != null && !user.UserStat.IsDeleted
+                ? user.UserStat.CurrentStreak
+                : 0,
+            TotalLearningSeconds = user.UserStat != null && !user.UserStat.IsDeleted
+                ? user.UserStat.TotalLearningSeconds
+                : 0,
+            TotalCorrectAnswers = user.UserStat != null && !user.UserStat.IsDeleted
+                ? user.UserStat.TotalCorrectAnswers
+                : 0,
+            TotalQuestionsAnswered = user.UserStat != null && !user.UserStat.IsDeleted
+                ? user.UserStat.TotalQuestionsAnswered
+                : 0,
+            PaymentOrderCount = user.PaymentOrders.Count(order => !order.IsDeleted),
+            LatestPaymentStatus = user.PaymentOrders
+                .Where(order => !order.IsDeleted)
+                .OrderByDescending(order => order.CreatedAt)
+                .Select(order => order.Status)
+                .FirstOrDefault(),
+            LatestPaymentPlanCode = user.PaymentOrders
+                .Where(order => !order.IsDeleted)
+                .OrderByDescending(order => order.CreatedAt)
+                .Select(order => order.PlanCode)
+                .FirstOrDefault(),
+            LatestPaymentAt = user.PaymentOrders
+                .Where(order => !order.IsDeleted)
+                .OrderByDescending(order => order.CreatedAt)
+                .Select(order => (DateTime?)(order.PaidAt ?? order.CreatedAt))
+                .FirstOrDefault()
+        });
     }
 }

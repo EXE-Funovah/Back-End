@@ -8,6 +8,8 @@ public class AdminService : IAdminService
 {
     private const int MonthlyPrice = 119000;          // PRO_MONTHLY
     private const int YearlyMonthlyEquivalent = 99000; // 1.188.000 / 12
+    private static readonly string[] AllowedRoles = ["Teacher", "Student", "Parent", "Admin"];
+    private static readonly string[] AllowedSubscriptions = ["Freemium", "Premium", "Expired"];
 
     private readonly IAdminRepository _repo;
     public AdminService(IAdminRepository repo) => _repo = repo;
@@ -96,51 +98,101 @@ public class AdminService : IAdminService
         };
     }
 
-    public async Task<AdminAccountsResponse> GetAccountsAsync(string? search, string? tier, int page, int pageSize)
+    public async Task<AdminUsersResponse> GetUsersAsync(
+        string? search,
+        string? role,
+        string? subscription,
+        int page,
+        int pageSize)
     {
+        var normalizedSearch = string.IsNullOrWhiteSpace(search) ? null : search.Trim();
+        var normalizedRole = NormalizeFilter(role, AllowedRoles, "role");
+        var normalizedSubscription = NormalizeFilter(
+            subscription,
+            AllowedSubscriptions,
+            "subscription");
         if (page < 1) page = 1;
         if (pageSize < 1 || pageSize > 100) pageSize = 20;
-        var now = DateTime.UtcNow;
-        var today = DateOnly.FromDateTime(now);
 
-        var (items, total) = await _repo.GetAccountsPageAsync(search, tier, page, pageSize);
-        var totalUsers = await _repo.CountUsersAsync();
-        var paying = await _repo.CountPremiumActiveAsync(now);
+        var (items, total) = await _repo.GetUsersPageAsync(
+            normalizedSearch,
+            normalizedRole,
+            normalizedSubscription,
+            DateTime.UtcNow,
+            page,
+            pageSize);
 
-        var dtos = items.Select(u =>
+        return new AdminUsersResponse
         {
-            var stat = u.UserStat;
-            var premiumActive = u.PremiumExpiresAt != null && u.PremiumExpiresAt > now;
-            string status;
-            if (premiumActive) status = "on";
-            else if (stat?.LastActiveDate != null &&
-                     today.DayNumber - stat.LastActiveDate.Value.DayNumber <= 2) status = "on";
-            else status = "idle";
-
-            return new AdminAccountDto
-            {
-                Id = u.Id,
-                Name = u.FullName,
-                Email = u.Email,
-                Type = u.Role,
-                Plan = u.SubscriptionTier,
-                PremiumActive = premiumActive,
-                Questions = stat?.TotalQuestionsAnswered ?? 0,
-                Minutes = (stat?.TotalLearningSeconds ?? 0) / 60,
-                Status = status,
-                LastActive = stat?.LastActiveDate,
-            };
-        }).ToList();
-
-        return new AdminAccountsResponse
-        {
-            TotalAccounts = totalUsers,
-            PayingAccounts = paying,
             Page = page,
             PageSize = pageSize,
             Total = total,
-            Items = dtos,
+            Items = items.Select(ToUserListItem).ToList()
         };
+    }
+
+    public async Task<AdminUserDetailResponse?> GetUserByIdAsync(int userId)
+    {
+        var user = await _repo.GetUserDetailAsync(userId, DateTime.UtcNow);
+        if (user == null) return null;
+
+        var response = new AdminUserDetailResponse
+        {
+            DocumentsProcessed = user.DocumentsProcessed,
+            Xp = user.Xp,
+            CurrentStreak = user.CurrentStreak,
+            TotalLearningSeconds = user.TotalLearningSeconds,
+            TotalCorrectAnswers = user.TotalCorrectAnswers,
+            TotalQuestionsAnswered = user.TotalQuestionsAnswered,
+            PaymentOrderCount = user.PaymentOrderCount,
+            LatestPaymentStatus = user.LatestPaymentStatus,
+            LatestPaymentPlanCode = user.LatestPaymentPlanCode,
+            LatestPaymentAt = user.LatestPaymentAt
+        };
+        CopyUserListFields(user, response);
+        return response;
+    }
+
+    private static string? NormalizeFilter(
+        string? value,
+        IEnumerable<string> allowedValues,
+        string filterName)
+    {
+        if (string.IsNullOrWhiteSpace(value)) return null;
+
+        var normalized = allowedValues.FirstOrDefault(allowed =>
+            string.Equals(allowed, value.Trim(), StringComparison.OrdinalIgnoreCase));
+        if (normalized == null)
+            throw new ArgumentException($"Unknown {filterName} filter.");
+
+        return normalized;
+    }
+
+    private static AdminUserListItemDto ToUserListItem(
+        Mascoteach.Data.Projections.AdminUserProjection user)
+    {
+        var response = new AdminUserListItemDto();
+        CopyUserListFields(user, response);
+        return response;
+    }
+
+    private static void CopyUserListFields(
+        Mascoteach.Data.Projections.AdminUserProjection user,
+        AdminUserListItemDto response)
+    {
+        response.Id = user.Id;
+        response.FullName = user.FullName;
+        response.Email = user.Email;
+        response.Role = user.Role;
+        response.SubscriptionTier = user.SubscriptionTier;
+        response.SubscriptionStatus = user.SubscriptionStatus;
+        response.PremiumExpiresAt = user.PremiumExpiresAt;
+        response.CreatedAt = user.CreatedAt;
+        response.LastActiveDate = user.LastActiveDate;
+        response.DocumentCount = user.DocumentCount;
+        response.QuizCount = user.QuizCount;
+        response.FlashcardCount = user.FlashcardCount;
+        response.LiveSessionCount = user.LiveSessionCount;
     }
 
     /// <summary>Chuỗi doanh thu Paid 12 tháng gần nhất (label "T{tháng}").</summary>

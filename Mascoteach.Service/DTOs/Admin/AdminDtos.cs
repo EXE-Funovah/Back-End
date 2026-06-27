@@ -43,27 +43,3 @@ public class AdminRevenueResponse
     public List<AdminNamedValueDto> Funnel { get; set; } = new();
     public List<AdminNamedValueDto> Movement { get; set; } = new(); // ước lượng / Phase 2
 }
-
-public class AdminAccountDto
-{
-    public int Id { get; set; }
-    public string Name { get; set; } = null!;
-    public string Email { get; set; } = null!;
-    public string Type { get; set; } = null!;   // Role (Student/Teacher/Parent)
-    public string Plan { get; set; } = null!;   // SubscriptionTier
-    public bool PremiumActive { get; set; }
-    public int Questions { get; set; }
-    public int Minutes { get; set; }
-    public string Status { get; set; } = "idle"; // on | idle | trial
-    public DateOnly? LastActive { get; set; }
-}
-
-public class AdminAccountsResponse
-{
-    public int TotalAccounts { get; set; }   // tổng toàn hệ thống
-    public int PayingAccounts { get; set; }  // premium đang hoạt động
-    public int Page { get; set; }
-    public int PageSize { get; set; }
-    public int Total { get; set; }           // tổng khớp filter
-    public List<AdminAccountDto> Items { get; set; } = new();
-}

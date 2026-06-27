@@ -855,6 +855,22 @@ Admin Dashboard nên mang cảm giác vận hành, rõ ràng, scan nhanh:
 
 ### Giai đoạn 3 - Users
 
+#### Backend Admin Users read-only API
+
+- [x] `GET /api/Admin/users` với search, role, subscription và pagination.
+  - Status: Completed
+  - Filters: role `Teacher|Student|Parent|Admin`; subscription `Freemium|Premium|Expired`.
+- [x] `GET /api/Admin/users/{id}` với content/activity/billing aggregates không nhạy cảm.
+  - Status: Completed
+  - Trả content counts, learning stats và latest payment summary; không trả secret/token/S3/PayOS payload.
+- [x] Xóa legacy `GET /api/Admin/accounts` và vertical slice riêng vì frontend chưa sử dụng.
+  - Status: Completed
+  - `/api/Admin/users` là contract duy nhất cho danh sách/quản lý user phía Admin.
+- [x] Chưa thêm role/subscription/status mutation trước khi có `Admin_Audit_Logs`.
+  - Status: Confirmed scope
+- Verification: focused Admin tests `10/10`, full suite `147/147`, solution build thành công.
+- Remaining check: smoke test EF projection trên SQL Server dev vì unit tests hiện mock repository.
+
 - [ ] Tạo `AdminUsersPage`.
 - [ ] Hiển thị danh sách user.
 - [ ] Search theo tên/email.

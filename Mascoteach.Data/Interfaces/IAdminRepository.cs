@@ -1,4 +1,4 @@
-using Mascoteach.Data.Models;
+using Mascoteach.Data.Projections;
 
 namespace Mascoteach.Data.Interfaces;
 
@@ -18,6 +18,12 @@ public interface IAdminRepository
     Task<int> CountDocumentsAsync();
     Task<int> CountQuestionsAsync();
     Task<int> CountLiveSessionsAsync();
-    Task<(List<User> Items, int Total)> GetAccountsPageAsync(
-        string? search, string? tier, int page, int pageSize);
+    Task<(List<AdminUserProjection> Items, int Total)> GetUsersPageAsync(
+        string? search,
+        string? role,
+        string? subscription,
+        DateTime now,
+        int page,
+        int pageSize);
+    Task<AdminUserProjection?> GetUserDetailAsync(int userId, DateTime now);
 }

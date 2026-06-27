@@ -24,12 +24,34 @@ public class AdminController : BaseController
     public async Task<IActionResult> Revenue([FromQuery] string range = "30d")
         => Ok(await _admin.GetRevenueAsync(range));
 
-    // GET: api/Admin/accounts?search=&tier=&page=&pageSize=
-    [HttpGet("accounts")]
-    public async Task<IActionResult> Accounts(
+    [HttpGet("users")]
+    public async Task<IActionResult> Users(
         [FromQuery] string? search,
-        [FromQuery] string? tier,
+        [FromQuery] string? role,
+        [FromQuery] string? subscription,
         [FromQuery] int page = 1,
         [FromQuery] int pageSize = 20)
-        => Ok(await _admin.GetAccountsAsync(search, tier, page, pageSize));
+    {
+        try
+        {
+            return Ok(await _admin.GetUsersAsync(
+                search,
+                role,
+                subscription,
+                page,
+                pageSize));
+        }
+        catch (ArgumentException ex)
+        {
+            return BadRequest(ex.Message);
+        }
+    }
+
+    [HttpGet("users/{id:int}")]
+    public async Task<IActionResult> UserDetail(int id)
+    {
+        var result = await _admin.GetUserByIdAsync(id);
+        if (result == null) return NotFound("User does not exist.");
+        return Ok(result);
+    }
 }

@@ -73,6 +73,32 @@ Related User API boundary:
 
 ## API endpoints
 
+### Users
+
+```http
+GET /api/Admin/users?search=&role=&subscription=&page=1&pageSize=20
+GET /api/Admin/users/{id}
+```
+
+- Both endpoints are read-only and inherit `[Authorize(Roles = "Admin")]`.
+- `role` accepts `Teacher`, `Student`, `Parent`, or `Admin`, case-insensitively.
+- `subscription` accepts `Freemium`, `Premium`, or `Expired`, case-insensitively.
+- `Premium` requires `SubscriptionTier == "Premium"` and a future `PremiumExpiresAt`.
+- `Expired` means stored tier `Premium` with missing or elapsed expiry; other tiers classify as `Freemium`.
+- Unknown role/subscription filters return HTTP 400.
+- `page < 1` becomes 1; `pageSize` outside 1 through 100 becomes 20.
+- List results are ordered by `CreatedAt` descending, then `Id` descending.
+- Soft-deleted users are excluded; detail returns HTTP 404 for missing/deleted users.
+- List responses include document, Quiz, Flashcard, and hosted live-session counts.
+- Detail adds learning stats and a non-sensitive latest-payment summary.
+- Responses never expose password/token hashes, S3 keys, checkout/QR data, signatures, or webhook payloads.
+- Legacy `GET /api/Admin/accounts`, `AdminAccountsResponse`, and their dedicated service/repository methods were
+  removed because no frontend consumed them. `/api/Admin/users` is the only Admin user-list contract.
+- Repository reads use `AsNoTracking` SQL projections and filter deleted related rows.
+
+There are no Admin role/subscription/status mutations yet. Do not add them before `Admin_Audit_Logs` and dedicated
+request DTOs are designed.
+
 ### Overview
 
 ```http
@@ -105,23 +131,6 @@ GET /api/Admin/revenue?range=7d|30d|12m
 - `churnRate`, `ltv`, and `movement` are not implemented because there is no subscription-event tracking.
 - The current implementation accepts `range` but does not use it; the revenue series always covers 12 months.
 - Funnel currently contains only total created accounts and active paying accounts.
-
-### Accounts
-
-```http
-GET /api/Admin/accounts?search=&tier=&page=1&pageSize=20
-```
-
-- Searches non-deleted users by `FullName` or `Email`.
-- Optional `tier` filters by exact `SubscriptionTier` value.
-- `page < 1` is normalized to 1.
-- `pageSize` outside 1 through 100 is normalized to 20.
-- Results include `UserStat` and are ordered by `LastActiveDate` descending.
-- Response includes system-wide `totalAccounts` and `payingAccounts`, plus filtered `total` and paged `items`.
-- `questions` comes from `UserStat.TotalQuestionsAnswered`.
-- `minutes` is integer division of `TotalLearningSeconds / 60`.
-- Account `status` is `on` when Premium is active or last activity was within two days; otherwise it is `idle`.
-  The DTO mentions `trial`, but the service does not currently emit it.
 
 ## Revenue and Premium calculations
 
@@ -166,7 +175,8 @@ Payment aggregate queries currently filter `Status == "Paid"` and `PaidAt`, but 
 - `AdminMonthPointDto`: `label`, `value`.
 - `AdminOverviewResponse`: `kpis`, `mrrSeries`, `featureUsage`.
 - `AdminRevenueResponse`: recurring metrics, series, plan distribution, funnel, and Phase 2 placeholders.
-- `AdminAccountsResponse`: global totals, pagination metadata, filtered total, and account items.
+- `AdminUsersResponse`: pagination metadata, filtered total, and Admin user list items.
+- `AdminUserDetailResponse`: user-list fields plus learning and non-sensitive payment summary.
 
 Keep these property names stable unless the Admin frontend is updated at the same time.
 
@@ -183,7 +193,9 @@ When changing Admin behavior, add or maintain tests for:
 - Account search, tier filter, pagination normalization, activity status, and totals.
 - Registration cannot create an Admin account.
 
-Current test coverage has no Admin-specific service, repository, or controller tests. Treat this as a coverage gap.
+Admin User service and controller contracts have focused tests. Repository projections are not currently executed
+against a real SQL Server in the test suite; smoke-test `/api/Admin/users` and `/api/Admin/users/{id}` against the
+development database after deployment or when a relational integration-test fixture is added.
 
 Run:
 
@@ -198,6 +210,8 @@ dotnet build EXE101-Mascoteach-Backend.sln --no-restore
 - Do not allow clients to self-register or promote themselves to Admin.
 - Do not expose collection or arbitrary-id User reads to ordinary authenticated users.
 - Do not reuse the profile update DTO for role or subscription changes.
+- Do not return authentication secrets, storage keys, payment-link data, signatures, or raw webhook payloads from
+  Admin User responses.
 - Do not call the 12-month paid-order series normalized recurring MRR without changing its calculation.
 - Do not assume `range` currently changes the revenue response.
 - Do not add Admin mutation endpoints without a separate authorization and audit design.
