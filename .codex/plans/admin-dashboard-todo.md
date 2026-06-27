@@ -923,7 +923,8 @@ Admin Dashboard nên mang cảm giác vận hành, rõ ràng, scan nhanh:
 
 ## Câu Hỏi Cần Chốt Với Backend/Product
 
-- Backend đã có role `Admin` trong auth/register và một số controller đã check `CurrentUserRole == "Admin"`, nhưng cần chốt seed/tài khoản admin đầu tiên.
+- [Đã chốt] Tài khoản Admin đầu tiên đã được provision thủ công trong DB. JWT hỗ trợ role `Admin`,
+  còn public register phải tiếp tục chặn tự đăng ký Admin.
 - Admin có được xem nội dung chi tiết của tài liệu/quiz không, hay chỉ metadata?
 - Có cần audit khi Admin xem nội dung riêng của giáo viên không?
 - Subscription có cho phép chỉnh thủ công không?
