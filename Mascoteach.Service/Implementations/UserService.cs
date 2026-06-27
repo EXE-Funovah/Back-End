@@ -71,8 +71,6 @@ namespace Mascoteach.Service.Implementations
 
             user.FullName = request.FullName;
             user.Email = request.Email;
-            user.Role = request.Role;
-            user.SubscriptionTier = request.SubscriptionTier;
 
             _userRepository.Update(user);
             return await _userRepository.SaveChangesAsync() > 0;
