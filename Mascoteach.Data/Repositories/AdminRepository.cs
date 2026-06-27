@@ -13,8 +13,6 @@ public class AdminRepository : IAdminRepository
 
     private IQueryable<User> ActiveUsers => _ctx.Users.Where(u => !u.IsDeleted);
 
-    public Task<int> CountUsersAsync() => ActiveUsers.CountAsync();
-
     public async Task<AdminOverviewProjection> GetOverviewAsync(DateTime from, DateTime to)
     {
         var activeUsers = ActiveUsers.AsNoTracking();
@@ -94,40 +92,6 @@ public class AdminRepository : IAdminRepository
                     && order.PaidAt < to)
                 .SumAsync(order => (long)order.Amount)
         };
-    }
-
-    public async Task<(int Monthly, int Yearly)> PremiumActiveByPlanAsync(DateTime now)
-    {
-        var premiumIds = await ActiveUsers
-            .Where(u =>
-                u.SubscriptionTier == "Premium"
-                && u.PremiumExpiresAt != null
-                && u.PremiumExpiresAt > now)
-            .Select(u => u.Id)
-            .ToListAsync();
-        if (premiumIds.Count == 0) return (0, 0);
-
-        // Order trả phí của các user premium → lấy plan của order MỚI NHẤT mỗi user.
-        var paid = await _ctx.PaymentOrders
-            .Where(o =>
-                !o.IsDeleted
-                && !o.User.IsDeleted
-                && o.Status == "Paid"
-                && o.PaidAt != null
-                && premiumIds.Contains(o.UserId))
-            .Select(o => new { o.UserId, o.PlanCode, o.PaidAt })
-            .ToListAsync();
-
-        int monthly = 0, yearly = 0;
-        foreach (var grp in paid.GroupBy(o => o.UserId))
-        {
-            var plan = grp.OrderByDescending(o => o.PaidAt).First().PlanCode;
-            if (plan == "PRO_YEARLY") yearly++; else monthly++;
-        }
-        // user premium nhưng chưa có order Paid (vd cấp tay) → tính là monthly cho đủ tổng
-        var withoutOrder = premiumIds.Count - paid.Select(o => o.UserId).Distinct().Count();
-        monthly += Math.Max(0, withoutOrder);
-        return (monthly, yearly);
     }
 
     public async Task<List<(int Year, int Month, long Total)>> PaidRevenueByMonthAsync(DateTime fromInclusive)

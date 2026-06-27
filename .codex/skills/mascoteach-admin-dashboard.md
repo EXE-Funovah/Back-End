@@ -188,18 +188,11 @@ GET /api/Admin/sessions/{id}/participants?search=&deletion=Active&page=1&pageSiz
 - No Admin end/delete/restore action exists yet. Add mutation endpoints only after `Admin_Audit_Logs`, dedicated
   request DTOs, and a reason policy are designed.
 
-### Revenue
+## Revenue and Premium semantics
 
-```http
-GET /api/Admin/revenue?range=7d|30d|12m
-```
-
-- Returns `AdminRevenueResponse` with `mrr`, `arr`, `arpu`, `mrrSeries`, `planDistribution`, and `funnel`.
-- `churnRate`, `ltv`, and `movement` are not implemented because there is no subscription-event tracking.
-- The current implementation accepts `range` but does not use it; the revenue series always covers 12 months.
-- Funnel currently contains only total created accounts and active paying accounts.
-
-## Revenue and Premium calculations
+`GET /api/Admin/overview` is the canonical Admin revenue-summary contract. The legacy
+`GET /api/Admin/revenue` route and its approximate MRR/ARR/ARPU vertical slice were removed before frontend
+integration because no client consumed them and their range/series semantics were inaccurate.
 
 Admin analytics treats Premium as active when:
 
@@ -211,29 +204,9 @@ AND PremiumExpiresAt > DateTime.UtcNow
 
 This matches the canonical Billing/document-quota invariant.
 
-Plan attribution for an active Premium user:
-
-1. Read the user's latest `Paid` payment order by `PaidAt`.
-2. `PRO_YEARLY` counts as yearly.
-3. Any other plan counts as monthly.
-4. An active Premium user with no paid order also counts as monthly.
-
-Approximate current recurring metrics:
-
-```text
-MRR = monthly users * 119000 + yearly users * 99000
-ARR = MRR * 12
-ARPU = MRR / active Premium users
-```
-
-`99000` is the monthly equivalent of the `1188000` yearly price.
-
-Despite its name, `mrrSeries` is the actual sum of `Payment_Orders.amount` with status `Paid`, grouped by calendar
-month for the current month and previous 11 months. Missing months are returned as zero and labels use `T{month}`.
-The overview MRR delta compares the last two values from this paid-revenue series.
-
 Payment aggregate queries filter `Status == "Paid"`, require `PaidAt`, and exclude soft-deleted payment orders
-and their soft-deleted users.
+and their soft-deleted users. Overview returns paid revenue in the selected range plus an actual paid-revenue
+series covering the current month and previous 11 months.
 
 ## DTO contracts
 
@@ -242,7 +215,6 @@ and their soft-deleted users.
 - `AdminMonthPointDto`: `label`, `value`.
 - `AdminOverviewResponse`: range window, `kpis`, `userDistribution`, `subscriptionDistribution`,
   `contentTotals`, `paymentStatusDistribution`, and `paidRevenueSeries`.
-- `AdminRevenueResponse`: recurring metrics, series, plan distribution, funnel, and Phase 2 placeholders.
 - `AdminUsersResponse`: pagination metadata, filtered total, and Admin user list items.
 - `AdminUserDetailResponse`: user-list fields plus learning and non-sensitive payment summary.
 - `AdminDocumentsResponse` / `AdminDocumentItemDto`: paginated Document operational metadata.
@@ -260,8 +232,6 @@ When changing Admin behavior, add or maintain tests for:
 - Non-Admin JWTs are forbidden and Admin JWTs are accepted.
 - Soft-deleted users and feature rows are excluded.
 - Overview range and user delta behavior.
-- Premium plan attribution and manual Premium fallback.
-- MRR, ARR, ARPU, conversion, and zero-user cases.
 - Twelve-month paid-revenue series including zero-filled months and year boundaries.
 - Account search, tier filter, pagination normalization, activity status, and totals.
 - Registration cannot create an Admin account.
@@ -285,8 +255,8 @@ dotnet build EXE101-Mascoteach-Backend.sln --no-restore
 - Do not reuse the profile update DTO for role or subscription changes.
 - Do not return authentication secrets, storage keys, payment-link data, signatures, or raw webhook payloads from
   Admin User responses.
-- Do not call the 12-month paid-order series normalized recurring MRR without changing its calculation.
-- Do not assume `range` currently changes the revenue response.
+- Do not reintroduce the removed legacy `/api/Admin/revenue` contract; design Billing read models from current
+  product requirements instead.
 - Do not add Admin mutation endpoints without a separate authorization and audit design.
 - Do not add EF migrations for this DB-first project.
 - Do not add feature labels that claim tracking precision the database does not provide.

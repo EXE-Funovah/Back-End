@@ -950,6 +950,14 @@ Admin Dashboard nên mang cảm giác vận hành, rõ ràng, scan nhanh:
 
 ### Giai đoạn 6 - Billing
 
+#### Legacy Admin Revenue cleanup
+
+- [x] Xóa `GET /api/Admin/revenue` và vertical slice cũ không theo roadmap.
+  - Status: Completed
+- [x] Giữ revenue Paid trong Overview và `PaidRevenueByMonthAsync`.
+  - Status: Verified unchanged
+- Verification: regression test RED/GREEN; full suite `188/188`, Release build thành công.
+
 - [ ] Tạo `AdminBillingPage`.
 - [ ] Danh sách orders.
 - [ ] Filter trạng thái payment.

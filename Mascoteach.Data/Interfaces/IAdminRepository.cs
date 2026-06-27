@@ -8,9 +8,7 @@ namespace Mascoteach.Data.Interfaces;
 /// </summary>
 public interface IAdminRepository
 {
-    Task<int> CountUsersAsync();
     Task<AdminOverviewProjection> GetOverviewAsync(DateTime from, DateTime to);
-    Task<(int Monthly, int Yearly)> PremiumActiveByPlanAsync(DateTime now);
     Task<List<(int Year, int Month, long Total)>> PaidRevenueByMonthAsync(DateTime fromInclusive);
     Task<(List<AdminUserProjection> Items, int Total)> GetUsersPageAsync(
         string? search,

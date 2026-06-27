@@ -36,7 +36,7 @@ public class AdminControllerTests
     }
 
     [Fact]
-    public void LegacyAccountsRoute_IsRemoved()
+    public void LegacyAdminRoutesAndContracts_AreRemoved()
     {
         var getRoutes = typeof(AdminController)
             .GetMethods(BindingFlags.Instance | BindingFlags.Public)
@@ -44,6 +44,12 @@ public class AdminControllerTests
             .Where(template => template != null);
 
         Assert.DoesNotContain("accounts", getRoutes);
+        Assert.DoesNotContain("revenue", getRoutes);
+        Assert.Null(typeof(IAdminService).GetMethod("GetRevenueAsync"));
+        Assert.Null(typeof(Mascoteach.Data.Interfaces.IAdminRepository)
+            .GetMethod("CountUsersAsync"));
+        Assert.Null(typeof(Mascoteach.Data.Interfaces.IAdminRepository)
+            .GetMethod("PremiumActiveByPlanAsync"));
     }
 
     [Fact]

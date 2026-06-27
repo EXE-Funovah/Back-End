@@ -28,11 +28,6 @@ public class AdminController : BaseController
         }
     }
 
-    // GET: api/Admin/revenue?range=
-    [HttpGet("revenue")]
-    public async Task<IActionResult> Revenue([FromQuery] string range = "30d")
-        => Ok(await _admin.GetRevenueAsync(range));
-
     [HttpGet("users")]
     public async Task<IActionResult> Users(
         [FromQuery] string? search,

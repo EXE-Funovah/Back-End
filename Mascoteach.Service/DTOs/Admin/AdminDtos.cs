@@ -36,16 +36,3 @@ public class AdminOverviewResponse
     public List<AdminNamedValueDto> PaymentStatusDistribution { get; set; } = new();
     public List<AdminMonthPointDto> PaidRevenueSeries { get; set; } = new();
 }
-
-public class AdminRevenueResponse
-{
-    public long Mrr { get; set; }
-    public long Arr { get; set; }
-    public long Arpu { get; set; }
-    public double? ChurnRate { get; set; }  // null = chưa có tracking (Phase 2)
-    public long? Ltv { get; set; }
-    public List<AdminMonthPointDto> MrrSeries { get; set; } = new();
-    public List<AdminNamedValueDto> PlanDistribution { get; set; } = new();
-    public List<AdminNamedValueDto> Funnel { get; set; } = new();
-    public List<AdminNamedValueDto> Movement { get; set; } = new(); // ước lượng / Phase 2
-}

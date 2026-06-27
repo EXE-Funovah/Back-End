@@ -7,8 +7,6 @@ namespace Mascoteach.Service.Implementations;
 
 public class AdminService : IAdminService
 {
-    private const int MonthlyPrice = 119000;          // PRO_MONTHLY
-    private const int YearlyMonthlyEquivalent = 99000; // 1.188.000 / 12
     private static readonly string[] AllowedRoles = ["Teacher", "Student", "Parent", "Admin"];
     private static readonly string[] AllowedSubscriptions = ["Freemium", "Premium", "Expired"];
     private static readonly string[] AllowedDeletionFilters = ["Active", "Deleted", "All"];
@@ -81,45 +79,6 @@ public class AdminService : IAdminService
                 new() { Label = "Failed", Value = overview.FailedPaymentCount }
             ],
             PaidRevenueSeries = await BuildRevenueSeriesAsync(to)
-        };
-    }
-
-    public async Task<AdminRevenueResponse> GetRevenueAsync(string range)
-    {
-        var now = DateTime.UtcNow;
-        var (monthly, yearly) = await _repo.PremiumActiveByPlanAsync(now);
-        var premium = monthly + yearly;
-        long mrr = (long)monthly * MonthlyPrice + (long)yearly * YearlyMonthlyEquivalent;
-        long arpu = premium > 0 ? mrr / premium : 0;
-        var total = await _repo.CountUsersAsync();
-        var free = Math.Max(0, total - premium);
-        var series = await BuildRevenueSeriesAsync(now);
-
-        var plans = new List<AdminNamedValueDto>
-        {
-            new() { Label = "Miễn phí", Value = free, Color = "#94A3B8" },
-            new() { Label = "Premium tháng", Value = monthly, Color = "#2B7AB5" },
-            new() { Label = "Premium năm", Value = yearly, Color = "#FB923C" },
-        };
-
-        // Phễu: bỏ bước "Cài đặt ứng dụng" (chưa có install analytics).
-        var funnel = new List<AdminNamedValueDto>
-        {
-            new() { Label = "Tạo tài khoản", Value = total },
-            new() { Label = "Trả phí", Value = premium },
-        };
-
-        return new AdminRevenueResponse
-        {
-            Mrr = mrr,
-            Arr = mrr * 12,
-            Arpu = arpu,
-            ChurnRate = null, // cần SubscriptionEvent (Phase 2)
-            Ltv = null,
-            MrrSeries = series,
-            PlanDistribution = plans,
-            Funnel = funnel,
-            Movement = new(), // cần SubscriptionEvent (Phase 2)
         };
     }
 
