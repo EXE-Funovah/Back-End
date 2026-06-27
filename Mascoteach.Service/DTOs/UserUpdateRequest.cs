@@ -10,10 +10,4 @@ public class UserUpdateRequest
     [Required]
     [EmailAddress]
     public string Email { get; set; } = null!;
-
-    [Required]
-    public string Role { get; set; } = null!;
-
-    [Required]
-    public string SubscriptionTier { get; set; } = null!;
 }

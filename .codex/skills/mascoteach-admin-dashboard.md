@@ -8,6 +8,26 @@ description: |
 
 # Mascoteach - Admin Dashboard Skill
 
+## Required roadmap workflow
+
+The canonical living roadmap is `.codex/plans/admin-dashboard-todo.md`.
+
+Before any Admin task:
+
+1. Read the roadmap and the relevant domain rules in `.codex/skills/`.
+2. Verify the requested todo against current code and DB-first schema; the roadmap may be older than the code.
+3. Mark only the selected item `In Progress`.
+
+After implementation:
+
+1. Run focused tests, the full test suite, and the solution build.
+2. Mark an item complete only after fresh verification passes.
+3. Record the implemented routes or behavior, verification commands, and any remaining limitation under that item.
+4. Update this skill only with durable, verified architecture and business rules, not temporary progress notes.
+5. Leave partial or blocked items unchecked and state the exact blocker.
+
+Never store secrets in the roadmap or mark frontend-only work as backend-complete.
+
 ## Current module shape
 
 The Admin dashboard is a read-only analytics module following the existing dependency direction:
@@ -42,6 +62,14 @@ never grant Admin. `AuthService` only accepts the self-registerable roles `Stude
 case-insensitively, and normalizes them to those canonical values.
 
 There is currently no public API for creating, promoting, demoting, disabling, or deleting Admin accounts.
+
+Related User API boundary:
+
+- `GET /api/User` and `GET /api/User/{id}` require role `Admin`.
+- `GET /api/User/me` remains available to any authenticated user.
+- `PUT /api/User/{id}` is profile-only and can change only `FullName` and `Email`.
+- `Role` and `SubscriptionTier` are not part of `UserUpdateRequest` and must not be reintroduced.
+- Future privileged role/subscription changes require dedicated Admin DTOs, endpoints, validation, and audit logs.
 
 ## API endpoints
 
@@ -168,6 +196,8 @@ dotnet build EXE101-Mascoteach-Backend.sln --no-restore
 
 - Do not weaken `[Authorize(Roles = "Admin")]` to ordinary `[Authorize]`.
 - Do not allow clients to self-register or promote themselves to Admin.
+- Do not expose collection or arbitrary-id User reads to ordinary authenticated users.
+- Do not reuse the profile update DTO for role or subscription changes.
 - Do not call the 12-month paid-order series normalized recurring MRR without changing its calculation.
 - Do not assume `range` currently changes the revenue response.
 - Do not add Admin mutation endpoints without a separate authorization and audit design.

@@ -1,10 +1,12 @@
 using AutoMapper;
 using Mascoteach.Data.Interfaces;
 using Mascoteach.Data.Models;
+using Mascoteach.Service.DTOs;
 using Mascoteach.Service.Implementations;
 using Mascoteach.Service.Interfaces;
 using Microsoft.EntityFrameworkCore.Storage;
 using Moq;
+using System.Text.Json;
 using Xunit;
 
 namespace Mascoteach.Tests;
@@ -19,6 +21,90 @@ public class UserServiceTests
     public UserServiceTests()
     {
         _sut = new UserService(_userRepo.Object, _mapper, _s3Service.Object);
+    }
+
+    [Fact]
+    public async Task UpdateAsync_AttackerSuppliedRole_PreservesStoredRole()
+    {
+        var user = new User
+        {
+            Id = 10,
+            FullName = "Student",
+            Email = "student@test.com",
+            Role = "Student",
+            SubscriptionTier = "Freemium"
+        };
+        var request = JsonSerializer.Deserialize<UserUpdateRequest>(
+            """
+            {
+              "FullName": "Updated Student",
+              "Email": "updated@test.com",
+              "Role": "Admin",
+              "SubscriptionTier": "Freemium"
+            }
+            """)!;
+        _userRepo.Setup(r => r.GetByIdAsync(10)).ReturnsAsync(user);
+        _userRepo.Setup(r => r.SaveChangesAsync()).ReturnsAsync(1);
+
+        var result = await _sut.UpdateAsync(10, request);
+
+        Assert.True(result);
+        Assert.Equal("Student", user.Role);
+    }
+
+    [Fact]
+    public async Task UpdateAsync_AttackerSuppliedSubscription_PreservesStoredSubscription()
+    {
+        var user = new User
+        {
+            Id = 10,
+            FullName = "Teacher",
+            Email = "teacher@test.com",
+            Role = "Teacher",
+            SubscriptionTier = "Freemium"
+        };
+        var request = JsonSerializer.Deserialize<UserUpdateRequest>(
+            """
+            {
+              "FullName": "Updated Teacher",
+              "Email": "updated@test.com",
+              "Role": "Teacher",
+              "SubscriptionTier": "Premium"
+            }
+            """)!;
+        _userRepo.Setup(r => r.GetByIdAsync(10)).ReturnsAsync(user);
+        _userRepo.Setup(r => r.SaveChangesAsync()).ReturnsAsync(1);
+
+        var result = await _sut.UpdateAsync(10, request);
+
+        Assert.True(result);
+        Assert.Equal("Freemium", user.SubscriptionTier);
+    }
+
+    [Fact]
+    public async Task UpdateAsync_LegitimateProfileFields_UpdatesNameAndEmail()
+    {
+        var user = new User
+        {
+            Id = 10,
+            FullName = "Old Name",
+            Email = "old@test.com",
+            Role = "Teacher",
+            SubscriptionTier = "Freemium"
+        };
+        var request = new UserUpdateRequest
+        {
+            FullName = "New Name",
+            Email = "new@test.com"
+        };
+        _userRepo.Setup(r => r.GetByIdAsync(10)).ReturnsAsync(user);
+        _userRepo.Setup(r => r.SaveChangesAsync()).ReturnsAsync(1);
+
+        var result = await _sut.UpdateAsync(10, request);
+
+        Assert.True(result);
+        Assert.Equal("New Name", user.FullName);
+        Assert.Equal("new@test.com", user.Email);
     }
 
     [Fact]
