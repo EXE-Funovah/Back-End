@@ -1,4 +1,5 @@
 using Mascoteach.Data.Interfaces;
+using Mascoteach.Data.Projections;
 using Mascoteach.Service.DTOs.Admin;
 using Mascoteach.Service.Interfaces;
 
@@ -10,6 +11,10 @@ public class AdminService : IAdminService
     private const int YearlyMonthlyEquivalent = 99000; // 1.188.000 / 12
     private static readonly string[] AllowedRoles = ["Teacher", "Student", "Parent", "Admin"];
     private static readonly string[] AllowedSubscriptions = ["Freemium", "Premium", "Expired"];
+    private static readonly string[] AllowedDeletionFilters = ["Active", "Deleted", "All"];
+    private static readonly string[] AllowedActivityTypes = ["Quiz", "Flashcard"];
+    private static readonly string[] AllowedQuizStatuses =
+        ["AI_Drafted", "Teacher_Approved", "Published"];
 
     private readonly IAdminRepository _repo;
     public AdminService(IAdminRepository repo) => _repo = repo;
@@ -171,6 +176,157 @@ public class AdminService : IAdminService
         CopyUserListFields(user, response);
         return response;
     }
+
+    public async Task<AdminDocumentsResponse> GetDocumentsAsync(
+        string? search,
+        int? ownerId,
+        string deletion,
+        DateTime? from,
+        DateTime? to,
+        int page,
+        int pageSize)
+    {
+        var normalizedSearch = NormalizeSearch(search);
+        var normalizedDeletion = NormalizeRequiredFilter(
+            deletion,
+            AllowedDeletionFilters,
+            "deletion");
+        ValidateDateRange(from, to);
+        NormalizePagination(ref page, ref pageSize);
+
+        var (items, total) = await _repo.GetDocumentsPageAsync(
+            normalizedSearch,
+            ownerId,
+            normalizedDeletion,
+            from,
+            to,
+            page,
+            pageSize);
+
+        return new AdminDocumentsResponse
+        {
+            Page = page,
+            PageSize = pageSize,
+            Total = total,
+            Items = items.Select(ToDocumentItem).ToList()
+        };
+    }
+
+    public async Task<AdminDocumentItemDto?> GetDocumentByIdAsync(int id)
+    {
+        var document = await _repo.GetDocumentDetailAsync(id);
+        return document == null ? null : ToDocumentItem(document);
+    }
+
+    public async Task<AdminQuizzesResponse> GetQuizzesAsync(
+        string? search,
+        int? ownerId,
+        string? activityType,
+        string? status,
+        string deletion,
+        DateTime? from,
+        DateTime? to,
+        int page,
+        int pageSize)
+    {
+        var normalizedSearch = NormalizeSearch(search);
+        var normalizedActivityType = NormalizeFilter(
+            activityType,
+            AllowedActivityTypes,
+            "activityType");
+        var normalizedStatus = NormalizeFilter(
+            status,
+            AllowedQuizStatuses,
+            "status");
+        var normalizedDeletion = NormalizeRequiredFilter(
+            deletion,
+            AllowedDeletionFilters,
+            "deletion");
+        ValidateDateRange(from, to);
+        NormalizePagination(ref page, ref pageSize);
+
+        var (items, total) = await _repo.GetQuizzesPageAsync(
+            normalizedSearch,
+            ownerId,
+            normalizedActivityType,
+            normalizedStatus,
+            normalizedDeletion,
+            from,
+            to,
+            page,
+            pageSize);
+
+        return new AdminQuizzesResponse
+        {
+            Page = page,
+            PageSize = pageSize,
+            Total = total,
+            Items = items.Select(ToQuizItem).ToList()
+        };
+    }
+
+    public async Task<AdminQuizItemDto?> GetQuizByIdAsync(int id)
+    {
+        var quiz = await _repo.GetQuizDetailAsync(id);
+        return quiz == null ? null : ToQuizItem(quiz);
+    }
+
+    private static string? NormalizeSearch(string? search) =>
+        string.IsNullOrWhiteSpace(search) ? null : search.Trim();
+
+    private static string NormalizeRequiredFilter(
+        string? value,
+        IEnumerable<string> allowedValues,
+        string filterName) =>
+        NormalizeFilter(value, allowedValues, filterName)
+        ?? throw new ArgumentException($"Unknown {filterName} filter.");
+
+    private static void ValidateDateRange(DateTime? from, DateTime? to)
+    {
+        if (from.HasValue && to.HasValue && from.Value >= to.Value)
+            throw new ArgumentException("'from' must be earlier than 'to'.");
+    }
+
+    private static void NormalizePagination(ref int page, ref int pageSize)
+    {
+        if (page < 1) page = 1;
+        if (pageSize < 1 || pageSize > 100) pageSize = 20;
+    }
+
+    private static AdminDocumentItemDto ToDocumentItem(
+        AdminDocumentProjection document) =>
+        new()
+        {
+            Id = document.Id,
+            FileName = document.FileName,
+            UploadedAt = document.UploadedAt,
+            IsDeleted = document.IsDeleted,
+            OwnerId = document.OwnerId,
+            OwnerName = document.OwnerName,
+            OwnerEmail = document.OwnerEmail,
+            OwnerIsDeleted = document.OwnerIsDeleted,
+            QuizCount = document.QuizCount,
+            FlashcardCount = document.FlashcardCount
+        };
+
+    private static AdminQuizItemDto ToQuizItem(AdminQuizProjection quiz) =>
+        new()
+        {
+            Id = quiz.Id,
+            Title = quiz.Title,
+            ActivityType = quiz.ActivityType,
+            Status = quiz.Status,
+            CreatedAt = quiz.CreatedAt,
+            IsDeleted = quiz.IsDeleted,
+            QuestionCount = quiz.QuestionCount,
+            DocumentId = quiz.DocumentId,
+            DocumentFileName = quiz.DocumentFileName,
+            DocumentIsDeleted = quiz.DocumentIsDeleted,
+            OwnerId = quiz.OwnerId,
+            OwnerName = quiz.OwnerName,
+            OwnerEmail = quiz.OwnerEmail,
+            OwnerIsDeleted = quiz.OwnerIsDeleted
+        };
 
     private static string? NormalizeFilter(
         string? value,

@@ -13,4 +13,24 @@ public interface IAdminService
         int page,
         int pageSize);
     Task<AdminUserDetailResponse?> GetUserByIdAsync(int userId);
+    Task<AdminDocumentsResponse> GetDocumentsAsync(
+        string? search,
+        int? ownerId,
+        string deletion,
+        DateTime? from,
+        DateTime? to,
+        int page,
+        int pageSize);
+    Task<AdminDocumentItemDto?> GetDocumentByIdAsync(int id);
+    Task<AdminQuizzesResponse> GetQuizzesAsync(
+        string? search,
+        int? ownerId,
+        string? activityType,
+        string? status,
+        string deletion,
+        DateTime? from,
+        DateTime? to,
+        int page,
+        int pageSize);
+    Task<AdminQuizItemDto?> GetQuizByIdAsync(int id);
 }

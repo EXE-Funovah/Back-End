@@ -63,4 +63,78 @@ public class AdminController : BaseController
         if (result == null) return NotFound("User does not exist.");
         return Ok(result);
     }
+
+    [HttpGet("documents")]
+    public async Task<IActionResult> Documents(
+        [FromQuery] string? search,
+        [FromQuery] int? ownerId,
+        [FromQuery] string deletion = "Active",
+        [FromQuery] DateTime? from = null,
+        [FromQuery] DateTime? to = null,
+        [FromQuery] int page = 1,
+        [FromQuery] int pageSize = 20)
+    {
+        try
+        {
+            return Ok(await _admin.GetDocumentsAsync(
+                search,
+                ownerId,
+                deletion,
+                from,
+                to,
+                page,
+                pageSize));
+        }
+        catch (ArgumentException ex)
+        {
+            return BadRequest(ex.Message);
+        }
+    }
+
+    [HttpGet("documents/{id:int}")]
+    public async Task<IActionResult> DocumentDetail(int id)
+    {
+        var result = await _admin.GetDocumentByIdAsync(id);
+        if (result == null) return NotFound("Document does not exist.");
+        return Ok(result);
+    }
+
+    [HttpGet("quizzes")]
+    public async Task<IActionResult> Quizzes(
+        [FromQuery] string? search,
+        [FromQuery] int? ownerId,
+        [FromQuery] string? activityType,
+        [FromQuery] string? status,
+        [FromQuery] string deletion = "Active",
+        [FromQuery] DateTime? from = null,
+        [FromQuery] DateTime? to = null,
+        [FromQuery] int page = 1,
+        [FromQuery] int pageSize = 20)
+    {
+        try
+        {
+            return Ok(await _admin.GetQuizzesAsync(
+                search,
+                ownerId,
+                activityType,
+                status,
+                deletion,
+                from,
+                to,
+                page,
+                pageSize));
+        }
+        catch (ArgumentException ex)
+        {
+            return BadRequest(ex.Message);
+        }
+    }
+
+    [HttpGet("quizzes/{id:int}")]
+    public async Task<IActionResult> QuizDetail(int id)
+    {
+        var result = await _admin.GetQuizByIdAsync(id);
+        if (result == null) return NotFound("Quiz does not exist.");
+        return Ok(result);
+    }
 }

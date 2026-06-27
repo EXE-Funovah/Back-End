@@ -2,6 +2,7 @@ using Mascoteach.Data.Interfaces;
 using Mascoteach.Data.Models;
 using Mascoteach.Data.Projections;
 using Microsoft.EntityFrameworkCore;
+using System.Linq.Expressions;
 
 namespace Mascoteach.Data.Repositories;
 
@@ -271,6 +272,157 @@ public class AdminRepository : IAdminRepository
                 .FirstOrDefault()
         });
     }
+
+    public async Task<(List<AdminDocumentProjection> Items, int Total)> GetDocumentsPageAsync(
+        string? search,
+        int? ownerId,
+        string deletion,
+        DateTime? from,
+        DateTime? to,
+        int page,
+        int pageSize)
+    {
+        var query = _ctx.Documents.AsNoTracking();
+
+        query = deletion switch
+        {
+            "Active" => query.Where(document => !document.IsDeleted),
+            "Deleted" => query.Where(document => document.IsDeleted),
+            _ => query
+        };
+
+        if (!string.IsNullOrWhiteSpace(search))
+        {
+            var loweredSearch = search.ToLower();
+            query = query.Where(document =>
+                (document.FileName != null
+                    && document.FileName.ToLower().Contains(loweredSearch))
+                || document.Owner.FullName.ToLower().Contains(loweredSearch)
+                || document.Owner.Email.ToLower().Contains(loweredSearch));
+        }
+
+        if (ownerId.HasValue)
+            query = query.Where(document => document.OwnerId == ownerId.Value);
+        if (from.HasValue)
+            query = query.Where(document => document.UploadedAt >= from.Value);
+        if (to.HasValue)
+            query = query.Where(document => document.UploadedAt < to.Value);
+
+        var total = await query.CountAsync();
+        var items = await query
+            .OrderByDescending(document => document.UploadedAt)
+            .ThenByDescending(document => document.Id)
+            .Skip((page - 1) * pageSize)
+            .Take(pageSize)
+            .Select(DocumentProjection)
+            .ToListAsync();
+
+        return (items, total);
+    }
+
+    public Task<AdminDocumentProjection?> GetDocumentDetailAsync(int id) =>
+        _ctx.Documents
+            .AsNoTracking()
+            .Where(document => document.Id == id)
+            .Select(DocumentProjection)
+            .FirstOrDefaultAsync();
+
+    public async Task<(List<AdminQuizProjection> Items, int Total)> GetQuizzesPageAsync(
+        string? search,
+        int? ownerId,
+        string? activityType,
+        string? status,
+        string deletion,
+        DateTime? from,
+        DateTime? to,
+        int page,
+        int pageSize)
+    {
+        var query = _ctx.Quizzes.AsNoTracking();
+
+        query = deletion switch
+        {
+            "Active" => query.Where(quiz => !quiz.IsDeleted),
+            "Deleted" => query.Where(quiz => quiz.IsDeleted),
+            _ => query
+        };
+
+        if (!string.IsNullOrWhiteSpace(search))
+        {
+            var loweredSearch = search.ToLower();
+            query = query.Where(quiz =>
+                quiz.Title.ToLower().Contains(loweredSearch)
+                || (quiz.Document.FileName != null
+                    && quiz.Document.FileName.ToLower().Contains(loweredSearch))
+                || quiz.Document.Owner.FullName.ToLower().Contains(loweredSearch)
+                || quiz.Document.Owner.Email.ToLower().Contains(loweredSearch));
+        }
+
+        if (ownerId.HasValue)
+            query = query.Where(quiz => quiz.Document.OwnerId == ownerId.Value);
+        if (activityType != null)
+            query = query.Where(quiz => quiz.ActivityType == activityType);
+        if (status != null)
+            query = query.Where(quiz => quiz.Status == status);
+        if (from.HasValue)
+            query = query.Where(quiz => quiz.CreatedAt >= from.Value);
+        if (to.HasValue)
+            query = query.Where(quiz => quiz.CreatedAt < to.Value);
+
+        var total = await query.CountAsync();
+        var items = await query
+            .OrderByDescending(quiz => quiz.CreatedAt)
+            .ThenByDescending(quiz => quiz.Id)
+            .Skip((page - 1) * pageSize)
+            .Take(pageSize)
+            .Select(QuizProjection)
+            .ToListAsync();
+
+        return (items, total);
+    }
+
+    public Task<AdminQuizProjection?> GetQuizDetailAsync(int id) =>
+        _ctx.Quizzes
+            .AsNoTracking()
+            .Where(quiz => quiz.Id == id)
+            .Select(QuizProjection)
+            .FirstOrDefaultAsync();
+
+    private static readonly Expression<Func<Document, AdminDocumentProjection>>
+        DocumentProjection = document => new AdminDocumentProjection
+        {
+            Id = document.Id,
+            FileName = document.FileName,
+            UploadedAt = document.UploadedAt,
+            IsDeleted = document.IsDeleted,
+            OwnerId = document.OwnerId,
+            OwnerName = document.Owner.FullName,
+            OwnerEmail = document.Owner.Email,
+            OwnerIsDeleted = document.Owner.IsDeleted,
+            QuizCount = document.Quizzes.Count(quiz =>
+                !quiz.IsDeleted && quiz.ActivityType == "Quiz"),
+            FlashcardCount = document.Quizzes.Count(quiz =>
+                !quiz.IsDeleted && quiz.ActivityType == "Flashcard")
+        };
+
+    private static readonly Expression<Func<Quiz, AdminQuizProjection>>
+        QuizProjection = quiz => new AdminQuizProjection
+        {
+            Id = quiz.Id,
+            Title = quiz.Title,
+            ActivityType = quiz.ActivityType,
+            Status = quiz.Status,
+            CreatedAt = quiz.CreatedAt,
+            IsDeleted = quiz.IsDeleted,
+            QuestionCount = quiz.Questions.Count(question => !question.IsDeleted),
+            DocumentId = quiz.DocumentId,
+            DocumentFileName = quiz.Document.FileName,
+            DocumentIsDeleted = quiz.Document.IsDeleted,
+            OwnerId = quiz.Document.OwnerId,
+            OwnerName = quiz.Document.Owner.FullName,
+            OwnerEmail = quiz.Document.Owner.Email,
+            OwnerIsDeleted = quiz.Document.Owner.IsDeleted
+        };
 
     private static int GetCount(
         IReadOnlyDictionary<string, int> counts,

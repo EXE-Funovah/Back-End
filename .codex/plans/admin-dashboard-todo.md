@@ -896,6 +896,22 @@ Admin Dashboard nên mang cảm giác vận hành, rõ ràng, scan nhanh:
 
 ### Giai đoạn 4 - Content Monitoring
 
+#### Backend Admin Content read-only API
+
+- [x] `GET /api/Admin/documents` và `GET /api/Admin/documents/{id}` chỉ trả metadata an toàn.
+  - Status: Completed
+- [x] `GET /api/Admin/quizzes` và `GET /api/Admin/quizzes/{id}` dùng chung cho Quiz/Flashcard metadata.
+  - Status: Completed
+- [x] Search/filter/date/pagination và validation HTTP 400/404.
+  - Status: Completed
+- [x] Không trả S3 key, presigned URL, question/option text hoặc correct answer.
+  - Status: Verified contract
+- [x] Chưa thêm hide/restore/retry trước khi có `Admin_Audit_Logs`.
+  - Status: Confirmed scope
+- Verification: TDD RED xác nhận contract chưa tồn tại; focused Admin tests `25/25`, full suite `173/173`,
+  Release build thành công.
+- Remaining check: smoke test bốn aggregate/projection endpoint trên SQL Server dev vì unit tests mock repository.
+
 - [ ] Tạo `AdminContentPage`.
 - [ ] Tab tài liệu.
 - [ ] Tab quiz/flashcard.

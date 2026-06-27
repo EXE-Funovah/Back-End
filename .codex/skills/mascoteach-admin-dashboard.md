@@ -135,6 +135,33 @@ Overview excludes soft-deleted users and related Documents, Quizzes, LiveSession
 PaymentOrders. AI failures, processing stalls, realtime reconnects, and quota-abuse alerts are excluded because
 the current schema has no reliable telemetry for them.
 
+### Content monitoring
+
+```http
+GET /api/Admin/documents?search=&ownerId=&deletion=Active&from=&to=&page=1&pageSize=20
+GET /api/Admin/documents/{id}
+GET /api/Admin/quizzes?search=&ownerId=&activityType=&status=&deletion=Active&from=&to=&page=1&pageSize=20
+GET /api/Admin/quizzes/{id}
+```
+
+- All four endpoints are read-only and inherit `[Authorize(Roles = "Admin")]`.
+- Document search covers file name, owner name, and owner email.
+- Quiz search covers title, source file name, owner name, and owner email.
+- `deletion` accepts `Active`, `Deleted`, or `All`, case-insensitively; default is `Active`.
+- `activityType` accepts `Quiz` or `Flashcard`, case-insensitively.
+- `status` accepts `AI_Drafted`, `Teacher_Approved`, or `Published`, case-insensitively.
+- `from` is inclusive and `to` is exclusive. `from >= to` returns HTTP 400.
+- `page < 1` becomes 1; `pageSize` outside 1 through 100 becomes 20.
+- Lists sort by content timestamp descending and then id descending.
+- Detail routes can return active or soft-deleted rows and return HTTP 404 for missing ids.
+- Document metadata includes owner metadata and active Quiz/Flashcard counts.
+- Quiz/Flashcard metadata includes source-document metadata, owner metadata, and active question count.
+- Responses never include `Document.FileUrl`, S3 keys, presigned URLs, question/option text, or correct answers.
+- Owner metadata is limited to id, name, email, and soft-delete state.
+- Repository reads use `AsNoTracking`, SQL-side filters/counts/pagination, and dedicated projections.
+- No hide, restore, retry, delete, or content-view action exists yet. Add mutations only after
+  `Admin_Audit_Logs`, dedicated request DTOs, and a reason policy are designed.
+
 ### Revenue
 
 ```http
@@ -192,6 +219,8 @@ and their soft-deleted users.
 - `AdminRevenueResponse`: recurring metrics, series, plan distribution, funnel, and Phase 2 placeholders.
 - `AdminUsersResponse`: pagination metadata, filtered total, and Admin user list items.
 - `AdminUserDetailResponse`: user-list fields plus learning and non-sensitive payment summary.
+- `AdminDocumentsResponse` / `AdminDocumentItemDto`: paginated Document operational metadata.
+- `AdminQuizzesResponse` / `AdminQuizItemDto`: paginated Quiz/Flashcard operational metadata.
 
 Keep these property names stable unless the Admin frontend is updated at the same time.
 
@@ -208,8 +237,8 @@ When changing Admin behavior, add or maintain tests for:
 - Account search, tier filter, pagination normalization, activity status, and totals.
 - Registration cannot create an Admin account.
 
-Admin User service and controller contracts have focused tests. Repository projections are not currently executed
-against a real SQL Server in the test suite; smoke-test `/api/Admin/users` and `/api/Admin/users/{id}` against the
+Admin User and Content service/controller contracts have focused tests. Repository projections are not currently
+executed against a real SQL Server in the test suite; smoke-test the Admin User and Content routes against the
 development database after deployment or when a relational integration-test fixture is added.
 
 Run:
