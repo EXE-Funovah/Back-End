@@ -15,6 +15,7 @@ public class AdminService : IAdminService
     private static readonly string[] AllowedActivityTypes = ["Quiz", "Flashcard"];
     private static readonly string[] AllowedQuizStatuses =
         ["AI_Drafted", "Teacher_Approved", "Published"];
+    private static readonly string[] AllowedSessionStatuses = ["Waiting", "Active", "Ended"];
 
     private readonly IAdminRepository _repo;
     public AdminService(IAdminRepository repo) => _repo = repo;
@@ -271,6 +272,89 @@ public class AdminService : IAdminService
         return quiz == null ? null : ToQuizItem(quiz);
     }
 
+    public async Task<AdminSessionsResponse> GetSessionsAsync(
+        string? search,
+        int? teacherId,
+        int? templateId,
+        string? status,
+        string deletion,
+        DateTime? from,
+        DateTime? to,
+        int page,
+        int pageSize)
+    {
+        var normalizedSearch = NormalizeSearch(search);
+        var normalizedStatus = NormalizeFilter(
+            status,
+            AllowedSessionStatuses,
+            "status");
+        var normalizedDeletion = NormalizeRequiredFilter(
+            deletion,
+            AllowedDeletionFilters,
+            "deletion");
+        ValidateDateRange(from, to);
+        NormalizePagination(ref page, ref pageSize);
+
+        var (items, total) = await _repo.GetSessionsPageAsync(
+            normalizedSearch,
+            teacherId,
+            templateId,
+            normalizedStatus,
+            normalizedDeletion,
+            from,
+            to,
+            page,
+            pageSize);
+
+        return new AdminSessionsResponse
+        {
+            Page = page,
+            PageSize = pageSize,
+            Total = total,
+            Items = items.Select(ToSessionItem).ToList()
+        };
+    }
+
+    public async Task<AdminSessionItemDto?> GetSessionByIdAsync(int id)
+    {
+        var session = await _repo.GetSessionDetailAsync(id);
+        return session == null ? null : ToSessionItem(session);
+    }
+
+    public async Task<AdminSessionParticipantsResponse?> GetSessionParticipantsAsync(
+        int sessionId,
+        string? search,
+        string deletion,
+        int page,
+        int pageSize)
+    {
+        var normalizedSearch = NormalizeSearch(search);
+        var normalizedDeletion = NormalizeRequiredFilter(
+            deletion,
+            AllowedDeletionFilters,
+            "deletion");
+        NormalizePagination(ref page, ref pageSize);
+
+        var session = await _repo.GetSessionDetailAsync(sessionId);
+        if (session == null) return null;
+
+        var (items, total) = await _repo.GetSessionParticipantsPageAsync(
+            sessionId,
+            normalizedSearch,
+            normalizedDeletion,
+            page,
+            pageSize);
+
+        return new AdminSessionParticipantsResponse
+        {
+            SessionId = sessionId,
+            Page = page,
+            PageSize = pageSize,
+            Total = total,
+            Items = items.Select(ToSessionParticipant).ToList()
+        };
+    }
+
     private static string? NormalizeSearch(string? search) =>
         string.IsNullOrWhiteSpace(search) ? null : search.Trim();
 
@@ -326,6 +410,40 @@ public class AdminService : IAdminService
             OwnerName = quiz.OwnerName,
             OwnerEmail = quiz.OwnerEmail,
             OwnerIsDeleted = quiz.OwnerIsDeleted
+        };
+
+    private static AdminSessionItemDto ToSessionItem(
+        AdminSessionProjection session) =>
+        new()
+        {
+            Id = session.Id,
+            GamePin = session.GamePin,
+            Status = session.Status,
+            CreatedAt = session.CreatedAt,
+            IsDeleted = session.IsDeleted,
+            TeacherId = session.TeacherId,
+            TeacherName = session.TeacherName,
+            TeacherEmail = session.TeacherEmail,
+            TeacherIsDeleted = session.TeacherIsDeleted,
+            QuizId = session.QuizId,
+            QuizTitle = session.QuizTitle,
+            QuizActivityType = session.QuizActivityType,
+            QuizIsDeleted = session.QuizIsDeleted,
+            TemplateId = session.TemplateId,
+            TemplateName = session.TemplateName,
+            TemplateIsDeleted = session.TemplateIsDeleted,
+            ParticipantCount = session.ParticipantCount
+        };
+
+    private static AdminSessionParticipantDto ToSessionParticipant(
+        AdminSessionParticipantProjection participant) =>
+        new()
+        {
+            Id = participant.Id,
+            SessionId = participant.SessionId,
+            StudentName = participant.StudentName,
+            TotalScore = participant.TotalScore,
+            IsDeleted = participant.IsDeleted
         };
 
     private static string? NormalizeFilter(

@@ -137,4 +137,68 @@ public class AdminController : BaseController
         if (result == null) return NotFound("Quiz does not exist.");
         return Ok(result);
     }
+
+    [HttpGet("sessions")]
+    public async Task<IActionResult> Sessions(
+        [FromQuery] string? search,
+        [FromQuery] int? teacherId,
+        [FromQuery] int? templateId,
+        [FromQuery] string? status,
+        [FromQuery] string deletion = "Active",
+        [FromQuery] DateTime? from = null,
+        [FromQuery] DateTime? to = null,
+        [FromQuery] int page = 1,
+        [FromQuery] int pageSize = 20)
+    {
+        try
+        {
+            return Ok(await _admin.GetSessionsAsync(
+                search,
+                teacherId,
+                templateId,
+                status,
+                deletion,
+                from,
+                to,
+                page,
+                pageSize));
+        }
+        catch (ArgumentException ex)
+        {
+            return BadRequest(ex.Message);
+        }
+    }
+
+    [HttpGet("sessions/{id:int}")]
+    public async Task<IActionResult> SessionDetail(int id)
+    {
+        var result = await _admin.GetSessionByIdAsync(id);
+        if (result == null) return NotFound("Live session does not exist.");
+        return Ok(result);
+    }
+
+    [HttpGet("sessions/{id:int}/participants")]
+    public async Task<IActionResult> SessionParticipants(
+        int id,
+        [FromQuery] string? search,
+        [FromQuery] string deletion = "Active",
+        [FromQuery] int page = 1,
+        [FromQuery] int pageSize = 20)
+    {
+        try
+        {
+            var result = await _admin.GetSessionParticipantsAsync(
+                id,
+                search,
+                deletion,
+                page,
+                pageSize);
+            if (result == null) return NotFound("Live session does not exist.");
+            return Ok(result);
+        }
+        catch (ArgumentException ex)
+        {
+            return BadRequest(ex.Message);
+        }
+    }
 }

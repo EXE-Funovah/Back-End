@@ -134,4 +134,65 @@ public class AdminControllerTests
 
         Assert.IsType<NotFoundObjectResult>(result);
     }
+
+    [Theory]
+    [InlineData("Sessions", "sessions")]
+    [InlineData("SessionDetail", "sessions/{id:int}")]
+    [InlineData("SessionParticipants", "sessions/{id:int}/participants")]
+    public void SessionReadActions_ExposeExpectedGetRoutes(
+        string actionName,
+        string expectedTemplate)
+    {
+        var action = typeof(AdminController).GetMethod(actionName);
+
+        Assert.NotNull(action);
+        var httpGet = action!.GetCustomAttribute<HttpGetAttribute>();
+        Assert.NotNull(httpGet);
+        Assert.Equal(expectedTemplate, httpGet!.Template);
+    }
+
+    [Fact]
+    public async Task Sessions_InvalidFilter_ReturnsBadRequest()
+    {
+        var service = new Mock<IAdminService>();
+        service.Setup(admin => admin.GetSessionsAsync(
+                null, null, null, "Paused", "Active", null, null, 1, 20))
+            .ThrowsAsync(new ArgumentException("Unknown status filter."));
+        var controller = new AdminController(service.Object);
+
+        var result = await controller.Sessions(
+            null, null, null, "Paused", "Active", null, null, 1, 20);
+
+        var badRequest = Assert.IsType<BadRequestObjectResult>(result);
+        Assert.Equal("Unknown status filter.", badRequest.Value);
+    }
+
+    [Fact]
+    public async Task SessionDetail_MissingSession_ReturnsNotFound()
+    {
+        var service = new Mock<IAdminService>();
+        service.Setup(admin => admin.GetSessionByIdAsync(404))
+            .ReturnsAsync((Mascoteach.Service.DTOs.Admin.AdminSessionItemDto?)null);
+        var controller = new AdminController(service.Object);
+
+        var result = await controller.SessionDetail(404);
+
+        Assert.IsType<NotFoundObjectResult>(result);
+    }
+
+    [Fact]
+    public async Task SessionParticipants_MissingSession_ReturnsNotFound()
+    {
+        var service = new Mock<IAdminService>();
+        service.Setup(admin => admin.GetSessionParticipantsAsync(
+                404, null, "Active", 1, 20))
+            .ReturnsAsync((
+                Mascoteach.Service.DTOs.Admin.AdminSessionParticipantsResponse?)null);
+        var controller = new AdminController(service.Object);
+
+        var result = await controller.SessionParticipants(
+            404, null, "Active", 1, 20);
+
+        Assert.IsType<NotFoundObjectResult>(result);
+    }
 }

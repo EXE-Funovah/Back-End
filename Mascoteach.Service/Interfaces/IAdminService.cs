@@ -33,4 +33,21 @@ public interface IAdminService
         int page,
         int pageSize);
     Task<AdminQuizItemDto?> GetQuizByIdAsync(int id);
+    Task<AdminSessionsResponse> GetSessionsAsync(
+        string? search,
+        int? teacherId,
+        int? templateId,
+        string? status,
+        string deletion,
+        DateTime? from,
+        DateTime? to,
+        int page,
+        int pageSize);
+    Task<AdminSessionItemDto?> GetSessionByIdAsync(int id);
+    Task<AdminSessionParticipantsResponse?> GetSessionParticipantsAsync(
+        int sessionId,
+        string? search,
+        string deletion,
+        int page,
+        int pageSize);
 }

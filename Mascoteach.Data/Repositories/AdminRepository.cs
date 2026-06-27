@@ -388,6 +388,111 @@ public class AdminRepository : IAdminRepository
             .Select(QuizProjection)
             .FirstOrDefaultAsync();
 
+    public async Task<(List<AdminSessionProjection> Items, int Total)> GetSessionsPageAsync(
+        string? search,
+        int? teacherId,
+        int? templateId,
+        string? status,
+        string deletion,
+        DateTime? from,
+        DateTime? to,
+        int page,
+        int pageSize)
+    {
+        var query = _ctx.LiveSessions.AsNoTracking();
+
+        query = deletion switch
+        {
+            "Active" => query.Where(session => !session.IsDeleted),
+            "Deleted" => query.Where(session => session.IsDeleted),
+            _ => query
+        };
+
+        if (!string.IsNullOrWhiteSpace(search))
+        {
+            var loweredSearch = search.ToLower();
+            query = query.Where(session =>
+                session.GamePin.ToLower().Contains(loweredSearch)
+                || session.Teacher.FullName.ToLower().Contains(loweredSearch)
+                || session.Teacher.Email.ToLower().Contains(loweredSearch)
+                || session.Quiz.Title.ToLower().Contains(loweredSearch)
+                || session.Template.Name.ToLower().Contains(loweredSearch));
+        }
+
+        if (teacherId.HasValue)
+            query = query.Where(session => session.TeacherId == teacherId.Value);
+        if (templateId.HasValue)
+            query = query.Where(session => session.TemplateId == templateId.Value);
+        if (status != null)
+            query = query.Where(session => session.Status == status);
+        if (from.HasValue)
+            query = query.Where(session => session.CreatedAt >= from.Value);
+        if (to.HasValue)
+            query = query.Where(session => session.CreatedAt < to.Value);
+
+        var total = await query.CountAsync();
+        var items = await query
+            .OrderByDescending(session => session.CreatedAt)
+            .ThenByDescending(session => session.Id)
+            .Skip((page - 1) * pageSize)
+            .Take(pageSize)
+            .Select(SessionProjection)
+            .ToListAsync();
+
+        return (items, total);
+    }
+
+    public Task<AdminSessionProjection?> GetSessionDetailAsync(int id) =>
+        _ctx.LiveSessions
+            .AsNoTracking()
+            .Where(session => session.Id == id)
+            .Select(SessionProjection)
+            .FirstOrDefaultAsync();
+
+    public async Task<(List<AdminSessionParticipantProjection> Items, int Total)>
+        GetSessionParticipantsPageAsync(
+            int sessionId,
+            string? search,
+            string deletion,
+            int page,
+            int pageSize)
+    {
+        var query = _ctx.SessionParticipants
+            .AsNoTracking()
+            .Where(participant => participant.SessionId == sessionId);
+
+        query = deletion switch
+        {
+            "Active" => query.Where(participant => !participant.IsDeleted),
+            "Deleted" => query.Where(participant => participant.IsDeleted),
+            _ => query
+        };
+
+        if (!string.IsNullOrWhiteSpace(search))
+        {
+            var loweredSearch = search.ToLower();
+            query = query.Where(participant =>
+                participant.StudentName.ToLower().Contains(loweredSearch));
+        }
+
+        var total = await query.CountAsync();
+        var items = await query
+            .OrderBy(participant => participant.Id)
+            .Skip((page - 1) * pageSize)
+            .Take(pageSize)
+            .Select(participant => new AdminSessionParticipantProjection
+            {
+                Id = participant.Id,
+                SessionId = participant.SessionId,
+                StudentName = participant.StudentName,
+                TotalScore = participant.TotalScore,
+                IsDeleted = participant.IsDeleted
+            })
+            .ToListAsync();
+
+        return (items, total);
+    }
+
     private static readonly Expression<Func<Document, AdminDocumentProjection>>
         DocumentProjection = document => new AdminDocumentProjection
         {
@@ -422,6 +527,29 @@ public class AdminRepository : IAdminRepository
             OwnerName = quiz.Document.Owner.FullName,
             OwnerEmail = quiz.Document.Owner.Email,
             OwnerIsDeleted = quiz.Document.Owner.IsDeleted
+        };
+
+    private static readonly Expression<Func<LiveSession, AdminSessionProjection>>
+        SessionProjection = session => new AdminSessionProjection
+        {
+            Id = session.Id,
+            GamePin = session.GamePin,
+            Status = session.Status,
+            CreatedAt = session.CreatedAt,
+            IsDeleted = session.IsDeleted,
+            TeacherId = session.TeacherId,
+            TeacherName = session.Teacher.FullName,
+            TeacherEmail = session.Teacher.Email,
+            TeacherIsDeleted = session.Teacher.IsDeleted,
+            QuizId = session.QuizId,
+            QuizTitle = session.Quiz.Title,
+            QuizActivityType = session.Quiz.ActivityType,
+            QuizIsDeleted = session.Quiz.IsDeleted,
+            TemplateId = session.TemplateId,
+            TemplateName = session.Template.Name,
+            TemplateIsDeleted = session.Template.IsDeleted,
+            ParticipantCount = session.SessionParticipants.Count(participant =>
+                !participant.IsDeleted)
         };
 
     private static int GetCount(

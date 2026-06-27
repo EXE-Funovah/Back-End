@@ -40,4 +40,22 @@ public interface IAdminRepository
         int page,
         int pageSize);
     Task<AdminQuizProjection?> GetQuizDetailAsync(int id);
+    Task<(List<AdminSessionProjection> Items, int Total)> GetSessionsPageAsync(
+        string? search,
+        int? teacherId,
+        int? templateId,
+        string? status,
+        string deletion,
+        DateTime? from,
+        DateTime? to,
+        int page,
+        int pageSize);
+    Task<AdminSessionProjection?> GetSessionDetailAsync(int id);
+    Task<(List<AdminSessionParticipantProjection> Items, int Total)>
+        GetSessionParticipantsPageAsync(
+            int sessionId,
+            string? search,
+            string deletion,
+            int page,
+            int pageSize);
 }

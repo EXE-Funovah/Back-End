@@ -924,6 +924,22 @@ Admin Dashboard nên mang cảm giác vận hành, rõ ràng, scan nhanh:
 
 ### Giai đoạn 5 - Sessions
 
+#### Backend Admin Sessions read-only API
+
+- [x] `GET /api/Admin/sessions` với search/filter/date/deletion/pagination.
+  - Status: Completed
+- [x] `GET /api/Admin/sessions/{id}` trả session/teacher/quiz/template metadata và participant count.
+  - Status: Completed
+- [x] `GET /api/Admin/sessions/{id}/participants` trả display name/score metadata có pagination.
+  - Status: Completed
+- [x] Không trả JS bundle, quiz content, storage fields hoặc realtime data không được lưu.
+  - Status: Verified contract
+- [x] Chưa thêm end/delete/restore trước khi có `Admin_Audit_Logs`.
+  - Status: Confirmed scope
+- Verification: TDD RED xác nhận contract chưa tồn tại; focused Admin tests `28/28`, full suite `188/188`,
+  Release build thành công.
+- Remaining check: smoke test ba projection endpoint trên SQL Server dev vì unit tests mock repository.
+
 - [ ] Tạo `AdminSessionsPage`.
 - [ ] Danh sách live sessions.
 - [ ] Search theo PIN.

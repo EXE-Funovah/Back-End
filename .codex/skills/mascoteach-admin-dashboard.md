@@ -162,6 +162,32 @@ GET /api/Admin/quizzes/{id}
 - No hide, restore, retry, delete, or content-view action exists yet. Add mutations only after
   `Admin_Audit_Logs`, dedicated request DTOs, and a reason policy are designed.
 
+### Session monitoring
+
+```http
+GET /api/Admin/sessions?search=&teacherId=&templateId=&status=&deletion=Active&from=&to=&page=1&pageSize=20
+GET /api/Admin/sessions/{id}
+GET /api/Admin/sessions/{id}/participants?search=&deletion=Active&page=1&pageSize=20
+```
+
+- All three endpoints are read-only and inherit `[Authorize(Roles = "Admin")]`.
+- Session search covers game PIN, teacher name/email, quiz title, and template name.
+- `status` accepts `Waiting`, `Active`, or `Ended`, case-insensitively.
+- `deletion` accepts `Active`, `Deleted`, or `All`, case-insensitively; default is `Active`.
+- `from` is inclusive and `to` is exclusive. `from >= to` returns HTTP 400.
+- `page < 1` becomes 1; `pageSize` outside 1 through 100 becomes 20.
+- Session lists sort by `CreatedAt` descending, then id descending.
+- Session metadata includes PIN, teacher, quiz, template, soft-delete states, and active participant-row count.
+- Detail can return active or deleted sessions and returns HTTP 404 for missing ids.
+- Participant search covers display name. Participants sort by id ascending because no join timestamp exists.
+- Participants expose display name and total score. They have no user id, so they are join rows rather than
+  verified or unique student accounts.
+- Responses omit template JS/thumbnail URLs, quiz content, storage fields, and realtime data.
+- The schema has no `ended_at`, participant join timestamp/user id, or reconnect/event history. Do not infer
+  duration, unique students, or realtime health.
+- No Admin end/delete/restore action exists yet. Add mutation endpoints only after `Admin_Audit_Logs`, dedicated
+  request DTOs, and a reason policy are designed.
+
 ### Revenue
 
 ```http
@@ -221,6 +247,9 @@ and their soft-deleted users.
 - `AdminUserDetailResponse`: user-list fields plus learning and non-sensitive payment summary.
 - `AdminDocumentsResponse` / `AdminDocumentItemDto`: paginated Document operational metadata.
 - `AdminQuizzesResponse` / `AdminQuizItemDto`: paginated Quiz/Flashcard operational metadata.
+- `AdminSessionsResponse` / `AdminSessionItemDto`: paginated session/teacher/quiz/template metadata.
+- `AdminSessionParticipantsResponse` / `AdminSessionParticipantDto`: paginated participant display-name/score
+  metadata.
 
 Keep these property names stable unless the Admin frontend is updated at the same time.
 
@@ -237,8 +266,8 @@ When changing Admin behavior, add or maintain tests for:
 - Account search, tier filter, pagination normalization, activity status, and totals.
 - Registration cannot create an Admin account.
 
-Admin User and Content service/controller contracts have focused tests. Repository projections are not currently
-executed against a real SQL Server in the test suite; smoke-test the Admin User and Content routes against the
+Admin User, Content, and Session service/controller contracts have focused tests. Repository projections are not
+currently executed against a real SQL Server in the test suite; smoke-test these Admin routes against the
 development database after deployment or when a relational integration-test fixture is added.
 
 Run:
