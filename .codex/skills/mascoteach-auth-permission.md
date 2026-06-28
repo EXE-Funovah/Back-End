@@ -29,6 +29,8 @@ description: |
 ## Endpoint access rules
 
 - Use `[Authorize]` by default for controllers/endpoints.
+- `GET /api/User` and `GET /api/User/{id}` require `[Authorize(Roles = "Admin")]`.
+- `GET /api/User/me` is the authenticated self-service read endpoint.
 - Use `[AllowAnonymous]` only for flows that must work without login:
   - `AuthController.Register`
   - `AuthController.Login`
@@ -55,7 +57,14 @@ Existing example: `DocumentService.UpdateDocumentAsync` checks `doc.OwnerId != o
 
 ## Role checks
 
-Role values are strings from the database/request, currently including `Teacher`, `Parent`, `Student`, and sometimes `Admin` in comments.
+Role values are strings from the database and currently include `Teacher`, `Parent`, `Student`, and `Admin`.
+
+- Public local registration accepts only `Student`, `Teacher`, and `Parent`, case-insensitively, then stores the
+  canonical value.
+- `Admin` is never self-registerable. Admin accounts must be provisioned manually through a controlled database
+  seed or administration process.
+- All Admin dashboard endpoints use `[Authorize(Roles = "Admin")]`; also read
+  `.codex/skills/mascoteach-admin-dashboard.md` when changing Admin behavior.
 
 When adding role restrictions:
 
@@ -72,6 +81,10 @@ When adding role restrictions:
 - Soft-deleted users must not be able to login.
 - Local users must verify email before login. If `EmailVerified == false`, return a clear message telling them to verify email first.
 - Default subscription tier is currently `Freemium`.
+- Reject registration roles other than `Student`, `Teacher`, or `Parent`; never accept `Admin` from the request.
+- `PUT /api/User/{id}` is profile-only: `UserUpdateRequest` contains only `FullName` and `Email`.
+- Never add `Role` or `SubscriptionTier` back to the profile update DTO/service. Privileged changes require
+  dedicated Admin endpoints with explicit validation and audit logs.
 - Local users have `Authenticator = "Local"` and a BCrypt `PasswordHash`.
 - Google-only users have `Authenticator = "Google"`, `PasswordHash = null`, and `GoogleSubject` set from Google `sub`.
 - If a Google-only user attempts email/password login, return a clear message telling them to sign in with Google.
@@ -141,6 +154,10 @@ When adding role restrictions:
 ## Validation checklist
 
 - Protected endpoints have `[Authorize]`.
+- Admin endpoints remain protected by `[Authorize(Roles = "Admin")]`.
+- Public registration cannot create an Admin account.
+- User collection/arbitrary-id reads are Admin-only; authenticated users read themselves through `/api/User/me`.
+- Profile update cannot change `Role` or `SubscriptionTier`, including when extra JSON fields are submitted.
 - Public endpoints have a deliberate `[AllowAnonymous]`.
 - Current user id comes from JWT, not the client body.
 - Owner-scoped operations cannot update/delete another teacher's resource.

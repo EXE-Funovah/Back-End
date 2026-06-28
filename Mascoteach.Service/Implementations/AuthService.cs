@@ -39,10 +39,21 @@ namespace Mascoteach.Service.Implementations
             _googleTokenValidator = googleTokenValidator;
         }
        
+        // Role được phép tự đăng ký. KHÔNG cho "Admin" — admin chỉ cấp thủ công
+        // (seed/super-admin), tránh leo thang quyền qua API register.
+        private static readonly HashSet<string> SelfRegisterableRoles =
+            new(StringComparer.OrdinalIgnoreCase) { "Student", "Teacher", "Parent" };
+
         public async Task<RegisterResponse?> RegisterAsync(RegisterRequest request)
         {
             var existingUser = await _userRepository.GetByEmailAsync(request.Email);
             if (existingUser != null) return null;
+
+            // Bảo mật: chỉ chấp nhận role tự đăng ký hợp lệ; chặn "Admin".
+            if (!SelfRegisterableRoles.Contains(request.Role))
+                return null;
+            var safeRole = SelfRegisterableRoles.First(
+                r => string.Equals(r, request.Role, StringComparison.OrdinalIgnoreCase));
 
             // Mã hóa mật khẩu thô thành chuỗi Hash
             string hashedPassword = BCrypt.Net.BCrypt.HashPassword(request.Password);
@@ -53,7 +64,7 @@ namespace Mascoteach.Service.Implementations
                 FullName = request.FullName,
                 Email = request.Email,
                 PasswordHash = hashedPassword, // Lưu chuỗi đã mã hóa
-                Role = request.Role,           // 'Teacher', 'Parent', 'Student', 'Admin'
+                Role = safeRole,               // chỉ Student/Teacher/Parent
                 SubscriptionTier = "Freemium",
                 CreatedAt = DateTime.Now,
                 IsDeleted = false,

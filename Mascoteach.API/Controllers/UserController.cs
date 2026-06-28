@@ -43,6 +43,7 @@ namespace Mascoteach.API.Controllers
         }
 
         // GET: api/User
+        [Authorize(Roles = "Admin")]
         [HttpGet]
         public async Task<IActionResult> GetAll()
         {
@@ -60,6 +61,7 @@ namespace Mascoteach.API.Controllers
         }
 
         // GET: api/User/{id}
+        [Authorize(Roles = "Admin")]
         [HttpGet("{id}")]
         public async Task<IActionResult> GetById(int id)
         {
