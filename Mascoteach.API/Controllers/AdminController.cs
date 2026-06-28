@@ -196,4 +196,70 @@ public class AdminController : BaseController
             return BadRequest(ex.Message);
         }
     }
+
+    [HttpGet("billing/orders")]
+    public async Task<IActionResult> BillingOrders(
+        [FromQuery] string? search,
+        [FromQuery] int? userId,
+        [FromQuery] string? status,
+        [FromQuery] string? plan,
+        [FromQuery] string deletion = "Active",
+        [FromQuery] DateTime? from = null,
+        [FromQuery] DateTime? to = null,
+        [FromQuery] int page = 1,
+        [FromQuery] int pageSize = 20)
+    {
+        try
+        {
+            return Ok(await _admin.GetBillingOrdersAsync(
+                search,
+                userId,
+                status,
+                plan,
+                deletion,
+                from,
+                to,
+                page,
+                pageSize));
+        }
+        catch (ArgumentException ex)
+        {
+            return BadRequest(ex.Message);
+        }
+    }
+
+    [HttpGet("billing/orders/{id:int}")]
+    public async Task<IActionResult> BillingOrderDetail(int id)
+    {
+        var result = await _admin.GetBillingOrderByIdAsync(id);
+        if (result == null) return NotFound("Payment order does not exist.");
+        return Ok(result);
+    }
+
+    [HttpGet("billing/webhook-events")]
+    public async Task<IActionResult> BillingWebhookEvents(
+        [FromQuery] string? search,
+        [FromQuery] bool? processed,
+        [FromQuery] bool? hasError,
+        [FromQuery] DateTime? from = null,
+        [FromQuery] DateTime? to = null,
+        [FromQuery] int page = 1,
+        [FromQuery] int pageSize = 20)
+    {
+        try
+        {
+            return Ok(await _admin.GetBillingWebhookEventsAsync(
+                search,
+                processed,
+                hasError,
+                from,
+                to,
+                page,
+                pageSize));
+        }
+        catch (ArgumentException ex)
+        {
+            return BadRequest(ex.Message);
+        }
+    }
 }

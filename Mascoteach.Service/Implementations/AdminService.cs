@@ -14,6 +14,9 @@ public class AdminService : IAdminService
     private static readonly string[] AllowedQuizStatuses =
         ["AI_Drafted", "Teacher_Approved", "Published"];
     private static readonly string[] AllowedSessionStatuses = ["Waiting", "Active", "Ended"];
+    private static readonly string[] AllowedPaymentStatuses =
+        ["Pending", "Paid", "Cancelled", "Expired", "Failed"];
+    private static readonly string[] AllowedBillingPlans = ["PRO_MONTHLY", "PRO_YEARLY"];
 
     private readonly IAdminRepository _repo;
     public AdminService(IAdminRepository repo) => _repo = repo;
@@ -314,6 +317,93 @@ public class AdminService : IAdminService
         };
     }
 
+    public async Task<AdminPaymentOrdersResponse> GetBillingOrdersAsync(
+        string? search,
+        int? userId,
+        string? status,
+        string? plan,
+        string deletion,
+        DateTime? from,
+        DateTime? to,
+        int page,
+        int pageSize)
+    {
+        var normalizedSearch = NormalizeSearch(search);
+        var normalizedStatus = NormalizeFilter(
+            status,
+            AllowedPaymentStatuses,
+            "status");
+        var normalizedPlan = NormalizeFilter(
+            plan,
+            AllowedBillingPlans,
+            "plan");
+        var normalizedDeletion = NormalizeRequiredFilter(
+            deletion,
+            AllowedDeletionFilters,
+            "deletion");
+        ValidateDateRange(from, to);
+        NormalizePagination(ref page, ref pageSize);
+
+        var (items, total) = await _repo.GetPaymentOrdersPageAsync(
+            normalizedSearch,
+            userId,
+            normalizedStatus,
+            normalizedPlan,
+            normalizedDeletion,
+            from,
+            to,
+            page,
+            pageSize);
+        var now = DateTime.UtcNow;
+
+        return new AdminPaymentOrdersResponse
+        {
+            Page = page,
+            PageSize = pageSize,
+            Total = total,
+            Items = items.Select(order => ToPaymentOrderItem(order, now)).ToList()
+        };
+    }
+
+    public async Task<AdminPaymentOrderItemDto?> GetBillingOrderByIdAsync(int id)
+    {
+        var order = await _repo.GetPaymentOrderDetailAsync(id);
+        return order == null
+            ? null
+            : ToPaymentOrderItem(order, DateTime.UtcNow);
+    }
+
+    public async Task<AdminWebhookEventsResponse> GetBillingWebhookEventsAsync(
+        string? search,
+        bool? processed,
+        bool? hasError,
+        DateTime? from,
+        DateTime? to,
+        int page,
+        int pageSize)
+    {
+        var normalizedSearch = NormalizeSearch(search);
+        ValidateDateRange(from, to);
+        NormalizePagination(ref page, ref pageSize);
+
+        var (items, total) = await _repo.GetWebhookEventsPageAsync(
+            normalizedSearch,
+            processed,
+            hasError,
+            from,
+            to,
+            page,
+            pageSize);
+
+        return new AdminWebhookEventsResponse
+        {
+            Page = page,
+            PageSize = pageSize,
+            Total = total,
+            Items = items.Select(ToWebhookEventItem).ToList()
+        };
+    }
+
     private static string? NormalizeSearch(string? search) =>
         string.IsNullOrWhiteSpace(search) ? null : search.Trim();
 
@@ -403,6 +493,49 @@ public class AdminService : IAdminService
             StudentName = participant.StudentName,
             TotalScore = participant.TotalScore,
             IsDeleted = participant.IsDeleted
+        };
+
+    private static AdminPaymentOrderItemDto ToPaymentOrderItem(
+        AdminPaymentOrderProjection order,
+        DateTime now) =>
+        new()
+        {
+            Id = order.Id,
+            UserId = order.UserId,
+            OrderCode = order.OrderCode,
+            PlanCode = order.PlanCode,
+            Amount = order.Amount,
+            Currency = order.Currency,
+            Status = order.Status,
+            Provider = order.Provider,
+            PayosReference = order.PayosReference,
+            PaidAt = order.PaidAt,
+            CancelledAt = order.CancelledAt,
+            CreatedAt = order.CreatedAt,
+            UpdatedAt = order.UpdatedAt,
+            IsDeleted = order.IsDeleted,
+            UserName = order.UserName,
+            UserEmail = order.UserEmail,
+            UserIsDeleted = order.UserIsDeleted,
+            SubscriptionTier = order.SubscriptionTier,
+            PremiumExpiresAt = order.PremiumExpiresAt,
+            IsPremiumActive =
+                order.SubscriptionTier == "Premium"
+                && order.PremiumExpiresAt != null
+                && order.PremiumExpiresAt > now
+        };
+
+    private static AdminWebhookEventItemDto ToWebhookEventItem(
+        AdminWebhookEventProjection webhook) =>
+        new()
+        {
+            Id = webhook.Id,
+            Provider = webhook.Provider,
+            OrderCode = webhook.OrderCode,
+            Reference = webhook.Reference,
+            ProcessedAt = webhook.ProcessedAt,
+            IsProcessed = webhook.IsProcessed,
+            ProcessingError = webhook.ProcessingError
         };
 
     private static string? NormalizeFilter(

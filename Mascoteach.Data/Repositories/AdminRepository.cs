@@ -457,6 +457,134 @@ public class AdminRepository : IAdminRepository
         return (items, total);
     }
 
+    public async Task<(List<AdminPaymentOrderProjection> Items, int Total)>
+        GetPaymentOrdersPageAsync(
+            string? search,
+            int? userId,
+            string? status,
+            string? plan,
+            string deletion,
+            DateTime? from,
+            DateTime? to,
+            int page,
+            int pageSize)
+    {
+        var query = _ctx.PaymentOrders.AsNoTracking();
+
+        query = deletion switch
+        {
+            "Active" => query.Where(order => !order.IsDeleted),
+            "Deleted" => query.Where(order => order.IsDeleted),
+            _ => query
+        };
+
+        if (!string.IsNullOrWhiteSpace(search))
+        {
+            var loweredSearch = search.ToLower();
+            if (long.TryParse(search, out var orderCode))
+            {
+                query = query.Where(order =>
+                    order.OrderCode == orderCode
+                    || (order.PayosReference != null
+                        && order.PayosReference.ToLower().Contains(loweredSearch))
+                    || order.User.FullName.ToLower().Contains(loweredSearch)
+                    || order.User.Email.ToLower().Contains(loweredSearch));
+            }
+            else
+            {
+                query = query.Where(order =>
+                    (order.PayosReference != null
+                        && order.PayosReference.ToLower().Contains(loweredSearch))
+                    || order.User.FullName.ToLower().Contains(loweredSearch)
+                    || order.User.Email.ToLower().Contains(loweredSearch));
+            }
+        }
+
+        if (userId.HasValue)
+            query = query.Where(order => order.UserId == userId.Value);
+        if (status != null)
+            query = query.Where(order => order.Status == status);
+        if (plan != null)
+            query = query.Where(order => order.PlanCode == plan);
+        if (from.HasValue)
+            query = query.Where(order => order.CreatedAt >= from.Value);
+        if (to.HasValue)
+            query = query.Where(order => order.CreatedAt < to.Value);
+
+        var total = await query.CountAsync();
+        var items = await query
+            .OrderByDescending(order => order.CreatedAt)
+            .ThenByDescending(order => order.Id)
+            .Skip((page - 1) * pageSize)
+            .Take(pageSize)
+            .Select(PaymentOrderProjection)
+            .ToListAsync();
+
+        return (items, total);
+    }
+
+    public Task<AdminPaymentOrderProjection?> GetPaymentOrderDetailAsync(int id) =>
+        _ctx.PaymentOrders
+            .AsNoTracking()
+            .Where(order => order.Id == id)
+            .Select(PaymentOrderProjection)
+            .FirstOrDefaultAsync();
+
+    public async Task<(List<AdminWebhookEventProjection> Items, int Total)>
+        GetWebhookEventsPageAsync(
+            string? search,
+            bool? processed,
+            bool? hasError,
+            DateTime? from,
+            DateTime? to,
+            int page,
+            int pageSize)
+    {
+        var query = _ctx.PaymentWebhookEvents.AsNoTracking();
+
+        if (!string.IsNullOrWhiteSpace(search))
+        {
+            var loweredSearch = search.ToLower();
+            if (long.TryParse(search, out var orderCode))
+            {
+                query = query.Where(webhook =>
+                    webhook.OrderCode == orderCode
+                    || (webhook.Reference != null
+                        && webhook.Reference.ToLower().Contains(loweredSearch)));
+            }
+            else
+            {
+                query = query.Where(webhook =>
+                    webhook.Reference != null
+                    && webhook.Reference.ToLower().Contains(loweredSearch));
+            }
+        }
+
+        if (processed.HasValue)
+            query = query.Where(webhook => webhook.IsProcessed == processed.Value);
+        if (hasError == true)
+            query = query.Where(webhook =>
+                webhook.ProcessingError != null && webhook.ProcessingError != "");
+        else if (hasError == false)
+            query = query.Where(webhook =>
+                webhook.ProcessingError == null || webhook.ProcessingError == "");
+        if (from.HasValue)
+            query = query.Where(webhook => webhook.ProcessedAt >= from.Value);
+        if (to.HasValue)
+            query = query.Where(webhook => webhook.ProcessedAt < to.Value);
+
+        var total = await query.CountAsync();
+        var items = await query
+            .OrderByDescending(webhook => webhook.ProcessedAt)
+            .ThenByDescending(webhook => webhook.Id)
+            .Skip((page - 1) * pageSize)
+            .Take(pageSize)
+            .Select(WebhookEventProjection)
+            .ToListAsync();
+
+        return (items, total);
+    }
+
     private static readonly Expression<Func<Document, AdminDocumentProjection>>
         DocumentProjection = document => new AdminDocumentProjection
         {
@@ -514,6 +642,42 @@ public class AdminRepository : IAdminRepository
             TemplateIsDeleted = session.Template.IsDeleted,
             ParticipantCount = session.SessionParticipants.Count(participant =>
                 !participant.IsDeleted)
+        };
+
+    private static readonly Expression<Func<PaymentOrder, AdminPaymentOrderProjection>>
+        PaymentOrderProjection = order => new AdminPaymentOrderProjection
+        {
+            Id = order.Id,
+            UserId = order.UserId,
+            OrderCode = order.OrderCode,
+            PlanCode = order.PlanCode,
+            Amount = order.Amount,
+            Currency = order.Currency,
+            Status = order.Status,
+            Provider = order.Provider,
+            PayosReference = order.PayosReference,
+            PaidAt = order.PaidAt,
+            CancelledAt = order.CancelledAt,
+            CreatedAt = order.CreatedAt,
+            UpdatedAt = order.UpdatedAt,
+            IsDeleted = order.IsDeleted,
+            UserName = order.User.FullName,
+            UserEmail = order.User.Email,
+            UserIsDeleted = order.User.IsDeleted,
+            SubscriptionTier = order.User.SubscriptionTier,
+            PremiumExpiresAt = order.User.PremiumExpiresAt
+        };
+
+    private static readonly Expression<Func<PaymentWebhookEvent, AdminWebhookEventProjection>>
+        WebhookEventProjection = webhook => new AdminWebhookEventProjection
+        {
+            Id = webhook.Id,
+            Provider = webhook.Provider,
+            OrderCode = webhook.OrderCode,
+            Reference = webhook.Reference,
+            ProcessedAt = webhook.ProcessedAt,
+            IsProcessed = webhook.IsProcessed,
+            ProcessingError = webhook.ProcessingError
         };
 
     private static int GetCount(

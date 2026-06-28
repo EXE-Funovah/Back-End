@@ -49,4 +49,23 @@ public interface IAdminService
         string deletion,
         int page,
         int pageSize);
+    Task<AdminPaymentOrdersResponse> GetBillingOrdersAsync(
+        string? search,
+        int? userId,
+        string? status,
+        string? plan,
+        string deletion,
+        DateTime? from,
+        DateTime? to,
+        int page,
+        int pageSize);
+    Task<AdminPaymentOrderItemDto?> GetBillingOrderByIdAsync(int id);
+    Task<AdminWebhookEventsResponse> GetBillingWebhookEventsAsync(
+        string? search,
+        bool? processed,
+        bool? hasError,
+        DateTime? from,
+        DateTime? to,
+        int page,
+        int pageSize);
 }
