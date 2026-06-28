@@ -995,17 +995,24 @@ Admin Dashboard nên mang cảm giác vận hành, rõ ràng, scan nhanh:
 
 - [Đã chốt] Tài khoản Admin đầu tiên đã được provision thủ công trong DB. JWT hỗ trợ role `Admin`,
   còn public register phải tiếp tục chặn tự đăng ký Admin.
-- Admin có được xem nội dung chi tiết của tài liệu/quiz không, hay chỉ metadata?
-- Có cần audit khi Admin xem nội dung riêng của giáo viên không?
-- Subscription có cho phép chỉnh thủ công không?
+- [Đã chốt MVP] Admin chỉ xem metadata của tài liệu/quiz; API hiện không trả file URL, S3 key, câu hỏi, đáp án
+  hoặc correct answer.
+- [Đã chốt MVP] Chưa có endpoint Admin xem nội dung riêng của giáo viên nên chưa phát sinh audit cho hành vi này.
+  Nếu sau này mở quyền xem content detail thì phải thiết kế audit trước.
+- [Đã chốt MVP] Không cho chỉnh subscription thủ công trong Admin read-only MVP. Nếu bổ sung sau này phải dùng
+  endpoint/DTO riêng, validation, lý do thao tác và `Admin_Audit_Logs`.
 - Quota Free/Pro hiện mới có `Plans:FreemiumActiveDocumentLimit` và đếm active documents; cần chốt quota cho quiz, flashcard, live session, AI generation.
-- Tài liệu/quiz/session/user hiện có `is_deleted`, nhưng một số endpoint delete vẫn hard-delete; cần chuẩn hóa Admin dùng soft delete hay hard delete.
+- [Đã chốt MVP] Chưa có Admin delete/hide/restore mutation. Khi bổ sung moderation sau này, Admin phải dùng
+  soft delete/restore kèm audit; không dùng hard delete cho thao tác dashboard thông thường.
 - AI generate hiện chưa có bảng log lỗi đủ chi tiết; cần chốt tạo `Content_Processing_Logs`/`Ai_Processing_Logs`.
-- Live session hiện có participants nhưng chưa có event/reconnect history; cần chốt có cần `Live_Session_Events` không.
-- Billing webhook/payment callback đã có `Payment_Webhook_Events`; cần tạo API admin để xem/search bảng này.
-- Có cần phân quyền nhiều cấp admin ngay từ đầu không?
-- Admin settings có cần chỉnh trực tiếp trên web không, hay backend vẫn dùng appsettings/config trong MVP?
-- Có cần lưu lý do khi Admin ẩn/khôi phục nội dung, chỉnh subscription, reset quota không? Nếu có, đưa vào `Admin_Audit_Logs.reason`.
+- [Đã chốt MVP] Chưa tạo `Live_Session_Events`; Admin Sessions chỉ hiển thị session/participant metadata hiện có.
+  Chỉ bổ sung event/reconnect history khi product cần giám sát realtime sâu.
+- [Đã chốt] Đã có `GET /api/Admin/billing/webhook-events` để search/filter trạng thái xử lý và xem
+  `ProcessingError`; API không trả signature hoặc raw payload.
+- [Đã chốt MVP] Chỉ dùng một role `Admin`; chưa phân cấp Owner/Support/Moderator/Billing Manager.
+- [Đã chốt MVP] Backend tiếp tục dùng appsettings/config; chưa cho Admin chỉnh settings trực tiếp trên web.
+- [Đã chốt] Mọi Admin mutation tương lai như hide/restore content, chỉnh subscription, end session hoặc reset
+  quota phải lưu lý do trong `Admin_Audit_Logs.reason`.
 
 ## Kết Luận
 
