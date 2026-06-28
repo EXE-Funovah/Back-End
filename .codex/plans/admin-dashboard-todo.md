@@ -950,6 +950,22 @@ Admin Dashboard nên mang cảm giác vận hành, rõ ràng, scan nhanh:
 
 ### Giai đoạn 6 - Billing
 
+#### Backend Admin Billing read-only API
+
+- [x] `GET /api/Admin/billing/orders` với search/filter/date/deletion/pagination.
+  - Status: Completed
+- [x] `GET /api/Admin/billing/orders/{id}` trả order/user/subscription metadata an toàn.
+  - Status: Completed
+- [x] `GET /api/Admin/billing/webhook-events` trả processed state và `ProcessingError`.
+  - Status: Completed
+- [x] Không trả checkout URL, QR, payment-link id, signature hoặc raw payload.
+  - Status: Verified contract
+- [x] Chưa thêm sync/retry/manual subscription trước khi có `Admin_Audit_Logs`.
+  - Status: Confirmed scope
+- Verification: TDD RED xác nhận contract chưa tồn tại; focused Admin tests `34/34`, full suite `203/203`,
+  Release build thành công.
+- Remaining check: smoke test ba projection endpoint trên SQL Server dev vì unit tests mock repository.
+
 #### Legacy Admin Revenue cleanup
 
 - [x] Xóa `GET /api/Admin/revenue` và vertical slice cũ không theo roadmap.

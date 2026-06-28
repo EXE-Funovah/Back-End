@@ -188,6 +188,33 @@ GET /api/Admin/sessions/{id}/participants?search=&deletion=Active&page=1&pageSiz
 - No Admin end/delete/restore action exists yet. Add mutation endpoints only after `Admin_Audit_Logs`, dedicated
   request DTOs, and a reason policy are designed.
 
+### Billing monitoring
+
+```http
+GET /api/Admin/billing/orders?search=&userId=&status=&plan=&deletion=Active&from=&to=&page=1&pageSize=20
+GET /api/Admin/billing/orders/{id}
+GET /api/Admin/billing/webhook-events?search=&processed=&hasError=&from=&to=&page=1&pageSize=20
+```
+
+- All three endpoints are read-only and inherit `[Authorize(Roles = "Admin")]`.
+- Order search covers numeric order code, PayOS reference, user name, and user email.
+- `status` accepts `Pending`, `Paid`, `Cancelled`, `Expired`, or `Failed`, case-insensitively.
+- `plan` accepts `PRO_MONTHLY` or `PRO_YEARLY`, case-insensitively.
+- `deletion` accepts `Active`, `Deleted`, or `All`, case-insensitively; default is `Active`.
+- `from` is inclusive and `to` is exclusive. `from >= to` returns HTTP 400.
+- `page < 1` becomes 1; `pageSize` outside 1 through 100 becomes 20.
+- Order lists sort by `CreatedAt` descending, then id descending.
+- Order metadata includes safe payment fields plus user/subscription metadata and canonical active-Premium state.
+- Order detail can return active or deleted orders and returns HTTP 404 for missing ids.
+- Webhook search covers numeric order code and provider reference.
+- `processed` filters `IsProcessed`; `hasError` filters presence of non-empty `ProcessingError`.
+- Webhook events sort by `ProcessedAt` descending, then id descending.
+- Stored `ProcessingError` is returned for support/debugging.
+- Orders never expose payment-link id, checkout URL, or QR code.
+- Webhook events never expose payment-link id, signature, or raw payload.
+- No sync, retry, cancellation, or manual subscription mutation exists. Add mutations only after
+  `Admin_Audit_Logs`, dedicated request DTOs, and a reason policy are designed.
+
 ## Revenue and Premium semantics
 
 `GET /api/Admin/overview` is the canonical Admin revenue-summary contract. The legacy
@@ -222,6 +249,8 @@ series covering the current month and previous 11 months.
 - `AdminSessionsResponse` / `AdminSessionItemDto`: paginated session/teacher/quiz/template metadata.
 - `AdminSessionParticipantsResponse` / `AdminSessionParticipantDto`: paginated participant display-name/score
   metadata.
+- `AdminPaymentOrdersResponse` / `AdminPaymentOrderItemDto`: paginated safe order/user/subscription metadata.
+- `AdminWebhookEventsResponse` / `AdminWebhookEventItemDto`: paginated safe webhook processing metadata.
 
 Keep these property names stable unless the Admin frontend is updated at the same time.
 
@@ -236,9 +265,9 @@ When changing Admin behavior, add or maintain tests for:
 - Account search, tier filter, pagination normalization, activity status, and totals.
 - Registration cannot create an Admin account.
 
-Admin User, Content, and Session service/controller contracts have focused tests. Repository projections are not
-currently executed against a real SQL Server in the test suite; smoke-test these Admin routes against the
-development database after deployment or when a relational integration-test fixture is added.
+Admin User, Content, Session, and Billing service/controller contracts have focused tests. Repository projections
+are not currently executed against a real SQL Server in the test suite; smoke-test these Admin routes against
+the development database after deployment or when a relational integration-test fixture is added.
 
 Run:
 

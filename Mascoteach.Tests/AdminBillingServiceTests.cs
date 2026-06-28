@@ -1,0 +1,219 @@
+using Mascoteach.Data.Interfaces;
+using Mascoteach.Data.Projections;
+using Mascoteach.Service.DTOs.Admin;
+using Mascoteach.Service.Implementations;
+using Moq;
+using Xunit;
+
+namespace Mascoteach.Tests;
+
+public class AdminBillingServiceTests
+{
+    private readonly Mock<IAdminRepository> _repo = new();
+    private readonly AdminService _sut;
+
+    public AdminBillingServiceTests()
+    {
+        _sut = new AdminService(_repo.Object);
+    }
+
+    [Fact]
+    public async Task GetBillingOrdersAsync_NormalizesFiltersAndPagination()
+    {
+        var from = new DateTime(2026, 1, 1);
+        var to = new DateTime(2026, 2, 1);
+        _repo.Setup(repository => repository.GetPaymentOrdersPageAsync(
+                "alice",
+                7,
+                "Paid",
+                "PRO_YEARLY",
+                "All",
+                from,
+                to,
+                1,
+                20))
+            .ReturnsAsync((new List<AdminPaymentOrderProjection>(), 0));
+
+        var result = await _sut.GetBillingOrdersAsync(
+            "  alice  ",
+            7,
+            "paid",
+            "pro_yearly",
+            "all",
+            from,
+            to,
+            0,
+            101);
+
+        Assert.Equal(1, result.Page);
+        Assert.Equal(20, result.PageSize);
+        _repo.VerifyAll();
+    }
+
+    [Theory]
+    [InlineData("Refunded", "PRO_MONTHLY", "Active")]
+    [InlineData("Paid", "PRO_WEEKLY", "Active")]
+    [InlineData("Paid", "PRO_MONTHLY", "Archived")]
+    public async Task GetBillingOrdersAsync_InvalidFilter_ThrowsBeforeRepositoryAccess(
+        string? status,
+        string? plan,
+        string deletion)
+    {
+        await Assert.ThrowsAsync<ArgumentException>(() =>
+            _sut.GetBillingOrdersAsync(
+                null, null, status, plan, deletion, null, null, 1, 20));
+
+        _repo.Verify(repository => repository.GetPaymentOrdersPageAsync(
+            It.IsAny<string?>(),
+            It.IsAny<int?>(),
+            It.IsAny<string?>(),
+            It.IsAny<string?>(),
+            It.IsAny<string>(),
+            It.IsAny<DateTime?>(),
+            It.IsAny<DateTime?>(),
+            It.IsAny<int>(),
+            It.IsAny<int>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task GetBillingOrdersAsync_InvalidDateRange_ThrowsBeforeRepositoryAccess()
+    {
+        var instant = new DateTime(2026, 1, 1);
+
+        await Assert.ThrowsAsync<ArgumentException>(() =>
+            _sut.GetBillingOrdersAsync(
+                null, null, null, null, "Active", instant, instant, 1, 20));
+
+        _repo.Verify(repository => repository.GetPaymentOrdersPageAsync(
+            It.IsAny<string?>(),
+            It.IsAny<int?>(),
+            It.IsAny<string?>(),
+            It.IsAny<string?>(),
+            It.IsAny<string>(),
+            It.IsAny<DateTime?>(),
+            It.IsAny<DateTime?>(),
+            It.IsAny<int>(),
+            It.IsAny<int>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task GetBillingOrdersAsync_MapsSafeMetadataAndPremiumStatus()
+    {
+        var projection = CreateOrderProjection();
+        _repo.Setup(repository => repository.GetPaymentOrdersPageAsync(
+                null, null, null, null, "Active", null, null, 1, 20))
+            .ReturnsAsync((new List<AdminPaymentOrderProjection> { projection }, 1));
+
+        var result = await _sut.GetBillingOrdersAsync(
+            null, null, null, null, "Active", null, null, 1, 20);
+
+        var item = Assert.Single(result.Items);
+        Assert.Equal(projection.OrderCode, item.OrderCode);
+        Assert.Equal(projection.PayosReference, item.PayosReference);
+        Assert.Equal(projection.UserEmail, item.UserEmail);
+        Assert.True(item.IsPremiumActive);
+        AssertNoSensitiveProperties(typeof(AdminPaymentOrderItemDto));
+    }
+
+    [Fact]
+    public async Task GetBillingOrderByIdAsync_MissingOrder_ReturnsNull()
+    {
+        _repo.Setup(repository => repository.GetPaymentOrderDetailAsync(404))
+            .ReturnsAsync((AdminPaymentOrderProjection?)null);
+
+        var result = await _sut.GetBillingOrderByIdAsync(404);
+
+        Assert.Null(result);
+    }
+
+    [Fact]
+    public async Task GetBillingWebhookEventsAsync_ForwardsFiltersAndMapsProcessingError()
+    {
+        var from = new DateTime(2026, 1, 1);
+        var to = new DateTime(2026, 2, 1);
+        var projection = new AdminWebhookEventProjection
+        {
+            Id = 5,
+            Provider = "PayOS",
+            OrderCode = 123456,
+            Reference = "REF-01",
+            ProcessedAt = new DateTime(2026, 1, 5),
+            IsProcessed = false,
+            ProcessingError = "Amount mismatch."
+        };
+        _repo.Setup(repository => repository.GetWebhookEventsPageAsync(
+                "REF-01", false, true, from, to, 1, 20))
+            .ReturnsAsync((new List<AdminWebhookEventProjection> { projection }, 1));
+
+        var result = await _sut.GetBillingWebhookEventsAsync(
+            "  REF-01  ", false, true, from, to, 0, 500);
+
+        Assert.Equal(1, result.Page);
+        Assert.Equal(20, result.PageSize);
+        var item = Assert.Single(result.Items);
+        Assert.Equal("Amount mismatch.", item.ProcessingError);
+        AssertNoSensitiveProperties(typeof(AdminWebhookEventItemDto));
+        _repo.VerifyAll();
+    }
+
+    [Fact]
+    public async Task GetBillingWebhookEventsAsync_InvalidDateRange_ThrowsBeforeRepositoryAccess()
+    {
+        var instant = new DateTime(2026, 1, 1);
+
+        await Assert.ThrowsAsync<ArgumentException>(() =>
+            _sut.GetBillingWebhookEventsAsync(
+                null, null, null, instant, instant, 1, 20));
+
+        _repo.Verify(repository => repository.GetWebhookEventsPageAsync(
+            It.IsAny<string?>(),
+            It.IsAny<bool?>(),
+            It.IsAny<bool?>(),
+            It.IsAny<DateTime?>(),
+            It.IsAny<DateTime?>(),
+            It.IsAny<int>(),
+            It.IsAny<int>()), Times.Never);
+    }
+
+    private static void AssertNoSensitiveProperties(Type dtoType)
+    {
+        var propertyNames = dtoType.GetProperties()
+            .Select(property => property.Name)
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var forbidden = new[]
+        {
+            "PaymentLinkId",
+            "CheckoutUrl",
+            "QrCode",
+            "Signature",
+            "Payload",
+            "PasswordHash",
+            "RefreshTokenHash"
+        };
+
+        Assert.DoesNotContain(forbidden, propertyNames.Contains);
+    }
+
+    private static AdminPaymentOrderProjection CreateOrderProjection() => new()
+    {
+        Id = 10,
+        UserId = 7,
+        OrderCode = 123456,
+        PlanCode = "PRO_YEARLY",
+        Amount = 1_188_000,
+        Currency = "VND",
+        Status = "Paid",
+        Provider = "PayOS",
+        PayosReference = "REF-01",
+        PaidAt = DateTime.UtcNow.AddDays(-1),
+        CancelledAt = null,
+        CreatedAt = DateTime.UtcNow.AddDays(-2),
+        UpdatedAt = DateTime.UtcNow.AddDays(-1),
+        IsDeleted = false,
+        UserName = "Alice",
+        UserEmail = "alice@example.com",
+        UserIsDeleted = false,
+        SubscriptionTier = "Premium",
+        PremiumExpiresAt = DateTime.UtcNow.AddDays(30)
+    };
+}

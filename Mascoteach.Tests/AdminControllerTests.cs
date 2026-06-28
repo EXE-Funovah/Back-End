@@ -201,4 +201,72 @@ public class AdminControllerTests
 
         Assert.IsType<NotFoundObjectResult>(result);
     }
+
+    [Theory]
+    [InlineData("BillingOrders", "billing/orders")]
+    [InlineData("BillingOrderDetail", "billing/orders/{id:int}")]
+    [InlineData("BillingWebhookEvents", "billing/webhook-events")]
+    public void BillingReadActions_ExposeExpectedGetRoutes(
+        string actionName,
+        string expectedTemplate)
+    {
+        var action = typeof(AdminController).GetMethod(actionName);
+
+        Assert.NotNull(action);
+        var httpGet = action!.GetCustomAttribute<HttpGetAttribute>();
+        Assert.NotNull(httpGet);
+        Assert.Equal(expectedTemplate, httpGet!.Template);
+    }
+
+    [Fact]
+    public async Task BillingOrders_InvalidFilter_ReturnsBadRequest()
+    {
+        var service = new Mock<IAdminService>();
+        service.Setup(admin => admin.GetBillingOrdersAsync(
+                null,
+                null,
+                "Refunded",
+                null,
+                "Active",
+                null,
+                null,
+                1,
+                20))
+            .ThrowsAsync(new ArgumentException("Unknown status filter."));
+        var controller = new AdminController(service.Object);
+
+        var result = await controller.BillingOrders(
+            null, null, "Refunded", null, "Active", null, null, 1, 20);
+
+        Assert.IsType<BadRequestObjectResult>(result);
+    }
+
+    [Fact]
+    public async Task BillingOrderDetail_MissingOrder_ReturnsNotFound()
+    {
+        var service = new Mock<IAdminService>();
+        service.Setup(admin => admin.GetBillingOrderByIdAsync(404))
+            .ReturnsAsync((Mascoteach.Service.DTOs.Admin.AdminPaymentOrderItemDto?)null);
+        var controller = new AdminController(service.Object);
+
+        var result = await controller.BillingOrderDetail(404);
+
+        Assert.IsType<NotFoundObjectResult>(result);
+    }
+
+    [Fact]
+    public async Task BillingWebhookEvents_InvalidDateRange_ReturnsBadRequest()
+    {
+        var instant = new DateTime(2026, 1, 1);
+        var service = new Mock<IAdminService>();
+        service.Setup(admin => admin.GetBillingWebhookEventsAsync(
+                null, null, null, instant, instant, 1, 20))
+            .ThrowsAsync(new ArgumentException("'from' must be earlier than 'to'."));
+        var controller = new AdminController(service.Object);
+
+        var result = await controller.BillingWebhookEvents(
+            null, null, null, instant, instant, 1, 20);
+
+        Assert.IsType<BadRequestObjectResult>(result);
+    }
 }

@@ -56,4 +56,23 @@ public interface IAdminRepository
             string deletion,
             int page,
             int pageSize);
+    Task<(List<AdminPaymentOrderProjection> Items, int Total)> GetPaymentOrdersPageAsync(
+        string? search,
+        int? userId,
+        string? status,
+        string? plan,
+        string deletion,
+        DateTime? from,
+        DateTime? to,
+        int page,
+        int pageSize);
+    Task<AdminPaymentOrderProjection?> GetPaymentOrderDetailAsync(int id);
+    Task<(List<AdminWebhookEventProjection> Items, int Total)> GetWebhookEventsPageAsync(
+        string? search,
+        bool? processed,
+        bool? hasError,
+        DateTime? from,
+        DateTime? to,
+        int page,
+        int pageSize);
 }
