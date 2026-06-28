@@ -49,6 +49,38 @@ Sau MVP mới thêm:
 - `/admin/settings`
 - `/admin/support`
 
+## Trạng Thái Đồng Bộ Backend - Frontend (2026-06-28)
+
+Roadmap này là nguồn live update chung. Khi frontend gửi todo mới, chỉ bổ sung nhu cầu backend chưa có và cập
+nhật trạng thái tích hợp; không đánh dấu backend hoàn thành chỉ dựa trên UI/mock.
+
+Đối chiếu gần nhất:
+
+- Backend đã có Admin API read-only cho Overview, Users, Documents, Quizzes, Sessions, Participants, Payment
+  Orders và Payment Webhook Events.
+- Manual smoke test qua Swagger với backend/database dev thật đã được người dùng xác nhận pass ngày 2026-06-27
+  cho toàn bộ Admin API read-only hiện có.
+- Frontend đã có route/layout/pages, `adminService.js`, và đã nối các API read-only chính; mock chỉ còn là
+  fallback/dev fixture.
+- Frontend còn phải nối search/filter/date/pagination controls thành query parameters thật.
+- `AdminOverviewResponse` đã có KPI, user/subscription/content/payment distributions và paid-revenue series.
+  Không tạo endpoint revenue riêng; frontend lấy revenue từ `GET /api/Admin/overview`.
+- `GET /api/Admin/billing/webhook-events` đã tồn tại. Không đưa lại endpoint này vào backlog.
+- Các mutation Admin, AI telemetry/retry, quota, audit, settings và support vẫn chưa có.
+- Admin user soft-delete hiện có ở legacy `PATCH /api/User/{id}/toggle-delete`, nhưng chưa có reason/audit.
+  `DELETE /api/User/{id}` là hard-delete tài khoản và không dùng cho thao tác dashboard thông thường.
+- Document/Quiz toggle-delete hiện chỉ hỗ trợ owner; `GameHub.EndGame` chỉ là realtime host flow. Chúng không
+  thay thế Admin moderation/end-session API có audit.
+
+Ưu tiên backend tiếp theo:
+
+1. `Admin_Audit_Logs` và API đọc audit.
+2. User role/subscription/status mutations có DTO riêng, reason và audit.
+3. Document/Quiz hide-restore cho Admin có reason và audit.
+4. Admin end-session và Billing sync có audit, kiểm soát race/idempotency.
+5. AI/content processing telemetry, retry và overview alerts.
+6. Quota overrides, Support Console và Settings sau khi product chốt contract.
+
 ## Module 1 - Tổng Quan Hệ Thống
 
 ### Chức năng
@@ -361,15 +393,16 @@ Dùng được cho:
 - Hoạt động học tập cơ bản.
 - Trang chi tiết user.
 
-Cần API, chưa cần bảng mới:
+Trạng thái API:
 
-- `GET /api/Admin/users`
-- `GET /api/Admin/users/{id}`
-- `PATCH /api/Admin/users/{id}/role`
-- `PATCH /api/Admin/users/{id}/subscription`
-- `PATCH /api/Admin/users/{id}/status`
+- [x] `GET /api/Admin/users`
+- [x] `GET /api/Admin/users/{id}`
+- [ ] `PATCH /api/Admin/users/{id}/role`
+- [ ] `PATCH /api/Admin/users/{id}/subscription`
+- [ ] `PATCH /api/Admin/users/{id}/status`
 
-Lưu ý: backend đã có `UserController.GetAll`, `GetById`, `Update`, `ToggleDelete`, nhưng dashboard vẫn nên có `AdminController/AdminUserService` riêng để trả thêm aggregate: document count, quiz count, flashcard count, live session count, paid order count, last active.
+Admin list/detail đã trả aggregate riêng. Legacy `UserController.ToggleDelete` có thể soft-delete user nhưng chưa có
+reason/audit nên chưa được xem là mutation contract hoàn chỉnh cho dashboard.
 
 #### Content: tài liệu, quiz, flashcard
 
@@ -390,17 +423,18 @@ Dùng được cho:
 - Xem metadata và detail ở mức support/moderation.
 - Ẩn/khôi phục bằng `is_deleted`.
 
-Cần API, chưa cần bảng mới:
+Trạng thái API:
 
-- `GET /api/Admin/content`
-- `GET /api/Admin/documents`
-- `GET /api/Admin/documents/{id}`
-- `GET /api/Admin/quizzes`
-- `GET /api/Admin/quizzes/{id}`
-- `PATCH /api/Admin/documents/{id}/hide`
-- `PATCH /api/Admin/documents/{id}/restore`
-- `PATCH /api/Admin/quizzes/{id}/hide`
-- `PATCH /api/Admin/quizzes/{id}/restore`
+- [x] `GET /api/Admin/documents`
+- [x] `GET /api/Admin/documents/{id}`
+- [x] `GET /api/Admin/quizzes`
+- [x] `GET /api/Admin/quizzes/{id}`
+- [ ] `PATCH /api/Admin/documents/{id}/hide`
+- [ ] `PATCH /api/Admin/documents/{id}/restore`
+- [ ] `PATCH /api/Admin/quizzes/{id}/hide`
+- [ ] `PATCH /api/Admin/quizzes/{id}/restore`
+
+Không tạo `GET /api/Admin/content`; frontend gộp hai nguồn Documents và Quizzes bằng adapter.
 
 Lưu ý: hiện `Document.ToggleDelete` và `Quiz.ToggleDelete` đang check owner, nên Admin API riêng cần bypass owner check nhưng bắt buộc ghi audit log.
 
@@ -424,12 +458,12 @@ Dùng được cho:
 - Xem điểm participant.
 - Thống kê số phiên theo ngày và mode.
 
-Cần API, chưa cần bảng mới:
+Trạng thái API:
 
-- `GET /api/Admin/sessions`
-- `GET /api/Admin/sessions/{id}`
-- `GET /api/Admin/sessions/{id}/participants`
-- `POST /api/Admin/sessions/{id}/end`
+- [x] `GET /api/Admin/sessions`
+- [x] `GET /api/Admin/sessions/{id}`
+- [x] `GET /api/Admin/sessions/{id}/participants`
+- [ ] `POST /api/Admin/sessions/{id}/end`
 
 Thiếu dữ liệu nếu muốn giám sát realtime sâu:
 
@@ -454,16 +488,16 @@ Dùng được cho:
 - Tra lỗi webhook.
 - Phát hiện đơn đã paid nhưng user chưa được Premium.
 
-Cần API, chưa cần bảng mới:
+Trạng thái API:
 
-- `GET /api/Admin/billing/orders`
-- `GET /api/Admin/billing/orders/{id}`
-- `GET /api/Admin/billing/revenue`
-- `GET /api/Admin/billing/webhook-events`
-- `POST /api/Admin/billing/orders/{orderCode}/sync`
-- `PATCH /api/Admin/billing/users/{userId}/subscription`
+- [x] `GET /api/Admin/billing/orders`
+- [x] `GET /api/Admin/billing/orders/{id}`
+- [x] `GET /api/Admin/billing/webhook-events`
+- [x] Revenue summary và paid series trong `GET /api/Admin/overview`
+- [ ] `POST /api/Admin/billing/orders/{orderCode}/sync`
+- [ ] `PATCH /api/Admin/billing/users/{userId}/subscription`
 
-Lưu ý: backend đã có `BillingController` cho flow người dùng, nhưng chưa có endpoint admin để xem toàn bộ orders hoặc webhook events.
+Không tạo lại revenue endpoint riêng. Billing mutations vẫn cần DTO riêng, reason, audit và xử lý race với webhook.
 
 ### Nên thêm table mới
 
@@ -644,7 +678,8 @@ Tuy nhiên nếu muốn có lịch sử lỗi/retry nhiều lần thì vẫn nê
 
 ## Backend/API Cần Bổ Sung
 
-Nếu backend hiện chưa có API admin tổng hợp, nên thêm các endpoint riêng để tránh frontend phải gọi quá nhiều API lẻ.
+Trạng thái dưới đây đã được đối chiếu trực tiếp với `AdminController`, `IAdminService`, `AdminService`,
+`IAdminRepository`, `AdminRepository`, DTOs và schema backend ngày 2026-06-28.
 
 Ưu tiên triển khai API trước khi thêm nhiều bảng mới. Với schema hiện tại, MVP có thể query trực tiếp từ các bảng đang có:
 
@@ -661,92 +696,97 @@ Các bảng nên thêm trước khi bật thao tác admin thật:
 
 ### Overview
 
-- `GET /api/Admin/overview`
-- `GET /api/Admin/overview/growth`
-- `GET /api/Admin/overview/alerts`
+- [x] `GET /api/Admin/overview?range=7d|30d|12m`
+- [ ] `GET /api/Admin/overview/growth` chỉ khi frontend cần time-series growth ngoài KPI delta hiện có.
+- [ ] `GET /api/Admin/overview/alerts` sau khi có telemetry AI/realtime/quota/billing đáng tin cậy.
 
 ### Users
 
-- `GET /api/Admin/users`
-- `GET /api/Admin/users/{id}`
-- `PATCH /api/Admin/users/{id}/role`
-- `PATCH /api/Admin/users/{id}/subscription`
-- `PATCH /api/Admin/users/{id}/status`
-- `DELETE /api/Admin/users/{id}`
+- [x] `GET /api/Admin/users`
+- [x] `GET /api/Admin/users/{id}`
+- [ ] `PATCH /api/Admin/users/{id}/role`
+- [ ] `PATCH /api/Admin/users/{id}/subscription`
+- [ ] `PATCH /api/Admin/users/{id}/status`
+- [ ] Thiết kế soft-delete/restore Admin route có audit; không dùng hard-delete cho dashboard thông thường.
 
 ### Content
 
-- `GET /api/Admin/documents`
-- `GET /api/Admin/documents/{id}`
-- `PATCH /api/Admin/documents/{id}/hide`
-- `PATCH /api/Admin/documents/{id}/restore`
-- `POST /api/Admin/documents/{id}/retry-processing`
-- `GET /api/Admin/quizzes`
-- `GET /api/Admin/quizzes/{id}`
-- `PATCH /api/Admin/quizzes/{id}/hide`
-- `PATCH /api/Admin/quizzes/{id}/restore`
-- `POST /api/Admin/quizzes/{id}/retry-generation`
+- [x] `GET /api/Admin/documents`
+- [x] `GET /api/Admin/documents/{id}`
+- [x] `GET /api/Admin/quizzes`
+- [x] `GET /api/Admin/quizzes/{id}`
+- [ ] `PATCH /api/Admin/documents/{id}/hide`
+- [ ] `PATCH /api/Admin/documents/{id}/restore`
+- [ ] `POST /api/Admin/documents/{id}/retry-processing`
+- [ ] `PATCH /api/Admin/quizzes/{id}/hide`
+- [ ] `PATCH /api/Admin/quizzes/{id}/restore`
+- [ ] `POST /api/Admin/quizzes/{id}/retry-generation`
 
 ### Sessions
 
-- `GET /api/Admin/sessions`
-- `GET /api/Admin/sessions/{id}`
-- `POST /api/Admin/sessions/{id}/end`
-- `GET /api/Admin/sessions/{id}/participants`
-- `GET /api/Admin/sessions/{id}/events`
+- [x] `GET /api/Admin/sessions`
+- [x] `GET /api/Admin/sessions/{id}`
+- [x] `GET /api/Admin/sessions/{id}/participants`
+- [ ] `POST /api/Admin/sessions/{id}/end`
+- [ ] `GET /api/Admin/sessions/{id}/events` sau khi có `Live_Session_Events`.
 
 ### Billing
 
-- `GET /api/Admin/billing/orders`
-- `GET /api/Admin/billing/orders/{id}`
-- `GET /api/Admin/billing/webhook-events`
-- `POST /api/Admin/billing/orders/{id}/sync`
-- `PATCH /api/Admin/billing/users/{userId}/subscription`
-- `GET /api/Admin/billing/revenue`
+- [x] `GET /api/Admin/billing/orders`
+- [x] `GET /api/Admin/billing/orders/{id}`
+- [x] `GET /api/Admin/billing/webhook-events`
+- [x] Revenue summary và 12-month paid series qua `GET /api/Admin/overview`.
+- [ ] `POST /api/Admin/billing/orders/{id}/sync`
+- [ ] `PATCH /api/Admin/billing/users/{userId}/subscription`
 
 ### AI Usage & Quota
 
-- `GET /api/Admin/ai-usage`
-- `GET /api/Admin/ai-usage/errors`
-- `GET /api/Admin/quota/users/{userId}`
-- `PATCH /api/Admin/quota/users/{userId}`
-- `POST /api/Admin/quota/users/{userId}/reset`
+- [ ] `GET /api/Admin/ai-usage`
+- [ ] `GET /api/Admin/ai-usage/errors`
+- [ ] `GET /api/Admin/quota/users/{userId}`
+- [ ] `PATCH /api/Admin/quota/users/{userId}`
+- [ ] `POST /api/Admin/quota/users/{userId}/reset`
 
 ### Audit
 
-- `GET /api/Admin/audit-logs`
-- `GET /api/Admin/audit-logs/{id}`
+- [ ] `GET /api/Admin/audit-logs`
+- [ ] `GET /api/Admin/audit-logs/{id}`
 
 ### Settings
 
-- `GET /api/Admin/settings`
-- `PATCH /api/Admin/settings/{key}`
-- `GET /api/Admin/settings/history`
+- [ ] `GET /api/Admin/settings`
+- [ ] `PATCH /api/Admin/settings/{key}`
+- [ ] `GET /api/Admin/settings/history`
 
 ### Support
 
-- `GET /api/Admin/support/search?q=`
-- `GET /api/Admin/support/users/{userId}/timeline`
-- `POST /api/Admin/support/notes`
+- [ ] `GET /api/Admin/support/search?q=`
+- [ ] `GET /api/Admin/support/users/{userId}/timeline`
+- [ ] `POST /api/Admin/support/notes`
 
 ## Frontend Việc Cần Làm
 
 ### Routing
 
-- Tạo route `/admin`.
-- Tạo nested routes:
+- [x] Tạo route `/admin`.
+- [x] Tạo nested routes:
   - `/admin`
   - `/admin/users`
+  - `/admin/users/:userId`
   - `/admin/content`
+  - `/admin/content/:contentId`
   - `/admin/sessions`
+  - `/admin/sessions/:sessionId`
   - `/admin/billing`
   - `/admin/ai-usage`
+  - `/admin/support`
   - `/admin/audit-logs`
   - `/admin/settings`
 
 ### Auth/Role
 
-- Cập nhật `ProtectedRoute` để hỗ trợ role `Admin`.
+- [x] Route production dùng `ProtectedRoute` với role `Admin`.
+- [x] Frontend có local/dev bypass để xem UI khi chưa có account; bypass không được ảnh hưởng production.
 - Route admin dùng:
 
 ```jsx
@@ -757,10 +797,10 @@ Các bảng nên thêm trước khi bật thao tác admin thật:
 
 ### Layout
 
-- Tạo `AdminLayout`.
-- Tạo `AdminSidebar`.
-- Tạo `AdminHeader`.
-- Tạo component shared:
+- [x] Tạo `AdminLayout`.
+- [x] Tạo `AdminSidebar`.
+- [x] Tạo header/search/user cluster.
+- [x] Tạo component shared:
   - `AdminStatCard`
   - `AdminDataTable`
   - `AdminFilterBar`
@@ -773,21 +813,25 @@ Các bảng nên thêm trước khi bật thao tác admin thật:
 
 Tạo service riêng:
 
-- `src/services/adminService.js`
+- [x] `src/services/adminService.js`
 
 Nên gom các API admin vào đây thay vì rải trong từng page.
 
 ### Pages
 
-- `src/pages/admin/AdminOverviewPage.jsx`
-- `src/pages/admin/AdminUsersPage.jsx`
-- `src/pages/admin/AdminUserDetailPage.jsx`
-- `src/pages/admin/AdminContentPage.jsx`
-- `src/pages/admin/AdminSessionsPage.jsx`
-- `src/pages/admin/AdminBillingPage.jsx`
-- `src/pages/admin/AdminAiUsagePage.jsx`
-- `src/pages/admin/AdminAuditLogsPage.jsx`
-- `src/pages/admin/AdminSettingsPage.jsx`
+- [x] Các trang hiện nằm chung trong `src/pages/admin/AdminPages.jsx`.
+- [x] `AdminOverviewPage`
+- [x] `AdminUsersPage` và `AdminUserDetailPage`
+- [x] `AdminContentPage` và `AdminContentDetailPage`
+- [x] `AdminSessionsPage` và `AdminSessionDetailPage`
+- [x] `AdminBillingPage`
+- [x] `AdminAiUsagePage`
+- [x] `AdminSupportPage`
+- [x] `AdminAuditLogsPage`
+- [x] `AdminSettingsPage`
+- [x] Overview, Users, Content và Sessions đã dùng `adminService.js`; mock là fallback/dev fixture.
+- [ ] Tách file theo page nếu `AdminPages.jsx` tiếp tục lớn.
+- [ ] Nối toàn bộ search/filter/date/pagination controls thành query parameters thật.
 
 ## UI/UX Đề Xuất
 
@@ -823,25 +867,27 @@ Admin Dashboard nên mang cảm giác vận hành, rõ ràng, scan nhanh:
 
 ### Giai đoạn 0 - Backend schema/API audit
 
-- [ ] Xác nhận backend dùng schema trong `D:\Projects\Back-End\Mascoteach.Data\Models\MascoteachDbContext.cs`.
-- [ ] Tạo `AdminController` hoặc nhóm controller `AdminUsersController`, `AdminContentController`, `AdminBillingController`.
-- [ ] Tạo service đọc aggregate trực tiếp từ bảng hiện có, tránh frontend gọi nhiều API lẻ.
-- [ ] Tạo DTO riêng cho admin list/detail để trả count, owner, status, timestamps.
+- [x] Xác nhận backend dùng schema hiện có và chưa cần bảng mới cho các API Admin read-only.
+- [x] Tạo `AdminController` với `[Authorize(Roles = "Admin")]`.
+- [x] Tạo service/repository đọc aggregate trực tiếp từ bảng hiện có.
+- [x] Tạo DTO riêng cho Admin list/detail để trả count, owner, status và timestamps.
+- [x] Đăng ký `IAdminRepository` và `IAdminService` trong DI.
 - [ ] Thêm bảng `Admin_Audit_Logs` trước khi bật thao tác thay đổi dữ liệu.
 - [ ] Thêm bảng `Admin_Settings` nếu muốn chỉnh hạn mức/tính năng/ngưỡng cảnh báo từ dashboard.
 - [ ] Thêm bảng `Content_Processing_Logs` hoặc `Ai_Processing_Logs` nếu muốn hiển thị lỗi AI/retry/duration/token/cost.
-- [ ] Chưa cần thêm bảng mới cho overview cards, users, documents, quizzes, sessions, billing orders.
-- [ ] Chưa cần thêm bảng `Billing_Plans` nếu gói Pro vẫn cố định trong `BillingService`.
-- [ ] Chưa cần thêm bảng `Live_Session_Events` trong MVP nếu chỉ xem session và participants.
+- [x] Chưa cần thêm bảng mới cho overview cards, users, documents, quizzes, sessions và billing orders.
+- [x] Chưa cần thêm bảng `Billing_Plans` nếu gói Pro vẫn cố định trong `BillingService`.
+- [x] Chưa cần thêm bảng `Live_Session_Events` trong MVP nếu chỉ xem session và participants.
 
 ### Giai đoạn 1 - Nền admin
 
-- [ ] Thêm role `Admin` vào luồng phân quyền nếu backend/frontend chưa hỗ trợ.
-- [ ] Tạo route `/admin`.
-- [ ] Tạo `AdminLayout`.
-- [ ] Tạo `AdminSidebar`.
-- [ ] Tạo `adminService.js`.
-- [ ] Tạo shared table/card/status components.
+- [x] Backend và frontend hỗ trợ role `Admin`; public registration không thể tự tạo Admin.
+- [x] Tạo route `/admin` và các route detail.
+- [x] Tạo `AdminLayout`, sidebar và header.
+- [x] Tạo `adminService.js`.
+- [x] Tạo shared table/card/status/action components.
+- [x] Nối các API read-only chính vào frontend với loading/error/fallback state.
+- [ ] Nối search/filter/date/pagination controls thành query parameters thật trên từng trang.
 
 ### Giai đoạn 2 - Overview
 
@@ -857,15 +903,13 @@ Admin Dashboard nên mang cảm giác vận hành, rõ ràng, scan nhanh:
 - [x] Không đưa AI/realtime/quota alerts vào response khi chưa có telemetry.
   - Status: Confirmed scope
 - Verification: focused Overview/Admin Controller tests `10/10`, full suite `153/153`, Release build thành công.
-- Remaining check: smoke test aggregate queries trên SQL Server dev vì unit tests hiện mock repository.
+- Manual verification: Swagger smoke test trên SQL Server dev đã được xác nhận pass ngày 2026-06-27.
 
-- [ ] Tạo `AdminOverviewPage`.
-- [ ] Hiển thị user count.
-- [ ] Hiển thị document count.
-- [ ] Hiển thị quiz/flashcard count.
-- [ ] Hiển thị live session count.
-- [ ] Hiển thị Pro/Free count.
-- [ ] Hiển thị alerts cơ bản.
+- [x] Tạo `AdminOverviewPage` và nối `GET /api/Admin/overview`.
+- [x] Map KPI cards và `paidRevenueSeries`.
+- [ ] Map `contentTotals`, `userDistribution`, `subscriptionDistribution` và `paymentStatusDistribution` thành
+  chart/phân bố riêng nếu product cần.
+- [ ] Chỉ hiển thị alerts AI/realtime/quota sau khi backend có telemetry đáng tin cậy.
 
 ### Giai đoạn 3 - Users
 
@@ -883,14 +927,12 @@ Admin Dashboard nên mang cảm giác vận hành, rõ ràng, scan nhanh:
 - [x] Chưa thêm role/subscription/status mutation trước khi có `Admin_Audit_Logs`.
   - Status: Confirmed scope
 - Verification: focused Admin tests `10/10`, full suite `147/147`, solution build thành công.
-- Remaining check: smoke test EF projection trên SQL Server dev vì unit tests hiện mock repository.
+- Manual verification: Swagger smoke test trên SQL Server dev đã được xác nhận pass ngày 2026-06-27.
 
-- [ ] Tạo `AdminUsersPage`.
-- [ ] Hiển thị danh sách user.
-- [ ] Search theo tên/email.
-- [ ] Filter role.
-- [ ] Filter subscription.
-- [ ] Xem detail user.
+- [x] Tạo `AdminUsersPage` và `AdminUserDetailPage`.
+- [x] Nối danh sách, pagination và detail aggregate với Admin API.
+- [x] Danh sách content/session của user dùng `ownerId` hoặc `teacherId` trên các Admin API hiện có.
+- [ ] Nối search, role và subscription controls thành query parameters thật.
 - [ ] Cập nhật role nếu backend hỗ trợ.
 - [ ] Cập nhật subscription nếu backend hỗ trợ.
 
@@ -910,15 +952,12 @@ Admin Dashboard nên mang cảm giác vận hành, rõ ràng, scan nhanh:
   - Status: Confirmed scope
 - Verification: TDD RED xác nhận contract chưa tồn tại; focused Admin tests `25/25`, full suite `173/173`,
   Release build thành công.
-- Remaining check: smoke test bốn aggregate/projection endpoint trên SQL Server dev vì unit tests mock repository.
+- Manual verification: Swagger smoke test trên SQL Server dev đã được xác nhận pass ngày 2026-06-27.
 
-- [ ] Tạo `AdminContentPage`.
-- [ ] Tab tài liệu.
-- [ ] Tab quiz/flashcard.
-- [ ] Filter theo owner.
-- [ ] Filter theo trạng thái.
-- [ ] Filter theo ngày tạo.
-- [ ] Xem metadata.
+- [x] Tạo `AdminContentPage` và `AdminContentDetailPage`.
+- [x] Nối danh sách/detail Documents và Quizzes/Flashcards với các Admin API riêng.
+- [x] Không dùng endpoint mock `/api/Admin/content`.
+- [ ] Nối `ownerId`, `deletion`, `from`, `to`, `activityType` và `status` thành query parameters thật.
 - [ ] Retry processing/generation nếu backend hỗ trợ.
 - [ ] Hide/delete/restore nếu backend hỗ trợ.
 
@@ -938,14 +977,12 @@ Admin Dashboard nên mang cảm giác vận hành, rõ ràng, scan nhanh:
   - Status: Confirmed scope
 - Verification: TDD RED xác nhận contract chưa tồn tại; focused Admin tests `28/28`, full suite `188/188`,
   Release build thành công.
-- Remaining check: smoke test ba projection endpoint trên SQL Server dev vì unit tests mock repository.
+- Manual verification: Swagger smoke test trên SQL Server dev đã được xác nhận pass ngày 2026-06-27.
 
-- [ ] Tạo `AdminSessionsPage`.
-- [ ] Danh sách live sessions.
-- [ ] Search theo PIN.
-- [ ] Filter trạng thái.
-- [ ] Filter game mode.
-- [ ] Xem participants.
+- [x] Tạo `AdminSessionsPage` và `AdminSessionDetailPage`.
+- [x] Nối danh sách/detail session và participants với Admin API.
+- [x] Không gọi endpoint mock `/api/Admin/sessions/{id}/events`.
+- [ ] Nối search/PIN, status, teacherId, templateId, deletion, from và to thành query parameters thật.
 - [ ] Kết thúc session nếu backend hỗ trợ.
 
 ### Giai đoạn 6 - Billing
@@ -964,7 +1001,7 @@ Admin Dashboard nên mang cảm giác vận hành, rõ ràng, scan nhanh:
   - Status: Confirmed scope
 - Verification: TDD RED xác nhận contract chưa tồn tại; focused Admin tests `34/34`, full suite `203/203`,
   Release build thành công.
-- Remaining check: smoke test ba projection endpoint trên SQL Server dev vì unit tests mock repository.
+- Manual verification: Swagger smoke test trên SQL Server dev đã được xác nhận pass ngày 2026-06-27.
 
 #### Legacy Admin Revenue cleanup
 
@@ -974,22 +1011,25 @@ Admin Dashboard nên mang cảm giác vận hành, rõ ràng, scan nhanh:
   - Status: Verified unchanged
 - Verification: regression test RED/GREEN; full suite `188/188`, Release build thành công.
 
-- [ ] Tạo `AdminBillingPage`.
-- [ ] Danh sách orders.
-- [ ] Filter trạng thái payment.
-- [ ] Filter plan.
-- [ ] Revenue summary.
+- [x] Tạo `AdminBillingPage`.
+- [x] Nối orders và webhook events với Admin Billing API.
+- [x] Lấy revenue summary từ `GET /api/Admin/overview`; không gọi revenue endpoint cũ.
+- [ ] Nối search, userId, status, plan, deletion, from và to thành query parameters thật.
 - [ ] Sync order nếu backend hỗ trợ.
 - [ ] Update subscription thủ công nếu backend hỗ trợ.
 
 ### Giai đoạn 7 - Sau MVP
 
-- [ ] AI Usage page.
-- [ ] Quota management.
-- [ ] Audit logs.
-- [ ] Support console.
-- [ ] Admin settings.
-- [ ] Feature flags.
+- [x] Frontend có UI mock cho AI Usage.
+- [x] Frontend có UI mock cho Support Console.
+- [x] Frontend có UI mock cho Audit Logs.
+- [x] Frontend có UI mock cho Admin Settings.
+- [ ] Backend tạo `Admin_Audit_Logs` và audit read API trước khi bật mutation.
+- [ ] Backend tạo processing/AI logs trước khi nối AI Usage và retry thật.
+- [ ] Backend tạo quota API trước khi bật quota management.
+- [ ] Backend tạo support timeline/notes nếu Support Console cần dữ liệu bền vững.
+- [ ] Backend tạo settings schema/API nếu product cho phép chỉnh settings từ web.
+- [ ] Chốt feature flags dùng DB settings hay deployment config.
 
 ## Câu Hỏi Cần Chốt Với Backend/Product
 
