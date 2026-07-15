@@ -74,7 +74,7 @@ nhật trạng thái tích hợp; không đánh dấu backend hoàn thành chỉ
 
 Ưu tiên backend tiếp theo:
 
-1. `Admin_Audit_Logs` và API đọc audit.
+1. [Hoàn tất 2026-07-15] `Admin_Audit_Logs` và API đọc audit.
 2. User role/subscription/status mutations có DTO riêng, reason và audit.
 3. Document/Quiz hide-restore cho Admin có reason và audit.
 4. Admin end-session và Billing sync có audit, kiểm soát race/idempotency.
@@ -503,6 +503,17 @@ Không tạo lại revenue endpoint riêng. Billing mutations vẫn cần DTO ri
 
 #### 1. `Admin_Audit_Logs` - bắt buộc cho Admin Dashboard
 
+- Status: Completed (2026-07-15)
+- Schema đã chốt: audit log append-only, không có `is_deleted`; `actor_user_id` nullable với `ON DELETE SET NULL`,
+  `actor_email` là snapshot, `target_id` dùng chuỗi và `reason` bắt buộc.
+- Rollout: `Database/admin_audit_logs_rollout.sql` đã chạy thành công trên development DB và model/DbContext đã
+  scaffold DB-first. Production DB chưa rollout.
+- Read API đã hoàn tất qua module riêng `AdminAuditController -> IAdminAuditService/IAdminAuditWriter ->
+  AdminAuditService -> IAdminAuditLogRepository -> AdminAuditLogRepository`.
+- Focused Audit tests `12/12`, full suite `218/218` và solution build đã pass.
+- Manual Swagger smoke test `GET /api/Admin/audit-logs?page=1&pageSize=20` với Admin JWT và development DB thật
+  trả HTTP 200, `total: 0`, `items: []` ngày 2026-07-15.
+
 Lý do:
 
 - Admin có quyền đổi role, đổi subscription, ẩn/khôi phục nội dung, kết thúc phiên, reset quota.
@@ -749,8 +760,14 @@ Các bảng nên thêm trước khi bật thao tác admin thật:
 
 ### Audit
 
-- [ ] `GET /api/Admin/audit-logs`
-- [ ] `GET /api/Admin/audit-logs/{id}`
+- [x] `GET /api/Admin/audit-logs`
+  - Search theo actor email, action, target type/id và reason.
+  - Filter theo `actorUserId`, `action`, `targetType`, `riskLevel`, `from`, `to`; có pagination và validation.
+  - List không trả `beforeJson`, `afterJson` hoặc `userAgent`.
+- [x] `GET /api/Admin/audit-logs/{id}`
+  - Detail trả snapshot JSON và user agent; id không tồn tại trả HTTP 404.
+  - Cả hai route yêu cầu role `Admin`.
+  - Manual Swagger smoke test list trên development DB trả HTTP 200 ngày 2026-07-15.
 
 ### Settings
 
@@ -872,7 +889,9 @@ Admin Dashboard nên mang cảm giác vận hành, rõ ràng, scan nhanh:
 - [x] Tạo service/repository đọc aggregate trực tiếp từ bảng hiện có.
 - [x] Tạo DTO riêng cho Admin list/detail để trả count, owner, status và timestamps.
 - [x] Đăng ký `IAdminRepository` và `IAdminService` trong DI.
-- [ ] Thêm bảng `Admin_Audit_Logs` trước khi bật thao tác thay đổi dữ liệu.
+- [x] Thêm bảng `Admin_Audit_Logs` trước khi bật thao tác thay đổi dữ liệu.
+  - Development rollout và DB-first scaffold hoàn tất ngày 2026-07-15; production rollout còn chờ.
+  - Bảng append-only, không có `is_deleted`; actor FK dùng `ON DELETE SET NULL` và giữ snapshot email.
 - [ ] Thêm bảng `Admin_Settings` nếu muốn chỉnh hạn mức/tính năng/ngưỡng cảnh báo từ dashboard.
 - [ ] Thêm bảng `Content_Processing_Logs` hoặc `Ai_Processing_Logs` nếu muốn hiển thị lỗi AI/retry/duration/token/cost.
 - [x] Chưa cần thêm bảng mới cho overview cards, users, documents, quizzes, sessions và billing orders.
@@ -1024,7 +1043,9 @@ Admin Dashboard nên mang cảm giác vận hành, rõ ràng, scan nhanh:
 - [x] Frontend có UI mock cho Support Console.
 - [x] Frontend có UI mock cho Audit Logs.
 - [x] Frontend có UI mock cho Admin Settings.
-- [ ] Backend tạo `Admin_Audit_Logs` và audit read API trước khi bật mutation.
+- [x] Backend tạo `Admin_Audit_Logs` và audit read API trước khi bật mutation.
+  - Có `IAdminAuditWriter` nội bộ để các Admin mutation tương lai ghi log bắt buộc.
+  - Verification: focused `12/12`, full suite `218/218`, solution build pass.
 - [ ] Backend tạo processing/AI logs trước khi nối AI Usage và retry thật.
 - [ ] Backend tạo quota API trước khi bật quota management.
 - [ ] Backend tạo support timeline/notes nếu Support Console cần dữ liệu bền vững.

@@ -11,6 +11,8 @@ public partial class MascoteachDbContext : DbContext
     {
     }
 
+    public virtual DbSet<AdminAuditLog> AdminAuditLogs { get; set; }
+
     public virtual DbSet<Document> Documents { get; set; }
 
     public virtual DbSet<GameTemplate> GameTemplates { get; set; }
@@ -37,6 +39,60 @@ public partial class MascoteachDbContext : DbContext
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
+        modelBuilder.Entity<AdminAuditLog>(entity =>
+        {
+            entity.ToTable("Admin_Audit_Logs");
+
+            entity.HasIndex(e => new { e.Action, e.CreatedAt, e.Id }, "IX_AdminAuditLogs_Action_CreatedAt").IsDescending(false, true, true);
+
+            entity.HasIndex(e => new { e.ActorUserId, e.CreatedAt, e.Id }, "IX_AdminAuditLogs_Actor_CreatedAt").IsDescending(false, true, true);
+
+            entity.HasIndex(e => new { e.CreatedAt, e.Id }, "IX_AdminAuditLogs_CreatedAt").IsDescending();
+
+            entity.HasIndex(e => new { e.TargetType, e.TargetId, e.CreatedAt, e.Id }, "IX_AdminAuditLogs_Target_CreatedAt").IsDescending(false, false, true, true);
+
+            entity.Property(e => e.Id).HasColumnName("id");
+            entity.Property(e => e.Action)
+                .HasMaxLength(100)
+                .IsUnicode(false)
+                .HasColumnName("action");
+            entity.Property(e => e.ActorEmail)
+                .HasMaxLength(255)
+                .HasColumnName("actor_email");
+            entity.Property(e => e.ActorUserId).HasColumnName("actor_user_id");
+            entity.Property(e => e.AfterJson).HasColumnName("after_json");
+            entity.Property(e => e.BeforeJson).HasColumnName("before_json");
+            entity.Property(e => e.CreatedAt)
+                .HasDefaultValueSql("(sysutcdatetime())")
+                .HasColumnName("created_at");
+            entity.Property(e => e.IpAddress)
+                .HasMaxLength(45)
+                .IsUnicode(false)
+                .HasColumnName("ip_address");
+            entity.Property(e => e.Reason)
+                .HasMaxLength(500)
+                .HasColumnName("reason");
+            entity.Property(e => e.RiskLevel)
+                .HasMaxLength(20)
+                .IsUnicode(false)
+                .HasColumnName("risk_level");
+            entity.Property(e => e.TargetId)
+                .HasMaxLength(100)
+                .HasColumnName("target_id");
+            entity.Property(e => e.TargetType)
+                .HasMaxLength(50)
+                .IsUnicode(false)
+                .HasColumnName("target_type");
+            entity.Property(e => e.UserAgent)
+                .HasMaxLength(512)
+                .HasColumnName("user_agent");
+
+            entity.HasOne(d => d.ActorUser).WithMany(p => p.AdminAuditLogs)
+                .HasForeignKey(d => d.ActorUserId)
+                .OnDelete(DeleteBehavior.SetNull)
+                .HasConstraintName("FK_AdminAuditLogs_Users_Actor");
+        });
+
         modelBuilder.Entity<Document>(entity =>
         {
             entity.HasKey(e => e.Id).HasName("PK__Document__3213E83F80515809");
@@ -348,15 +404,15 @@ public partial class MascoteachDbContext : DbContext
             entity.HasIndex(e => e.Email, "UQ__Users__AB6E616426BBBC00").IsUnique();
 
             entity.Property(e => e.Id).HasColumnName("id");
-            entity.Property(e => e.AvatarUrl)
-                .HasMaxLength(500)
-                .IsUnicode(false)
-                .HasColumnName("avatar_url");
             entity.Property(e => e.Authenticator)
                 .HasMaxLength(50)
                 .IsUnicode(false)
                 .HasDefaultValue("Local")
                 .HasColumnName("authenticator");
+            entity.Property(e => e.AvatarUrl)
+                .HasMaxLength(500)
+                .IsUnicode(false)
+                .HasColumnName("avatar_url");
             entity.Property(e => e.CreatedAt)
                 .HasDefaultValueSql("(getdate())")
                 .HasColumnType("datetime")

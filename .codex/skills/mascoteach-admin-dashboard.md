@@ -45,7 +45,18 @@ Files:
 `AdminRepository` intentionally does not extend `IGenericRepository<T>`. It owns read-only aggregate queries such
 as count, sum, grouping, filtering, and pagination over several existing tables.
 
-The module adds no database table, migration, runtime configuration, or deployment secret.
+The read-only analytics module adds no database table, migration, runtime configuration, or deployment secret.
+The separate Admin Audit module adds the append-only `Admin_Audit_Logs` table but still adds no EF migration,
+runtime configuration, or deployment secret.
+
+The Admin Audit module is the deliberate exception to the original read-only module shape:
+
+`AdminAuditController -> IAdminAuditService / IAdminAuditWriter -> AdminAuditService -> IAdminAuditLogRepository -> AdminAuditLogRepository -> MascoteachDbContext`
+
+- `AdminAuditController` is read-only and uses the explicit route `api/Admin/audit-logs`.
+- `IAdminAuditWriter` is internal service infrastructure for future Admin mutations; there is no public write route.
+- `AdminAuditLogRepository` is separate from `AdminRepository` so append-only audit persistence does not turn the
+  analytics repository into a mutation repository.
 
 ## Authorization
 
@@ -98,6 +109,36 @@ GET /api/Admin/users/{id}
 
 There are no Admin role/subscription/status mutations yet. Do not add them before `Admin_Audit_Logs` and dedicated
 request DTOs are designed.
+
+### Audit logs
+
+```http
+GET /api/Admin/audit-logs?search=&actorUserId=&action=&targetType=&riskLevel=&from=&to=&page=1&pageSize=20
+GET /api/Admin/audit-logs/{id}
+```
+
+- Both routes require role `Admin`.
+- `riskLevel` accepts `Low`, `Medium`, `High`, or `Critical`, case-insensitively.
+- `from` is inclusive and `to` is exclusive; `from >= to` returns HTTP 400.
+- `page < 1` becomes 1; `pageSize` outside 1 through 100 becomes 20.
+- Search covers actor email, action, target type/id, and reason.
+- Results sort by `created_at` descending, then id descending.
+- List responses omit `beforeJson`, `afterJson`, and `userAgent`; detail includes them for Admin investigation.
+- Audit logs are append-only and have no `is_deleted`, update, delete, or public create endpoint.
+- `actor_user_id` is nullable with `ON DELETE SET NULL`; `actor_email` is the durable actor snapshot.
+- `target_id` is text so it can represent entity ids, PayOS order codes, or future setting keys.
+- `reason` is mandatory. Before/after JSON must be valid JSON and must contain only explicitly selected safe fields.
+- Never store password/token hashes, S3 keys, checkout/QR data, signatures, or raw webhook payloads in audit JSON.
+- Future mutation services must use `IAdminAuditWriter` inside the same scoped DbContext transaction as the mutation
+  so a data change cannot commit without its audit record.
+
+Schema rollout state:
+
+- Development DB rollout and DB-first scaffold completed on 2026-07-15.
+- Production rollout is still required using `Database/admin_audit_logs_rollout.sql` before deploying mutation code.
+- Focused Audit tests `12/12`, full suite `218/218`, and solution build passed.
+- Manual Swagger smoke test for the list route against the development DB passed with HTTP 200 on 2026-07-15;
+  the empty `items` result is expected until the first Admin mutation writes an audit record.
 
 ### Overview
 
