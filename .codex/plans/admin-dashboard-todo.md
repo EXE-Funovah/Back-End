@@ -432,6 +432,9 @@ Trạng thái API:
     và không tạo user mới. Audit read API trả đúng `User.StatusChanged` ngày 2026-07-15.
   - Giới hạn: kết nối SignalR đã thiết lập trước lúc khóa chưa bị cưỡng chế disconnect ngay; cần connection-revocation
     registry nếu product yêu cầu realtime kick.
+  - [Deferred - làm sau cùng] Khi status thực sự đổi sang `Deleted` hoặc `Active`, gửi email thông báo khóa/mở khóa
+    cho user; no-op không gửi. Cần chốt template/nội dung an toàn, retry/outbox và observability để lỗi email không
+    rollback mutation đã commit hoặc làm mất lịch sử audit.
   - Production DB vẫn phải rollout `Admin_Audit_Logs` trước khi deploy mutation code.
 
 Admin list/detail đã trả aggregate riêng. Admin Dashboard dùng status route có reason/audit; không dùng legacy
@@ -939,6 +942,10 @@ Admin Dashboard nên mang cảm giác vận hành, rõ ràng, scan nhanh:
     score/end-game và ownership; không vá authorization rời rạc làm gãy luồng game cũ.
   - Scope dự kiến: `[Authorize]`, SignalR JWT extraction, role/ownership policy theo từng hub method, token-expiry close,
     connection revocation/kick và focused integration/security tests.
+- [ ] [Deferred - làm sau cùng] Gửi email cho user sau khi Admin khóa hoặc mở khóa tài khoản.
+  - Chỉ gửi khi `User.StatusChanged` đã commit; no-op không gửi.
+  - Email phải phân biệt lock/restore, không lộ dữ liệu nội bộ hoặc audit payload nhạy cảm.
+  - Thiết kế retry/outbox + log delivery trước khi triển khai; lỗi nhà cung cấp email không rollback status/audit.
 
 ### Giai đoạn 0 - Backend schema/API audit
 

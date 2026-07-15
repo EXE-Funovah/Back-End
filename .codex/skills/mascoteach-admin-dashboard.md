@@ -150,6 +150,9 @@ PATCH /api/Admin/users/{id}/status
 - Deleted accounts cannot use local login, Google login, re-register the same email, or authenticate with an already
   issued JWT. JWT validation also rejects a role claim that no longer matches the database, so role changes require
   a fresh login/token.
+- Deferred sequencing decision: add user email notifications for actual lock/restore changes near the end of the
+  Admin roadmap. No-op status requests must not send mail. Design delivery retry/outbox and observability first so an
+  email-provider failure cannot roll back or obscure the already-committed status/audit transaction.
 - Already-established SignalR connections are not forcibly disconnected when an account is locked. Immediate
   realtime kick would require a connection-revocation registry integrated with `GameHub`.
 - Manual development smoke testing confirmed lock, blocked same-email registration without creating a replacement,
