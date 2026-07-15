@@ -28,6 +28,9 @@ public class DocumentServiceTests
                 ["Plans:FreemiumActiveDocumentLimit"] = "5"
             })
             .Build();
+        // Mặc định: object đã upload nằm trong giới hạn dung lượng.
+        _s3Service.Setup(s => s.GetObjectSizeAsync(It.IsAny<string>()))
+            .ReturnsAsync(1024L);
         _sut = new DocumentService(_docRepo.Object, _userRepo.Object, _mapper, _s3Service.Object, _configuration);
     }
 
@@ -135,6 +138,51 @@ public class DocumentServiceTests
     {
         await Assert.ThrowsAsync<ArgumentException>(
             () => _sut.UploadDocumentAsync(10, new DocumentCreateRequest { S3Key = "key.pdf" }));
+    }
+
+    [Fact]
+    public async Task UploadDocumentAsync_OverSizeLimit_ThrowsAndDeletesObject()
+    {
+        // 26MB > mặc định 25MB.
+        _s3Service.Setup(s => s.GetObjectSizeAsync("key.zip"))
+            .ReturnsAsync(26L * 1024 * 1024);
+
+        await Assert.ThrowsAsync<ArgumentException>(
+            () => _sut.UploadDocumentAsync(10, new DocumentCreateRequest { S3Key = "key.zip" }));
+
+        // Object quá cỡ phải bị xoá và KHÔNG tạo document.
+        _s3Service.Verify(s => s.DeleteObjectAsync("key.zip"), Times.Once);
+        _docRepo.Verify(r => r.AddAsync(It.IsAny<Document>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task UploadDocumentAsync_MissingUploadedObject_Throws()
+    {
+        _s3Service.Setup(s => s.GetObjectSizeAsync("key.zip")).ReturnsAsync((long?)null);
+
+        await Assert.ThrowsAsync<ArgumentException>(
+            () => _sut.UploadDocumentAsync(10, new DocumentCreateRequest { S3Key = "key.zip" }));
+        _docRepo.Verify(r => r.AddAsync(It.IsAny<Document>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task UploadDocumentAsync_RespectsConfiguredMaxSize()
+    {
+        // Config giới hạn 10MB → file 12MB bị chặn.
+        var config = new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                ["Plans:FreemiumActiveDocumentLimit"] = "5",
+                ["Uploads:MaxFileSizeMB"] = "10"
+            })
+            .Build();
+        var s3 = new Mock<IS3Service>();
+        s3.Setup(s => s.GetObjectSizeAsync(It.IsAny<string>()))
+            .ReturnsAsync(12L * 1024 * 1024);
+        var sut = new DocumentService(_docRepo.Object, _userRepo.Object, _mapper, s3.Object, config);
+
+        await Assert.ThrowsAsync<ArgumentException>(
+            () => sut.UploadDocumentAsync(10, new DocumentCreateRequest { S3Key = "key.zip" }));
     }
 
     // ── UpdateDocumentAsync ──

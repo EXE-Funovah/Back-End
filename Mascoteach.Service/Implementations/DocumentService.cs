@@ -15,6 +15,7 @@ public class DocumentService : IDocumentService
     private readonly IS3Service _s3Service;
     private readonly IConfiguration _configuration;
     private const int DefaultFreemiumActiveDocumentLimit = 5;
+    private const int DefaultMaxUploadSizeMb = 25;
 
     public DocumentService(
         IDocumentRepository documentRepository,
@@ -49,6 +50,35 @@ public class DocumentService : IDocumentService
         return DefaultFreemiumActiveDocumentLimit;
     }
 
+    private int GetMaxUploadSizeMb()
+    {
+        var configured = _configuration["Uploads:MaxFileSizeMB"];
+        if (int.TryParse(configured, out var mb) && mb > 0)
+            return mb;
+        return DefaultMaxUploadSizeMb;
+    }
+
+    /// <summary>
+    /// Client upload thẳng lên S3 qua presigned PUT nên backend không thấy bytes.
+    /// Sau khi client báo đã upload, ta HEAD object để lấy dung lượng thật và
+    /// chặn nếu vượt giới hạn (đồng thời xoá object rác để không tốn dung lượng).
+    /// </summary>
+    private async Task EnsureUploadWithinSizeLimitAsync(string s3Key)
+    {
+        var size = await _s3Service.GetObjectSizeAsync(s3Key);
+        if (size == null)
+            throw new ArgumentException("Uploaded file not found on storage. Please upload again.");
+
+        var maxBytes = (long)GetMaxUploadSizeMb() * 1024 * 1024;
+        if (size.Value > maxBytes)
+        {
+            // Dọn object quá cỡ để không giữ rác trên S3.
+            await _s3Service.DeleteObjectAsync(s3Key);
+            throw new ArgumentException(
+                $"File exceeds the maximum allowed size of {GetMaxUploadSizeMb()} MB.");
+        }
+    }
+
     private async Task EnsureCanActivateDocumentAsync(User user)
     {
         var isPremium = string.Equals(user.SubscriptionTier, "Premium", StringComparison.OrdinalIgnoreCase)
@@ -67,6 +97,8 @@ public class DocumentService : IDocumentService
     public async Task<DocumentResponse> UploadDocumentAsync(int ownerId, DocumentCreateRequest request)
     {
         EnsureZipS3Key(request.S3Key);
+
+        await EnsureUploadWithinSizeLimitAsync(request.S3Key);
 
         var user = await _userRepository.GetByIdAsync(ownerId)
             ?? throw new KeyNotFoundException($"User with id {ownerId} not found.");

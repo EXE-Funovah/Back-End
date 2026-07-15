@@ -87,6 +87,25 @@ public class S3Service : IS3Service
         return await Task.Run(() => _s3Client.GetPreSignedURL(request));
     }
 
+    public async Task<long?> GetObjectSizeAsync(string s3Key)
+    {
+        if (string.IsNullOrWhiteSpace(s3Key)) return null;
+
+        try
+        {
+            var metadata = await _s3Client.GetObjectMetadataAsync(new GetObjectMetadataRequest
+            {
+                BucketName = _bucketName,
+                Key = s3Key.Trim(),
+            });
+            return metadata.ContentLength;
+        }
+        catch (AmazonS3Exception ex) when (ex.StatusCode == System.Net.HttpStatusCode.NotFound)
+        {
+            return null;
+        }
+    }
+
     public async Task DeleteObjectAsync(string s3Key)
     {
         if (string.IsNullOrWhiteSpace(s3Key)) return;
