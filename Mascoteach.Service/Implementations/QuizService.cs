@@ -30,7 +30,7 @@ namespace Mascoteach.Service.Implementations
 
         public async Task<QuizResponse?> GetByIdAsync(int id)
         {
-            var quiz = await _quizRepository.GetByIdAsync(id);
+            var quiz = await _quizRepository.GetVisibleByIdAsync(id);
             return _mapper.Map<QuizResponse>(quiz);
         }
 

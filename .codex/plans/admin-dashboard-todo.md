@@ -76,7 +76,7 @@ nhật trạng thái tích hợp; không đánh dấu backend hoàn thành chỉ
 
 1. [Hoàn tất 2026-07-15] `Admin_Audit_Logs` và API đọc audit.
 2. [Hoàn tất 2026-07-15] User role/subscription/status mutations có DTO riêng, reason và audit.
-3. Document/Quiz hide-restore cho Admin có reason và audit.
+3. [Document hoàn tất 2026-07-15] Tiếp tục Quiz/Flashcard hide-restore cho Admin có reason và audit.
 4. Admin end-session và Billing sync có audit, kiểm soát race/idempotency.
 5. AI/content processing telemetry, retry và overview alerts.
 6. Quota overrides, Support Console và Settings sau khi product chốt contract.
@@ -428,6 +428,8 @@ Trạng thái API:
   - Tài khoản Deleted bị chặn local login, Google login, đăng ký lại cùng email và request dùng JWT cũ.
   - JWT có role không còn khớp DB cũng bị từ chối, nên user đổi role phải đăng nhập lại để nhận token mới.
   - Focused status/Auth/JWT tests `67/67`, full suite `270/270` và solution build đã pass.
+  - Manual Swagger smoke test trên development DB đã khóa account thành công; đăng ký lại cùng email trả HTTP 400
+    và không tạo user mới. Audit read API trả đúng `User.StatusChanged` ngày 2026-07-15.
   - Giới hạn: kết nối SignalR đã thiết lập trước lúc khóa chưa bị cưỡng chế disconnect ngay; cần connection-revocation
     registry nếu product yêu cầu realtime kick.
   - Production DB vẫn phải rollout `Admin_Audit_Logs` trước khi deploy mutation code.
@@ -460,8 +462,21 @@ Trạng thái API:
 - [x] `GET /api/Admin/documents/{id}`
 - [x] `GET /api/Admin/quizzes`
 - [x] `GET /api/Admin/quizzes/{id}`
-- [ ] `PATCH /api/Admin/documents/{id}/hide`
-- [ ] `PATCH /api/Admin/documents/{id}/restore`
+- [x] `PATCH /api/Admin/documents/{id}/hide`
+- [x] `PATCH /api/Admin/documents/{id}/restore`
+  - Status: Completed (2026-07-15)
+  - Admin-only soft-hide/restore với `reason` bắt buộc; không hard-delete hoặc xoá S3 object.
+  - Idempotent HTTP 200 no-op không audit; thay đổi thật ghi `Document.Hidden`/`Document.Restored` ở risk `Medium`.
+  - Document update và audit dùng chung serializable transaction; audit lỗi thì Document update rollback.
+  - Không cascade sửa `Quizzes.is_deleted`; restore giữ nguyên moderation state riêng của từng Quiz/Flashcard.
+  - Normal Quiz/Question/Option reads đã chặn hierarchy có Document/owner bị deleted để hide có hiệu lực theo mọi
+    direct-id/list read path hiện có.
+  - Admin restore bypass quota upload vì đây là hoàn tác moderation, không phải upload document mới.
+  - Focused Admin Content command tests `14/14`, related content regression `62/62`, full suite `288/288` và solution
+    build đã pass.
+  - Manual Swagger smoke test trên development DB đã hide/restore Document thành công và audit read API trả đúng
+    `Document.Hidden`/`Document.Restored` ngày 2026-07-16.
+  - Production DB vẫn phải rollout `Admin_Audit_Logs` trước khi deploy mutation code.
 - [ ] `PATCH /api/Admin/quizzes/{id}/hide`
 - [ ] `PATCH /api/Admin/quizzes/{id}/restore`
 
@@ -758,8 +773,8 @@ Các bảng nên thêm trước khi bật thao tác admin thật:
 - [x] `GET /api/Admin/documents/{id}`
 - [x] `GET /api/Admin/quizzes`
 - [x] `GET /api/Admin/quizzes/{id}`
-- [ ] `PATCH /api/Admin/documents/{id}/hide`
-- [ ] `PATCH /api/Admin/documents/{id}/restore`
+- [x] `PATCH /api/Admin/documents/{id}/hide`
+- [x] `PATCH /api/Admin/documents/{id}/restore`
 - [ ] `POST /api/Admin/documents/{id}/retry-processing`
 - [ ] `PATCH /api/Admin/quizzes/{id}/hide`
 - [ ] `PATCH /api/Admin/quizzes/{id}/restore`
@@ -914,6 +929,7 @@ Admin Dashboard nên mang cảm giác vận hành, rõ ràng, scan nhanh:
   - Thay đổi role/subscription sau này phải đi qua Admin API riêng có audit log.
   - Verified by attacker-payload regression tests; full suite `137/137` passed and solution build succeeded.
 - [ ] [Deferred - làm khi review lại game flow] Audit và harden toàn bộ `GameHub`/SignalR trước production.
+  - Thứ tự đã chốt: làm cuối sau khi hoàn tất các luồng Admin ưu tiên; không chen vào content/billing/admin mutations.
   - Hiện `GameHub` chưa có `[Authorize]`; các hub method chưa kiểm tra role host/student, quyền sở hữu session hoặc
     ràng buộc caller với game PIN.
   - Frontend có `accessTokenFactory`, nhưng backend chưa cấu hình đọc `access_token` query cho WebSocket/SSE và chưa
@@ -1105,8 +1121,8 @@ Admin Dashboard nên mang cảm giác vận hành, rõ ràng, scan nhanh:
 - [Đã chốt MVP] Không cho chỉnh subscription thủ công trong Admin read-only MVP. Nếu bổ sung sau này phải dùng
   endpoint/DTO riêng, validation, lý do thao tác và `Admin_Audit_Logs`.
 - Quota Free/Pro hiện mới có `Plans:FreemiumActiveDocumentLimit` và đếm active documents; cần chốt quota cho quiz, flashcard, live session, AI generation.
-- [Đã chốt MVP] Chưa có Admin delete/hide/restore mutation. Khi bổ sung moderation sau này, Admin phải dùng
-  soft delete/restore kèm audit; không dùng hard delete cho thao tác dashboard thông thường.
+- [Đã triển khai một phần] Document đã có Admin soft hide/restore kèm audit; Quiz/Flashcard moderation còn chờ.
+  Không dùng hard delete cho thao tác dashboard thông thường.
 - AI generate hiện chưa có bảng log lỗi đủ chi tiết; cần chốt tạo `Content_Processing_Logs`/`Ai_Processing_Logs`.
 - [Đã chốt MVP] Chưa tạo `Live_Session_Events`; Admin Sessions chỉ hiển thị session/participant metadata hiện có.
   Chỉ bổ sung event/reconnect history khi product cần giám sát realtime sâu.

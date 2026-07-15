@@ -66,6 +66,13 @@ The User command module is separate from analytics reads:
 - `AdminUserCommandRepository` and `AdminAuditLogRepository` share the same scoped DbContext.
 - Role mutation and its audit row commit in one serializable transaction.
 
+The Content command module follows the same separation:
+
+`AdminContentCommandController -> IAdminContentCommandService -> AdminContentCommandService -> IAdminContentCommandRepository / IAdminAuditWriter -> MascoteachDbContext`
+
+- Content mutation and audit use the same scoped DbContext and serializable transaction.
+- The command repository loads tracked moderation targets including soft-deleted rows; it does not own analytics reads.
+
 ## Authorization
 
 Every Admin endpoint is protected at controller level with:
@@ -145,6 +152,8 @@ PATCH /api/Admin/users/{id}/status
   a fresh login/token.
 - Already-established SignalR connections are not forcibly disconnected when an account is locked. Immediate
   realtime kick would require a connection-revocation registry integrated with `GameHub`.
+- Manual development smoke testing confirmed lock, blocked same-email registration without creating a replacement,
+  and `User.StatusChanged` audit history on 2026-07-15.
 
 Deferred GameHub/SignalR security review:
 
@@ -156,6 +165,7 @@ Deferred GameHub/SignalR security review:
 - Do not patch this flow piecemeal. When the game flow is revisited, audit join/reconnect/groups and every
   start/question/answer/score/end-game call, then add authorization, ownership, expiry-close, connection revocation,
   and integration/security tests together.
+- Project sequencing decision: complete the prioritized Admin flows first and handle this GameHub review last.
 
 ### Audit logs
 
@@ -183,7 +193,8 @@ Schema rollout state:
 
 - Development DB rollout and DB-first scaffold completed on 2026-07-15.
 - Production rollout is still required using `Database/admin_audit_logs_rollout.sql` before deploying mutation code.
-- Focused Audit tests `12/12`, focused status/Auth/JWT tests `67/67`, full suite `270/270`, and solution build passed.
+- Focused Audit tests `12/12`, focused status/Auth/JWT tests `67/67`, focused Document moderation tests `14/14`,
+  full suite `288/288`, and solution build passed.
 - Manual Swagger smoke test for the list route against the development DB passed with HTTP 200 on 2026-07-15;
   a later role-mutation smoke test also succeeded and appeared as `User.RoleChanged` in audit history.
 - Manual subscription smoke testing also changed Premium to Freemium, cleared the current expiry, and appeared as
@@ -232,9 +243,11 @@ GET /api/Admin/documents?search=&ownerId=&deletion=Active&from=&to=&page=1&pageS
 GET /api/Admin/documents/{id}
 GET /api/Admin/quizzes?search=&ownerId=&activityType=&status=&deletion=Active&from=&to=&page=1&pageSize=20
 GET /api/Admin/quizzes/{id}
+PATCH /api/Admin/documents/{id}/hide
+PATCH /api/Admin/documents/{id}/restore
 ```
 
-- All four endpoints are read-only and inherit `[Authorize(Roles = "Admin")]`.
+- All routes inherit `[Authorize(Roles = "Admin")]`; the four GET routes are read-only.
 - Document search covers file name, owner name, and owner email.
 - Quiz search covers title, source file name, owner name, and owner email.
 - `deletion` accepts `Active`, `Deleted`, or `All`, case-insensitively; default is `Active`.
@@ -249,8 +262,17 @@ GET /api/Admin/quizzes/{id}
 - Responses never include `Document.FileUrl`, S3 keys, presigned URLs, question/option text, or correct answers.
 - Owner metadata is limited to id, name, email, and soft-delete state.
 - Repository reads use `AsNoTracking`, SQL-side filters/counts/pagination, and dedicated projections.
-- No hide, restore, retry, delete, or content-view action exists yet. Add mutations only after
-  `Admin_Audit_Logs`, dedicated request DTOs, and a reason policy are designed.
+- Document hide/restore accepts a dedicated request with mandatory `reason` (maximum 500 characters), changes only
+  `Documents.is_deleted`, and never deletes the database row or S3 object.
+- Same-state requests are HTTP 200 no-ops without audit. Successful changes write `Document.Hidden` or
+  `Document.Restored` at `Medium` risk with `isDeleted`-only JSON in the same serializable transaction.
+- Document moderation does not cascade changes to `Quizzes.is_deleted`; restore preserves each Quiz/Flashcard's own
+  state. Admin restore bypasses upload quota because it is moderation reversal rather than a new upload.
+- Normal Quiz, Question, and Option reads require the full hierarchy, Document, and owner to be active; this prevents
+  direct-id/list reads from bypassing a hidden Document.
+- Quiz/Flashcard hide/restore and processing retry do not exist yet.
+- Manual development smoke testing confirmed Document hide/restore and corresponding `Document.Hidden`/
+  `Document.Restored` audit history on 2026-07-16.
 
 ### Session monitoring
 

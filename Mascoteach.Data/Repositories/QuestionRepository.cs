@@ -13,9 +13,23 @@ namespace Mascoteach.Data.Repositories
         public async Task<IEnumerable<Question>> GetByQuizIdAsync(int quizId)
         {
             return await _context.Questions
-                .Where(q => q.QuizId == quizId && q.IsDeleted == false)
+                .Where(q => q.QuizId == quizId
+                    && q.IsDeleted == false
+                    && q.Quiz.IsDeleted == false
+                    && q.Quiz.Document.IsDeleted == false
+                    && q.Quiz.Document.Owner.IsDeleted == false)
                 .OrderBy(q => q.Position)
                 .ToListAsync();
+        }
+
+        public Task<Question?> GetVisibleByIdAsync(int id)
+        {
+            return _context.Questions.FirstOrDefaultAsync(q =>
+                q.Id == id
+                && q.IsDeleted == false
+                && q.Quiz.IsDeleted == false
+                && q.Quiz.Document.IsDeleted == false
+                && q.Quiz.Document.Owner.IsDeleted == false);
         }
 
         public async Task<int> GetNextPositionAsync(int quizId)
