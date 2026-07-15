@@ -43,6 +43,7 @@ builder.Services.AddScoped<IPaymentOrderRepository, PaymentOrderRepository>();
 builder.Services.AddScoped<IPaymentWebhookEventRepository, PaymentWebhookEventRepository>();
 builder.Services.AddScoped<IAdminRepository, AdminRepository>();
 builder.Services.AddScoped<IAdminAuditLogRepository, AdminAuditLogRepository>();
+builder.Services.AddScoped<IAdminUserCommandRepository, AdminUserCommandRepository>();
 
 
 
@@ -67,6 +68,7 @@ builder.Services.AddScoped<IAdminService, AdminService>();
 builder.Services.AddScoped<AdminAuditService>();
 builder.Services.AddScoped<IAdminAuditService>(provider => provider.GetRequiredService<AdminAuditService>());
 builder.Services.AddScoped<IAdminAuditWriter>(provider => provider.GetRequiredService<AdminAuditService>());
+builder.Services.AddScoped<IAdminUserCommandService, AdminUserCommandService>();
 builder.Services.AddScoped<IPayOsSignatureService, PayOsSignatureService>();
 builder.Services.AddHttpClient<IPayOsClient, PayOsClient>();
 builder.Services.AddSignalR(); // signalR

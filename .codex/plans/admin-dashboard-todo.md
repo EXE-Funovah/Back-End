@@ -75,7 +75,7 @@ nhật trạng thái tích hợp; không đánh dấu backend hoàn thành chỉ
 Ưu tiên backend tiếp theo:
 
 1. [Hoàn tất 2026-07-15] `Admin_Audit_Logs` và API đọc audit.
-2. User role/subscription/status mutations có DTO riêng, reason và audit.
+2. [Role hoàn tất 2026-07-15] Tiếp tục User subscription/status mutations có DTO riêng, reason và audit.
 3. Document/Quiz hide-restore cho Admin có reason và audit.
 4. Admin end-session và Billing sync có audit, kiểm soát race/idempotency.
 5. AI/content processing telemetry, retry và overview alerts.
@@ -397,7 +397,14 @@ Trạng thái API:
 
 - [x] `GET /api/Admin/users`
 - [x] `GET /api/Admin/users/{id}`
-- [ ] `PATCH /api/Admin/users/{id}/role`
+- [x] `PATCH /api/Admin/users/{id}/role`
+  - Status: Completed (2026-07-15)
+  - Admin-only, DTO riêng với role chuẩn hoá và `reason` bắt buộc; chỉ đổi user active.
+  - Chặn tự đổi role và hạ role của Admin active cuối cùng (HTTP 409); cùng role trả HTTP 200 no-op, không ghi audit.
+  - Role update và audit `User.RoleChanged` (`High`, before/after chỉ chứa role) dùng chung serializable transaction;
+    audit lỗi thì role update rollback.
+  - Focused tests `17/17`, full suite `235/235` và solution build đã pass.
+  - Production DB vẫn phải chạy `Database/admin_audit_logs_rollout.sql` trước khi deploy mutation code.
 - [ ] `PATCH /api/Admin/users/{id}/subscription`
 - [ ] `PATCH /api/Admin/users/{id}/status`
 
@@ -715,7 +722,7 @@ Các bảng nên thêm trước khi bật thao tác admin thật:
 
 - [x] `GET /api/Admin/users`
 - [x] `GET /api/Admin/users/{id}`
-- [ ] `PATCH /api/Admin/users/{id}/role`
+- [x] `PATCH /api/Admin/users/{id}/role`
 - [ ] `PATCH /api/Admin/users/{id}/subscription`
 - [ ] `PATCH /api/Admin/users/{id}/status`
 - [ ] Thiết kế soft-delete/restore Admin route có audit; không dùng hard-delete cho dashboard thông thường.

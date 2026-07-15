@@ -54,9 +54,17 @@ The Admin Audit module is the deliberate exception to the original read-only mod
 `AdminAuditController -> IAdminAuditService / IAdminAuditWriter -> AdminAuditService -> IAdminAuditLogRepository -> AdminAuditLogRepository -> MascoteachDbContext`
 
 - `AdminAuditController` is read-only and uses the explicit route `api/Admin/audit-logs`.
-- `IAdminAuditWriter` is internal service infrastructure for future Admin mutations; there is no public write route.
+- `IAdminAuditWriter` is internal service infrastructure used by Admin mutation services; there is no public audit
+  write route.
 - `AdminAuditLogRepository` is separate from `AdminRepository` so append-only audit persistence does not turn the
   analytics repository into a mutation repository.
+
+The User command module is separate from analytics reads:
+
+`AdminUserCommandController -> IAdminUserCommandService -> AdminUserCommandService -> IAdminUserCommandRepository / IAdminAuditWriter -> MascoteachDbContext`
+
+- `AdminUserCommandRepository` and `AdminAuditLogRepository` share the same scoped DbContext.
+- Role mutation and its audit row commit in one serializable transaction.
 
 ## Authorization
 
@@ -72,7 +80,8 @@ Admin accounts are provisioned manually through database seed/controlled adminis
 never grant Admin. `AuthService` only accepts the self-registerable roles `Student`, `Teacher`, and `Parent`,
 case-insensitively, and normalizes them to those canonical values.
 
-There is currently no public API for creating, promoting, demoting, disabling, or deleting Admin accounts.
+There is no public API for creating, disabling, or deleting Admin accounts. The Admin-only role mutation can promote
+or demote another active account with the safeguards documented below.
 
 Related User API boundary:
 
@@ -89,9 +98,10 @@ Related User API boundary:
 ```http
 GET /api/Admin/users?search=&role=&subscription=&page=1&pageSize=20
 GET /api/Admin/users/{id}
+PATCH /api/Admin/users/{id}/role
 ```
 
-- Both endpoints are read-only and inherit `[Authorize(Roles = "Admin")]`.
+- All routes inherit `[Authorize(Roles = "Admin")]`; the two GET routes are read-only.
 - `role` accepts `Teacher`, `Student`, `Parent`, or `Admin`, case-insensitively.
 - `subscription` accepts `Freemium`, `Premium`, or `Expired`, case-insensitively.
 - `Premium` requires `SubscriptionTier == "Premium"` and a future `PremiumExpiresAt`.
@@ -106,9 +116,14 @@ GET /api/Admin/users/{id}
 - Legacy `GET /api/Admin/accounts`, `AdminAccountsResponse`, and their dedicated service/repository methods were
   removed because no frontend consumed them. `/api/Admin/users` is the only Admin user-list contract.
 - Repository reads use `AsNoTracking` SQL projections and filter deleted related rows.
-
-There are no Admin role/subscription/status mutations yet. Do not add them before `Admin_Audit_Logs` and dedicated
-request DTOs are designed.
+- Role mutation uses a dedicated request body `{ "role": "Teacher|Student|Parent|Admin", "reason": "..." }`;
+  values are normalized case-insensitively and `reason` is mandatory with a 500-character maximum.
+- Only active targets can be changed. Missing or soft-deleted targets return HTTP 404.
+- An Admin cannot change their own role, and the last active Admin cannot be demoted; both return HTTP 409.
+- Submitting the current role is an idempotent HTTP 200 no-op and does not create a misleading audit record.
+- A successful change writes `User.RoleChanged` at `High` risk with safe role-only before/after JSON in the same
+  serializable transaction. If audit persistence fails, the role change is rolled back.
+- Subscription and status mutations do not exist yet.
 
 ### Audit logs
 
@@ -129,14 +144,14 @@ GET /api/Admin/audit-logs/{id}
 - `target_id` is text so it can represent entity ids, PayOS order codes, or future setting keys.
 - `reason` is mandatory. Before/after JSON must be valid JSON and must contain only explicitly selected safe fields.
 - Never store password/token hashes, S3 keys, checkout/QR data, signatures, or raw webhook payloads in audit JSON.
-- Future mutation services must use `IAdminAuditWriter` inside the same scoped DbContext transaction as the mutation
+- Mutation services must use `IAdminAuditWriter` inside the same scoped DbContext transaction as the mutation
   so a data change cannot commit without its audit record.
 
 Schema rollout state:
 
 - Development DB rollout and DB-first scaffold completed on 2026-07-15.
 - Production rollout is still required using `Database/admin_audit_logs_rollout.sql` before deploying mutation code.
-- Focused Audit tests `12/12`, full suite `218/218`, and solution build passed.
+- Focused Audit tests `12/12`, focused User role-command tests `17/17`, full suite `235/235`, and solution build passed.
 - Manual Swagger smoke test for the list route against the development DB passed with HTTP 200 on 2026-07-15;
   the empty `items` result is expected until the first Admin mutation writes an audit record.
 
