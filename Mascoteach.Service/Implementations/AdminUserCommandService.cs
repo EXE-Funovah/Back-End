@@ -127,6 +127,107 @@ public class AdminUserCommandService : IAdminUserCommandService
         }
     }
 
+    public async Task<AdminUserStatusChangeResult> ChangeStatusAsync(
+        int targetUserId,
+        AdminUserStatusUpdateRequest request,
+        AdminActorContext actor)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+        ArgumentNullException.ThrowIfNull(actor);
+
+        ValidateCommandContext(targetUserId, actor);
+
+        var status = NormalizeUserStatus(request.Status);
+        var reason = NormalizeReason(request.Reason);
+        var shouldDelete = status == "Deleted";
+
+        if (shouldDelete && targetUserId == actor.UserId)
+        {
+            return new AdminUserStatusChangeResult
+            {
+                Status = AdminUserStatusChangeStatus.SelfLockForbidden
+            };
+        }
+
+        await using var transaction = await _repository.BeginTransactionAsync(
+            IsolationLevel.Serializable);
+
+        try
+        {
+            var user = await _repository.GetByIdIncludingDeletedAsync(targetUserId);
+            if (user == null)
+            {
+                await transaction.RollbackAsync();
+                return new AdminUserStatusChangeResult
+                {
+                    Status = AdminUserStatusChangeStatus.UserNotFound
+                };
+            }
+
+            var previousStatus = user.IsDeleted ? "Deleted" : "Active";
+            if (user.IsDeleted == shouldDelete)
+            {
+                await transaction.RollbackAsync();
+                return new AdminUserStatusChangeResult
+                {
+                    Status = AdminUserStatusChangeStatus.NoChange,
+                    Response = BuildStatusResponse(
+                        user.Id,
+                        previousStatus,
+                        status,
+                        changed: false)
+                };
+            }
+
+            if (shouldDelete
+                && string.Equals(user.Role, "Admin", StringComparison.OrdinalIgnoreCase)
+                && await _repository.CountActiveAdminsAsync() <= 1)
+            {
+                await transaction.RollbackAsync();
+                return new AdminUserStatusChangeResult
+                {
+                    Status = AdminUserStatusChangeStatus.LastAdminForbidden
+                };
+            }
+
+            user.IsDeleted = shouldDelete;
+            _repository.Update(user);
+            if (await _repository.SaveChangesAsync() <= 0)
+                throw new InvalidOperationException("User status was not updated.");
+
+            await _auditWriter.WriteAsync(new AdminAuditWriteRequest
+            {
+                ActorUserId = actor.UserId,
+                ActorEmail = actor.Email,
+                Action = "User.StatusChanged",
+                TargetType = "User",
+                TargetId = user.Id.ToString(),
+                RiskLevel = "High",
+                Reason = reason,
+                BeforeJson = JsonSerializer.Serialize(new { status = previousStatus }),
+                AfterJson = JsonSerializer.Serialize(new { status }),
+                IpAddress = actor.IpAddress,
+                UserAgent = actor.UserAgent
+            });
+
+            await transaction.CommitAsync();
+            return new AdminUserStatusChangeResult
+            {
+                Status = AdminUserStatusChangeStatus.Updated,
+                Response = BuildStatusResponse(
+                    user.Id,
+                    previousStatus,
+                    status,
+                    changed: true)
+            };
+        }
+        catch
+        {
+            await transaction.RollbackAsync();
+            throw;
+        }
+    }
+
     public async Task<AdminUserRoleChangeResult> ChangeRoleAsync(
         int targetUserId,
         AdminUserRoleUpdateRequest request,
@@ -252,6 +353,19 @@ public class AdminUserCommandService : IAdminUserCommandService
             "Subscription tier must be one of: Freemium, Premium.");
     }
 
+    private static string NormalizeUserStatus(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+            throw new ArgumentException("Status is required.");
+
+        if (string.Equals(value.Trim(), "Active", StringComparison.OrdinalIgnoreCase))
+            return "Active";
+        if (string.Equals(value.Trim(), "Deleted", StringComparison.OrdinalIgnoreCase))
+            return "Deleted";
+
+        throw new ArgumentException("Status must be one of: Active, Deleted.");
+    }
+
     private DateTimeOffset? NormalizePremiumExpiry(
         string subscriptionTier,
         DateTimeOffset? value)
@@ -306,6 +420,18 @@ public class AdminUserCommandService : IAdminUserCommandService
             PreviousPremiumExpiresAt = previousExpiry,
             SubscriptionTier = subscriptionTier,
             PremiumExpiresAt = premiumExpiresAt,
+            Changed = changed
+        };
+
+    private static AdminUserStatusUpdateResponse BuildStatusResponse(
+        int userId,
+        string previousStatus,
+        string status,
+        bool changed) => new()
+        {
+            UserId = userId,
+            PreviousStatus = previousStatus,
+            Status = status,
             Changed = changed
         };
 

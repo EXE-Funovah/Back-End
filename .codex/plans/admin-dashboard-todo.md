@@ -75,7 +75,7 @@ nhật trạng thái tích hợp; không đánh dấu backend hoàn thành chỉ
 Ưu tiên backend tiếp theo:
 
 1. [Hoàn tất 2026-07-15] `Admin_Audit_Logs` và API đọc audit.
-2. [Role + subscription hoàn tất 2026-07-15] Tiếp tục User status mutation có DTO riêng, reason và audit.
+2. [Hoàn tất 2026-07-15] User role/subscription/status mutations có DTO riêng, reason và audit.
 3. Document/Quiz hide-restore cho Admin có reason và audit.
 4. Admin end-session và Billing sync có audit, kiểm soát race/idempotency.
 5. AI/content processing telemetry, retry và overview alerts.
@@ -415,12 +415,25 @@ Trạng thái API:
   - Subscription update và audit `User.SubscriptionChanged` (`High`, before/after chỉ chứa tier + expiry) dùng chung
     serializable transaction; audit lỗi thì subscription update rollback.
   - Focused User command tests `31/31`, full suite `249/249` và solution build đã pass.
+  - Manual Swagger smoke test trên development DB đã đổi Premium về Freemium, xoá expiry hiện tại và audit read
+    API trả đúng lịch sử `User.SubscriptionChanged` ngày 2026-07-15.
   - Webhook thanh toán thành công đến sau vẫn gia hạn Premium theo billing invariant hiện có.
   - Production DB vẫn phải rollout `Admin_Audit_Logs` trước khi deploy mutation code.
-- [ ] `PATCH /api/Admin/users/{id}/status`
+- [x] `PATCH /api/Admin/users/{id}/status`
+  - Status: Completed (2026-07-15)
+  - Admin-only soft-delete/restore qua `Active|Deleted`, `reason` bắt buộc; không hard-delete dữ liệu user.
+  - Chặn Admin tự khóa và khóa Admin active cuối cùng (HTTP 409); cùng status trả HTTP 200 no-op, không audit.
+  - Status update và audit `User.StatusChanged` (`High`, before/after chỉ chứa status) dùng chung serializable
+    transaction; audit lỗi thì status update rollback.
+  - Tài khoản Deleted bị chặn local login, Google login, đăng ký lại cùng email và request dùng JWT cũ.
+  - JWT có role không còn khớp DB cũng bị từ chối, nên user đổi role phải đăng nhập lại để nhận token mới.
+  - Focused status/Auth/JWT tests `67/67`, full suite `270/270` và solution build đã pass.
+  - Giới hạn: kết nối SignalR đã thiết lập trước lúc khóa chưa bị cưỡng chế disconnect ngay; cần connection-revocation
+    registry nếu product yêu cầu realtime kick.
+  - Production DB vẫn phải rollout `Admin_Audit_Logs` trước khi deploy mutation code.
 
-Admin list/detail đã trả aggregate riêng. Legacy `UserController.ToggleDelete` có thể soft-delete user nhưng chưa có
-reason/audit nên chưa được xem là mutation contract hoàn chỉnh cho dashboard.
+Admin list/detail đã trả aggregate riêng. Admin Dashboard dùng status route có reason/audit; không dùng legacy
+`UserController.ToggleDelete` cho thao tác quản trị.
 
 #### Content: tài liệu, quiz, flashcard
 
@@ -736,8 +749,8 @@ Các bảng nên thêm trước khi bật thao tác admin thật:
 - [x] `GET /api/Admin/users/{id}`
 - [x] `PATCH /api/Admin/users/{id}/role`
 - [x] `PATCH /api/Admin/users/{id}/subscription`
-- [ ] `PATCH /api/Admin/users/{id}/status`
-- [ ] Thiết kế soft-delete/restore Admin route có audit; không dùng hard-delete cho dashboard thông thường.
+- [x] `PATCH /api/Admin/users/{id}/status`
+- [x] Soft-delete/restore Admin route có audit; không dùng hard-delete cho dashboard thông thường.
 
 ### Content
 
@@ -900,6 +913,16 @@ Admin Dashboard nên mang cảm giác vận hành, rõ ràng, scan nhanh:
   - Payload chứa `Role` hoặc `SubscriptionTier` bị JSON binding bỏ qua; service bảo toàn giá trị đang lưu.
   - Thay đổi role/subscription sau này phải đi qua Admin API riêng có audit log.
   - Verified by attacker-payload regression tests; full suite `137/137` passed and solution build succeeded.
+- [ ] [Deferred - làm khi review lại game flow] Audit và harden toàn bộ `GameHub`/SignalR trước production.
+  - Hiện `GameHub` chưa có `[Authorize]`; các hub method chưa kiểm tra role host/student, quyền sở hữu session hoặc
+    ràng buộc caller với game PIN.
+  - Frontend có `accessTokenFactory`, nhưng backend chưa cấu hình đọc `access_token` query cho WebSocket/SSE và chưa
+    cấu hình đóng connection khi JWT hết hạn.
+  - Account lock chặn REST/Auth/JWT mới, nhưng connection SignalR đã mở chưa bị cưỡng chế disconnect.
+  - Khi triển khai phải review end-to-end host join, student join, reconnect, group membership, start/question/answer/
+    score/end-game và ownership; không vá authorization rời rạc làm gãy luồng game cũ.
+  - Scope dự kiến: `[Authorize]`, SignalR JWT extraction, role/ownership policy theo từng hub method, token-expiry close,
+    connection revocation/kick và focused integration/security tests.
 
 ### Giai đoạn 0 - Backend schema/API audit
 

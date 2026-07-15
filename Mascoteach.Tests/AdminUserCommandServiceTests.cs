@@ -404,6 +404,170 @@ public class AdminUserCommandServiceTests
         _transaction.Verify(transaction => transaction.CommitAsync(default), Times.Never);
     }
 
+    [Fact]
+    public async Task ChangeStatus_ToDeleted_UpdatesAndAuditsInTransaction()
+    {
+        var user = CreateUser(42, "Teacher");
+        _repository.Setup(repo => repo.GetByIdIncludingDeletedAsync(42))
+            .ReturnsAsync(user);
+        _repository.Setup(repo => repo.SaveChangesAsync()).ReturnsAsync(1);
+        AdminAuditWriteRequest? audit = null;
+        _auditWriter
+            .Setup(writer => writer.WriteAsync(It.IsAny<AdminAuditWriteRequest>()))
+            .Callback<AdminAuditWriteRequest>(value => audit = value)
+            .Returns(Task.CompletedTask);
+
+        var result = await _service.ChangeStatusAsync(
+            42,
+            new AdminUserStatusUpdateRequest
+            {
+                Status = " deleted ",
+                Reason = " Policy violation "
+            },
+            CreateActor());
+
+        Assert.Equal(AdminUserStatusChangeStatus.Updated, result.Status);
+        Assert.Equal("Active", result.Response!.PreviousStatus);
+        Assert.Equal("Deleted", result.Response.Status);
+        Assert.True(result.Response.Changed);
+        Assert.True(user.IsDeleted);
+        Assert.Equal("User.StatusChanged", audit!.Action);
+        Assert.Equal("High", audit.RiskLevel);
+        Assert.Equal("Policy violation", audit.Reason);
+        Assert.Equal("{\"status\":\"Active\"}", audit.BeforeJson);
+        Assert.Equal("{\"status\":\"Deleted\"}", audit.AfterJson);
+        _transaction.Verify(transaction => transaction.CommitAsync(default), Times.Once);
+        _transaction.Verify(transaction => transaction.RollbackAsync(default), Times.Never);
+    }
+
+    [Fact]
+    public async Task ChangeStatus_ToActive_RestoresDeletedUser()
+    {
+        var user = CreateUser(42, "Teacher");
+        user.IsDeleted = true;
+        _repository.Setup(repo => repo.GetByIdIncludingDeletedAsync(42))
+            .ReturnsAsync(user);
+        _repository.Setup(repo => repo.SaveChangesAsync()).ReturnsAsync(1);
+
+        var result = await _service.ChangeStatusAsync(
+            42,
+            new AdminUserStatusUpdateRequest
+            {
+                Status = "Active",
+                Reason = "Verified account"
+            },
+            CreateActor());
+
+        Assert.Equal(AdminUserStatusChangeStatus.Updated, result.Status);
+        Assert.Equal("Deleted", result.Response!.PreviousStatus);
+        Assert.False(user.IsDeleted);
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    [InlineData("Locked")]
+    public async Task ChangeStatus_InvalidStatus_RejectsBeforeTransaction(string? status)
+    {
+        await Assert.ThrowsAsync<ArgumentException>(() => _service.ChangeStatusAsync(
+            42,
+            new AdminUserStatusUpdateRequest { Status = status!, Reason = "reason" },
+            CreateActor()));
+
+        _repository.Verify(
+            repo => repo.BeginTransactionAsync(It.IsAny<IsolationLevel>()),
+            Times.Never);
+    }
+
+    [Fact]
+    public async Task ChangeStatus_SelfLock_IsForbiddenWithoutTransaction()
+    {
+        var result = await _service.ChangeStatusAsync(
+            7,
+            new AdminUserStatusUpdateRequest { Status = "Deleted", Reason = "reason" },
+            CreateActor());
+
+        Assert.Equal(AdminUserStatusChangeStatus.SelfLockForbidden, result.Status);
+        _repository.Verify(
+            repo => repo.BeginTransactionAsync(It.IsAny<IsolationLevel>()),
+            Times.Never);
+    }
+
+    [Fact]
+    public async Task ChangeStatus_MissingTarget_ReturnsNotFound()
+    {
+        _repository.Setup(repo => repo.GetByIdIncludingDeletedAsync(42))
+            .ReturnsAsync((User?)null);
+
+        var result = await _service.ChangeStatusAsync(
+            42,
+            new AdminUserStatusUpdateRequest { Status = "Deleted", Reason = "reason" },
+            CreateActor());
+
+        Assert.Equal(AdminUserStatusChangeStatus.UserNotFound, result.Status);
+        _transaction.Verify(transaction => transaction.RollbackAsync(default), Times.Once);
+    }
+
+    [Fact]
+    public async Task ChangeStatus_SameStatus_IsNoOpWithoutAudit()
+    {
+        _repository.Setup(repo => repo.GetByIdIncludingDeletedAsync(42))
+            .ReturnsAsync(CreateUser(42, "Teacher"));
+
+        var result = await _service.ChangeStatusAsync(
+            42,
+            new AdminUserStatusUpdateRequest { Status = "active", Reason = "reason" },
+            CreateActor());
+
+        Assert.Equal(AdminUserStatusChangeStatus.NoChange, result.Status);
+        Assert.False(result.Response!.Changed);
+        _repository.Verify(repo => repo.SaveChangesAsync(), Times.Never);
+        _auditWriter.Verify(
+            writer => writer.WriteAsync(It.IsAny<AdminAuditWriteRequest>()),
+            Times.Never);
+    }
+
+    [Fact]
+    public async Task ChangeStatus_LastActiveAdminLock_IsForbidden()
+    {
+        _repository.Setup(repo => repo.GetByIdIncludingDeletedAsync(42))
+            .ReturnsAsync(CreateUser(42, "Admin"));
+        _repository.Setup(repo => repo.CountActiveAdminsAsync()).ReturnsAsync(1);
+
+        var result = await _service.ChangeStatusAsync(
+            42,
+            new AdminUserStatusUpdateRequest { Status = "Deleted", Reason = "reason" },
+            CreateActor());
+
+        Assert.Equal(AdminUserStatusChangeStatus.LastAdminForbidden, result.Status);
+        _repository.Verify(repo => repo.SaveChangesAsync(), Times.Never);
+        _transaction.Verify(transaction => transaction.RollbackAsync(default), Times.Once);
+    }
+
+    [Fact]
+    public async Task ChangeStatus_AuditFailure_RollsBackUserChange()
+    {
+        _repository.Setup(repo => repo.GetByIdIncludingDeletedAsync(42))
+            .ReturnsAsync(CreateUser(42, "Teacher"));
+        _repository.Setup(repo => repo.SaveChangesAsync()).ReturnsAsync(1);
+        _auditWriter
+            .Setup(writer => writer.WriteAsync(It.IsAny<AdminAuditWriteRequest>()))
+            .ThrowsAsync(new InvalidOperationException("audit failed"));
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            _service.ChangeStatusAsync(
+                42,
+                new AdminUserStatusUpdateRequest
+                {
+                    Status = "Deleted",
+                    Reason = "reason"
+                },
+                CreateActor()));
+
+        _transaction.Verify(transaction => transaction.RollbackAsync(default), Times.Once);
+        _transaction.Verify(transaction => transaction.CommitAsync(default), Times.Never);
+    }
+
     private static User CreateUser(int id, string role) => new()
     {
         Id = id,

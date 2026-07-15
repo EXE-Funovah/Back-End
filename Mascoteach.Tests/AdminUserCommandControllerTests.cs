@@ -26,11 +26,15 @@ public class AdminUserCommandControllerTests
         var subscriptionPatch = typeof(AdminUserCommandController)
             .GetMethod("ChangeSubscription")!
             .GetCustomAttribute<HttpPatchAttribute>();
+        var statusPatch = typeof(AdminUserCommandController)
+            .GetMethod("ChangeStatus")!
+            .GetCustomAttribute<HttpPatchAttribute>();
 
         Assert.Equal("Admin", authorize!.Roles);
         Assert.Equal("api/Admin/users", route!.Template);
         Assert.Equal("{id:int}/role", patch!.Template);
         Assert.Equal("{id:int}/subscription", subscriptionPatch!.Template);
+        Assert.Equal("{id:int}/status", statusPatch!.Template);
     }
 
     [Fact]
@@ -249,6 +253,90 @@ public class AdminUserCommandControllerTests
             });
 
         Assert.IsType<NotFoundObjectResult>(result);
+    }
+
+    [Fact]
+    public async Task ChangeStatus_ValidActor_PassesMetadataAndReturnsOk()
+    {
+        var service = new Mock<IAdminUserCommandService>();
+        AdminActorContext? actor = null;
+        var request = new AdminUserStatusUpdateRequest
+        {
+            Status = "Deleted",
+            Reason = "Policy violation"
+        };
+        service
+            .Setup(value => value.ChangeStatusAsync(
+                42,
+                request,
+                It.IsAny<AdminActorContext>()))
+            .Callback<int, AdminUserStatusUpdateRequest, AdminActorContext>(
+                (_, _, value) => actor = value)
+            .ReturnsAsync(new AdminUserStatusChangeResult
+            {
+                Status = AdminUserStatusChangeStatus.Updated,
+                Response = new AdminUserStatusUpdateResponse
+                {
+                    UserId = 42,
+                    PreviousStatus = "Active",
+                    Status = "Deleted",
+                    Changed = true
+                }
+            });
+        var controller = CreateController(service.Object, includeClaims: true);
+
+        var result = await controller.ChangeStatus(42, request);
+
+        var ok = Assert.IsType<OkObjectResult>(result);
+        Assert.IsType<AdminUserStatusUpdateResponse>(ok.Value);
+        Assert.Equal(7, actor!.UserId);
+        Assert.Equal("admin@mascoteach.com", actor.Email);
+    }
+
+    [Fact]
+    public async Task ChangeStatus_InvalidInput_ReturnsBadRequest()
+    {
+        var service = new Mock<IAdminUserCommandService>();
+        service
+            .Setup(value => value.ChangeStatusAsync(
+                It.IsAny<int>(),
+                It.IsAny<AdminUserStatusUpdateRequest>(),
+                It.IsAny<AdminActorContext>()))
+            .ThrowsAsync(new ArgumentException("Status is required."));
+        var controller = CreateController(service.Object, includeClaims: true);
+
+        var result = await controller.ChangeStatus(
+            42,
+            new AdminUserStatusUpdateRequest { Status = "", Reason = "reason" });
+
+        var badRequest = Assert.IsType<BadRequestObjectResult>(result);
+        Assert.Equal("Status is required.", badRequest.Value);
+    }
+
+    [Theory]
+    [InlineData(AdminUserStatusChangeStatus.UserNotFound, 404)]
+    [InlineData(AdminUserStatusChangeStatus.SelfLockForbidden, 409)]
+    [InlineData(AdminUserStatusChangeStatus.LastAdminForbidden, 409)]
+    public async Task ChangeStatus_BusinessRejection_ReturnsExpectedStatus(
+        AdminUserStatusChangeStatus status,
+        int expectedStatus)
+    {
+        var service = new Mock<IAdminUserCommandService>();
+        service
+            .Setup(value => value.ChangeStatusAsync(
+                It.IsAny<int>(),
+                It.IsAny<AdminUserStatusUpdateRequest>(),
+                It.IsAny<AdminActorContext>()))
+            .ReturnsAsync(new AdminUserStatusChangeResult { Status = status });
+        var controller = CreateController(service.Object, includeClaims: true);
+
+        var result = await controller.ChangeStatus(
+            42,
+            new AdminUserStatusUpdateRequest { Status = "Deleted", Reason = "reason" });
+
+        Assert.Equal(
+            expectedStatus,
+            Assert.IsAssignableFrom<ObjectResult>(result).StatusCode);
     }
 
     private static AdminUserCommandController CreateController(

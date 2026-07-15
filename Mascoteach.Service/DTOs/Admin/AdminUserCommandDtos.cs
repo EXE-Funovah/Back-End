@@ -24,6 +24,16 @@ public class AdminUserSubscriptionUpdateRequest
     public string Reason { get; set; } = null!;
 }
 
+public class AdminUserStatusUpdateRequest
+{
+    [Required]
+    public string Status { get; set; } = null!;
+
+    [Required]
+    [MaxLength(500)]
+    public string Reason { get; set; } = null!;
+}
+
 public class AdminActorContext
 {
     public int UserId { get; set; }
@@ -47,6 +57,14 @@ public class AdminUserSubscriptionUpdateResponse
     public DateTimeOffset? PreviousPremiumExpiresAt { get; set; }
     public string SubscriptionTier { get; set; } = null!;
     public DateTimeOffset? PremiumExpiresAt { get; set; }
+    public bool Changed { get; set; }
+}
+
+public class AdminUserStatusUpdateResponse
+{
+    public int UserId { get; set; }
+    public string PreviousStatus { get; set; } = null!;
+    public string Status { get; set; } = null!;
     public bool Changed { get; set; }
 }
 
@@ -76,4 +94,19 @@ public class AdminUserSubscriptionChangeResult
 {
     public AdminUserSubscriptionChangeStatus Status { get; set; }
     public AdminUserSubscriptionUpdateResponse? Response { get; set; }
+}
+
+public enum AdminUserStatusChangeStatus
+{
+    Updated,
+    NoChange,
+    UserNotFound,
+    SelfLockForbidden,
+    LastAdminForbidden
+}
+
+public class AdminUserStatusChangeResult
+{
+    public AdminUserStatusChangeStatus Status { get; set; }
+    public AdminUserStatusUpdateResponse? Response { get; set; }
 }

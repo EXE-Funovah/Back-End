@@ -100,6 +100,7 @@ GET /api/Admin/users?search=&role=&subscription=&page=1&pageSize=20
 GET /api/Admin/users/{id}
 PATCH /api/Admin/users/{id}/role
 PATCH /api/Admin/users/{id}/subscription
+PATCH /api/Admin/users/{id}/status
 ```
 
 - All routes inherit `[Authorize(Roles = "Admin")]`; the two GET routes are read-only.
@@ -134,7 +135,27 @@ PATCH /api/Admin/users/{id}/subscription
   `/api/Admin/billing/users/{userId}/subscription`.
 - A successful payment webhook arriving later may extend Premium using the existing billing rule; the Admin mutation
   does not alter payment orders or webhook history.
-- Status mutation does not exist yet.
+- Status mutation accepts `Active` or `Deleted` case-insensitively plus mandatory `reason`; it maps only to
+  `Users.is_deleted` and never hard-deletes account data.
+- An Admin cannot lock their own account or the last active Admin. Same-status requests are HTTP 200 no-ops without
+  audit. Successful changes write `User.StatusChanged` at `High` risk with status-only before/after JSON in the same
+  serializable transaction.
+- Deleted accounts cannot use local login, Google login, re-register the same email, or authenticate with an already
+  issued JWT. JWT validation also rejects a role claim that no longer matches the database, so role changes require
+  a fresh login/token.
+- Already-established SignalR connections are not forcibly disconnected when an account is locked. Immediate
+  realtime kick would require a connection-revocation registry integrated with `GameHub`.
+
+Deferred GameHub/SignalR security review:
+
+- `GameHub` currently has no `[Authorize]`, and its methods do not enforce host/student role, session ownership, or
+  caller-to-game-PIN membership.
+- The frontend supplies an access token through SignalR `accessTokenFactory`, but the backend does not currently
+  configure the standard `access_token` query extraction needed by WebSocket/SSE transports.
+- Active connections are not closed automatically on JWT expiry or account lock.
+- Do not patch this flow piecemeal. When the game flow is revisited, audit join/reconnect/groups and every
+  start/question/answer/score/end-game call, then add authorization, ownership, expiry-close, connection revocation,
+  and integration/security tests together.
 
 ### Audit logs
 
@@ -162,9 +183,11 @@ Schema rollout state:
 
 - Development DB rollout and DB-first scaffold completed on 2026-07-15.
 - Production rollout is still required using `Database/admin_audit_logs_rollout.sql` before deploying mutation code.
-- Focused Audit tests `12/12`, focused User command tests `31/31`, full suite `249/249`, and solution build passed.
+- Focused Audit tests `12/12`, focused status/Auth/JWT tests `67/67`, full suite `270/270`, and solution build passed.
 - Manual Swagger smoke test for the list route against the development DB passed with HTTP 200 on 2026-07-15;
   a later role-mutation smoke test also succeeded and appeared as `User.RoleChanged` in audit history.
+- Manual subscription smoke testing also changed Premium to Freemium, cleared the current expiry, and appeared as
+  `User.SubscriptionChanged` in audit history on 2026-07-15.
 
 ### Overview
 

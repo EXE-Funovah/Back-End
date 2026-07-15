@@ -15,6 +15,9 @@ public class AdminUserCommandRepository : IAdminUserCommandRepository
     public Task<User?> GetActiveByIdAsync(int id) =>
         _context.Users.FirstOrDefaultAsync(user => user.Id == id && !user.IsDeleted);
 
+    public Task<User?> GetByIdIncludingDeletedAsync(int id) =>
+        _context.Users.FirstOrDefaultAsync(user => user.Id == id);
+
     public Task<int> CountActiveAdminsAsync() =>
         _context.Users.CountAsync(user => !user.IsDeleted && user.Role == "Admin");
 
@@ -26,4 +29,3 @@ public class AdminUserCommandRepository : IAdminUserCommandRepository
         IsolationLevel isolationLevel = IsolationLevel.Serializable) =>
         _context.Database.BeginTransactionAsync(isolationLevel);
 }
-

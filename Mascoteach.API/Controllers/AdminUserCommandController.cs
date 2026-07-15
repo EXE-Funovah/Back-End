@@ -81,6 +81,38 @@ public class AdminUserCommandController : ControllerBase
         }
     }
 
+    [HttpPatch("{id:int}/status")]
+    public async Task<IActionResult> ChangeStatus(
+        int id,
+        [FromBody] AdminUserStatusUpdateRequest request)
+    {
+        if (!TryCreateActorContext(out var actor))
+            return Unauthorized("Admin identity claims are missing.");
+
+        try
+        {
+            var result = await _service.ChangeStatusAsync(id, request, actor);
+
+            return result.Status switch
+            {
+                AdminUserStatusChangeStatus.Updated => Ok(result.Response),
+                AdminUserStatusChangeStatus.NoChange => Ok(result.Response),
+                AdminUserStatusChangeStatus.UserNotFound =>
+                    NotFound("User does not exist."),
+                AdminUserStatusChangeStatus.SelfLockForbidden =>
+                    Conflict("Administrators cannot lock their own account."),
+                AdminUserStatusChangeStatus.LastAdminForbidden =>
+                    Conflict("The last active Admin cannot be locked."),
+                _ => throw new InvalidOperationException(
+                    "Unknown status change result.")
+            };
+        }
+        catch (ArgumentException ex)
+        {
+            return BadRequest(ex.Message);
+        }
+    }
+
     private bool TryCreateActorContext(out AdminActorContext actor)
     {
         var userIdClaim = User.FindFirst("UserId")?.Value;

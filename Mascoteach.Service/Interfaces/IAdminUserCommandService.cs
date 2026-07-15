@@ -13,4 +13,9 @@ public interface IAdminUserCommandService
         int targetUserId,
         AdminUserSubscriptionUpdateRequest request,
         AdminActorContext actor);
+
+    Task<AdminUserStatusChangeResult> ChangeStatusAsync(
+        int targetUserId,
+        AdminUserStatusUpdateRequest request,
+        AdminActorContext actor);
 }
