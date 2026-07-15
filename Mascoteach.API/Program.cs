@@ -69,6 +69,7 @@ builder.Services.AddScoped<AdminAuditService>();
 builder.Services.AddScoped<IAdminAuditService>(provider => provider.GetRequiredService<AdminAuditService>());
 builder.Services.AddScoped<IAdminAuditWriter>(provider => provider.GetRequiredService<AdminAuditService>());
 builder.Services.AddScoped<IAdminUserCommandService, AdminUserCommandService>();
+builder.Services.AddSingleton(TimeProvider.System);
 builder.Services.AddScoped<IPayOsSignatureService, PayOsSignatureService>();
 builder.Services.AddHttpClient<IPayOsClient, PayOsClient>();
 builder.Services.AddSignalR(); // signalR

@@ -23,10 +23,14 @@ public class AdminUserCommandControllerTests
         var patch = typeof(AdminUserCommandController)
             .GetMethod("ChangeRole")!
             .GetCustomAttribute<HttpPatchAttribute>();
+        var subscriptionPatch = typeof(AdminUserCommandController)
+            .GetMethod("ChangeSubscription")!
+            .GetCustomAttribute<HttpPatchAttribute>();
 
         Assert.Equal("Admin", authorize!.Roles);
         Assert.Equal("api/Admin/users", route!.Template);
         Assert.Equal("{id:int}/role", patch!.Template);
+        Assert.Equal("{id:int}/subscription", subscriptionPatch!.Template);
     }
 
     [Fact]
@@ -129,6 +133,122 @@ public class AdminUserCommandControllerTests
         Assert.Equal(
             expectedStatus,
             Assert.IsAssignableFrom<ObjectResult>(result).StatusCode);
+    }
+
+    [Fact]
+    public async Task ChangeSubscription_ValidActor_PassesMetadataAndReturnsOk()
+    {
+        var service = new Mock<IAdminUserCommandService>();
+        AdminActorContext? actor = null;
+        var request = new AdminUserSubscriptionUpdateRequest
+        {
+            SubscriptionTier = "Premium",
+            PremiumExpiresAt = new DateTimeOffset(
+                2026, 8, 15, 0, 0, 0, TimeSpan.Zero),
+            Reason = "Support extension"
+        };
+        service
+            .Setup(value => value.ChangeSubscriptionAsync(
+                42,
+                request,
+                It.IsAny<AdminActorContext>()))
+            .Callback<int, AdminUserSubscriptionUpdateRequest, AdminActorContext>(
+                (_, _, value) => actor = value)
+            .ReturnsAsync(new AdminUserSubscriptionChangeResult
+            {
+                Status = AdminUserSubscriptionChangeStatus.Updated,
+                Response = new AdminUserSubscriptionUpdateResponse
+                {
+                    UserId = 42,
+                    PreviousSubscriptionTier = "Freemium",
+                    SubscriptionTier = "Premium",
+                    PremiumExpiresAt = request.PremiumExpiresAt,
+                    Changed = true
+                }
+            });
+        var controller = CreateController(service.Object, includeClaims: true);
+
+        var result = await controller.ChangeSubscription(42, request);
+
+        var ok = Assert.IsType<OkObjectResult>(result);
+        Assert.IsType<AdminUserSubscriptionUpdateResponse>(ok.Value);
+        Assert.Equal(7, actor!.UserId);
+        Assert.Equal("admin@mascoteach.com", actor.Email);
+        Assert.Equal("127.0.0.1", actor.IpAddress);
+        Assert.Equal("test-agent", actor.UserAgent);
+    }
+
+    [Fact]
+    public async Task ChangeSubscription_MissingActorClaims_ReturnsUnauthorized()
+    {
+        var service = new Mock<IAdminUserCommandService>();
+        var controller = CreateController(service.Object, includeClaims: false);
+
+        var result = await controller.ChangeSubscription(
+            42,
+            new AdminUserSubscriptionUpdateRequest
+            {
+                SubscriptionTier = "Freemium",
+                Reason = "reason"
+            });
+
+        Assert.IsType<UnauthorizedObjectResult>(result);
+        service.Verify(
+            value => value.ChangeSubscriptionAsync(
+                It.IsAny<int>(),
+                It.IsAny<AdminUserSubscriptionUpdateRequest>(),
+                It.IsAny<AdminActorContext>()),
+            Times.Never);
+    }
+
+    [Fact]
+    public async Task ChangeSubscription_InvalidInput_ReturnsBadRequest()
+    {
+        var service = new Mock<IAdminUserCommandService>();
+        service
+            .Setup(value => value.ChangeSubscriptionAsync(
+                It.IsAny<int>(),
+                It.IsAny<AdminUserSubscriptionUpdateRequest>(),
+                It.IsAny<AdminActorContext>()))
+            .ThrowsAsync(new ArgumentException("Premium expiry is required."));
+        var controller = CreateController(service.Object, includeClaims: true);
+
+        var result = await controller.ChangeSubscription(
+            42,
+            new AdminUserSubscriptionUpdateRequest
+            {
+                SubscriptionTier = "Premium",
+                Reason = "reason"
+            });
+
+        var badRequest = Assert.IsType<BadRequestObjectResult>(result);
+        Assert.Equal("Premium expiry is required.", badRequest.Value);
+    }
+
+    [Fact]
+    public async Task ChangeSubscription_UserNotFound_ReturnsNotFound()
+    {
+        var service = new Mock<IAdminUserCommandService>();
+        service
+            .Setup(value => value.ChangeSubscriptionAsync(
+                It.IsAny<int>(),
+                It.IsAny<AdminUserSubscriptionUpdateRequest>(),
+                It.IsAny<AdminActorContext>()))
+            .ReturnsAsync(new AdminUserSubscriptionChangeResult
+            {
+                Status = AdminUserSubscriptionChangeStatus.UserNotFound
+            });
+        var controller = CreateController(service.Object, includeClaims: true);
+
+        var result = await controller.ChangeSubscription(
+            42,
+            new AdminUserSubscriptionUpdateRequest
+            {
+                SubscriptionTier = "Freemium",
+                Reason = "reason"
+            });
+
+        Assert.IsType<NotFoundObjectResult>(result);
     }
 
     private static AdminUserCommandController CreateController(

@@ -1,4 +1,5 @@
 using System.Data;
+using System.Text.Json;
 using Mascoteach.Data.Interfaces;
 using Mascoteach.Data.Models;
 using Mascoteach.Service.DTOs.Admin;
@@ -16,6 +17,8 @@ public class AdminUserCommandServiceTests
     private readonly Mock<IAdminAuditWriter> _auditWriter = new();
     private readonly Mock<IDbContextTransaction> _transaction = new();
     private readonly AdminUserCommandService _service;
+    private static readonly DateTimeOffset Now =
+        new(2026, 7, 15, 8, 0, 0, TimeSpan.Zero);
 
     public AdminUserCommandServiceTests()
     {
@@ -24,7 +27,8 @@ public class AdminUserCommandServiceTests
             .ReturnsAsync(_transaction.Object);
         _service = new AdminUserCommandService(
             _repository.Object,
-            _auditWriter.Object);
+            _auditWriter.Object,
+            new FixedTimeProvider(Now));
     }
 
     [Fact]
@@ -193,6 +197,213 @@ public class AdminUserCommandServiceTests
         _transaction.Verify(transaction => transaction.CommitAsync(default), Times.Never);
     }
 
+    [Fact]
+    public async Task ChangeSubscription_ToPremium_UpdatesAndAuditsInTransaction()
+    {
+        var user = CreateUser(42, "Student");
+        user.SubscriptionTier = "Freemium";
+        _repository.Setup(repo => repo.GetActiveByIdAsync(42)).ReturnsAsync(user);
+        _repository.Setup(repo => repo.SaveChangesAsync()).ReturnsAsync(1);
+        AdminAuditWriteRequest? audit = null;
+        _auditWriter
+            .Setup(writer => writer.WriteAsync(It.IsAny<AdminAuditWriteRequest>()))
+            .Callback<AdminAuditWriteRequest>(value => audit = value)
+            .Returns(Task.CompletedTask);
+        var expiresAt = Now.AddDays(30);
+
+        var result = await _service.ChangeSubscriptionAsync(
+            42,
+            new AdminUserSubscriptionUpdateRequest
+            {
+                SubscriptionTier = " premium ",
+                PremiumExpiresAt = expiresAt,
+                Reason = " Support extension "
+            },
+            CreateActor());
+
+        Assert.Equal(AdminUserSubscriptionChangeStatus.Updated, result.Status);
+        Assert.Equal("Freemium", result.Response!.PreviousSubscriptionTier);
+        Assert.Null(result.Response.PreviousPremiumExpiresAt);
+        Assert.Equal("Premium", result.Response.SubscriptionTier);
+        Assert.Equal(expiresAt, result.Response.PremiumExpiresAt);
+        Assert.True(result.Response.Changed);
+        Assert.Equal("Premium", user.SubscriptionTier);
+        Assert.Equal(expiresAt.UtcDateTime, user.PremiumExpiresAt);
+        Assert.Equal("User.SubscriptionChanged", audit!.Action);
+        Assert.Equal("High", audit.RiskLevel);
+        Assert.Equal("Support extension", audit.Reason);
+        using var before = JsonDocument.Parse(audit.BeforeJson!);
+        using var after = JsonDocument.Parse(audit.AfterJson!);
+        Assert.Equal(
+            "Freemium",
+            before.RootElement.GetProperty("subscriptionTier").GetString());
+        Assert.Equal(JsonValueKind.Null,
+            before.RootElement.GetProperty("premiumExpiresAt").ValueKind);
+        Assert.Equal(
+            "Premium",
+            after.RootElement.GetProperty("subscriptionTier").GetString());
+        _transaction.Verify(transaction => transaction.CommitAsync(default), Times.Once);
+        _transaction.Verify(transaction => transaction.RollbackAsync(default), Times.Never);
+    }
+
+    [Fact]
+    public async Task ChangeSubscription_ToFreemium_ClearsExpiry()
+    {
+        var user = CreateUser(42, "Student");
+        user.SubscriptionTier = "Premium";
+        user.PremiumExpiresAt = Now.AddDays(10).UtcDateTime;
+        _repository.Setup(repo => repo.GetActiveByIdAsync(42)).ReturnsAsync(user);
+        _repository.Setup(repo => repo.SaveChangesAsync()).ReturnsAsync(1);
+
+        var result = await _service.ChangeSubscriptionAsync(
+            42,
+            new AdminUserSubscriptionUpdateRequest
+            {
+                SubscriptionTier = "Freemium",
+                PremiumExpiresAt = Now.AddYears(1),
+                Reason = "End manual access"
+            },
+            CreateActor());
+
+        Assert.Equal(AdminUserSubscriptionChangeStatus.Updated, result.Status);
+        Assert.Equal("Freemium", user.SubscriptionTier);
+        Assert.Null(user.PremiumExpiresAt);
+        Assert.Null(result.Response!.PremiumExpiresAt);
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    [InlineData("Pro")]
+    public async Task ChangeSubscription_InvalidTier_RejectsBeforeTransaction(
+        string? subscriptionTier)
+    {
+        await Assert.ThrowsAsync<ArgumentException>(() =>
+            _service.ChangeSubscriptionAsync(
+                42,
+                new AdminUserSubscriptionUpdateRequest
+                {
+                    SubscriptionTier = subscriptionTier!,
+                    Reason = "reason"
+                },
+                CreateActor()));
+
+        _repository.Verify(
+            repo => repo.BeginTransactionAsync(It.IsAny<IsolationLevel>()),
+            Times.Never);
+    }
+
+    [Fact]
+    public async Task ChangeSubscription_PremiumWithoutExpiry_RejectsBeforeTransaction()
+    {
+        await Assert.ThrowsAsync<ArgumentException>(() =>
+            _service.ChangeSubscriptionAsync(
+                42,
+                new AdminUserSubscriptionUpdateRequest
+                {
+                    SubscriptionTier = "Premium",
+                    Reason = "reason"
+                },
+                CreateActor()));
+
+        _repository.Verify(
+            repo => repo.BeginTransactionAsync(It.IsAny<IsolationLevel>()),
+            Times.Never);
+    }
+
+    [Fact]
+    public async Task ChangeSubscription_PremiumWithElapsedExpiry_RejectsBeforeTransaction()
+    {
+        await Assert.ThrowsAsync<ArgumentException>(() =>
+            _service.ChangeSubscriptionAsync(
+                42,
+                new AdminUserSubscriptionUpdateRequest
+                {
+                    SubscriptionTier = "Premium",
+                    PremiumExpiresAt = Now,
+                    Reason = "reason"
+                },
+                CreateActor()));
+
+        _repository.Verify(
+            repo => repo.BeginTransactionAsync(It.IsAny<IsolationLevel>()),
+            Times.Never);
+    }
+
+    [Fact]
+    public async Task ChangeSubscription_MissingOrDeletedTarget_ReturnsNotFound()
+    {
+        _repository.Setup(repo => repo.GetActiveByIdAsync(42)).ReturnsAsync((User?)null);
+
+        var result = await _service.ChangeSubscriptionAsync(
+            42,
+            new AdminUserSubscriptionUpdateRequest
+            {
+                SubscriptionTier = "Freemium",
+                Reason = "reason"
+            },
+            CreateActor());
+
+        Assert.Equal(AdminUserSubscriptionChangeStatus.UserNotFound, result.Status);
+        _transaction.Verify(transaction => transaction.RollbackAsync(default), Times.Once);
+        _auditWriter.Verify(
+            writer => writer.WriteAsync(It.IsAny<AdminAuditWriteRequest>()),
+            Times.Never);
+    }
+
+    [Fact]
+    public async Task ChangeSubscription_SameValues_IsNoOpWithoutAudit()
+    {
+        var user = CreateUser(42, "Student");
+        user.SubscriptionTier = "Premium";
+        user.PremiumExpiresAt = Now.AddDays(30).UtcDateTime;
+        _repository.Setup(repo => repo.GetActiveByIdAsync(42)).ReturnsAsync(user);
+
+        var result = await _service.ChangeSubscriptionAsync(
+            42,
+            new AdminUserSubscriptionUpdateRequest
+            {
+                SubscriptionTier = "premium",
+                PremiumExpiresAt = Now.AddDays(30).ToOffset(TimeSpan.FromHours(7)),
+                Reason = "reason"
+            },
+            CreateActor());
+
+        Assert.Equal(AdminUserSubscriptionChangeStatus.NoChange, result.Status);
+        Assert.False(result.Response!.Changed);
+        _repository.Verify(repo => repo.SaveChangesAsync(), Times.Never);
+        _auditWriter.Verify(
+            writer => writer.WriteAsync(It.IsAny<AdminAuditWriteRequest>()),
+            Times.Never);
+        _transaction.Verify(transaction => transaction.RollbackAsync(default), Times.Once);
+    }
+
+    [Fact]
+    public async Task ChangeSubscription_AuditFailure_RollsBackUserChange()
+    {
+        var user = CreateUser(42, "Student");
+        user.SubscriptionTier = "Freemium";
+        _repository.Setup(repo => repo.GetActiveByIdAsync(42)).ReturnsAsync(user);
+        _repository.Setup(repo => repo.SaveChangesAsync()).ReturnsAsync(1);
+        _auditWriter
+            .Setup(writer => writer.WriteAsync(It.IsAny<AdminAuditWriteRequest>()))
+            .ThrowsAsync(new InvalidOperationException("audit failed"));
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            _service.ChangeSubscriptionAsync(
+                42,
+                new AdminUserSubscriptionUpdateRequest
+                {
+                    SubscriptionTier = "Premium",
+                    PremiumExpiresAt = Now.AddDays(30),
+                    Reason = "reason"
+                },
+                CreateActor()));
+
+        _transaction.Verify(transaction => transaction.RollbackAsync(default), Times.Once);
+        _transaction.Verify(transaction => transaction.CommitAsync(default), Times.Never);
+    }
+
     private static User CreateUser(int id, string role) => new()
     {
         Id = id,
@@ -209,4 +420,9 @@ public class AdminUserCommandServiceTests
         IpAddress = "127.0.0.1",
         UserAgent = "test-agent"
     };
+
+    private sealed class FixedTimeProvider(DateTimeOffset now) : TimeProvider
+    {
+        public override DateTimeOffset GetUtcNow() => now;
+    }
 }

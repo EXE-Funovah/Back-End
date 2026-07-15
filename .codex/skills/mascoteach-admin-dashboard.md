@@ -99,6 +99,7 @@ Related User API boundary:
 GET /api/Admin/users?search=&role=&subscription=&page=1&pageSize=20
 GET /api/Admin/users/{id}
 PATCH /api/Admin/users/{id}/role
+PATCH /api/Admin/users/{id}/subscription
 ```
 
 - All routes inherit `[Authorize(Roles = "Admin")]`; the two GET routes are read-only.
@@ -123,7 +124,17 @@ PATCH /api/Admin/users/{id}/role
 - Submitting the current role is an idempotent HTTP 200 no-op and does not create a misleading audit record.
 - A successful change writes `User.RoleChanged` at `High` risk with safe role-only before/after JSON in the same
   serializable transaction. If audit persistence fails, the role change is rolled back.
-- Subscription and status mutations do not exist yet.
+- Subscription mutation uses a dedicated request body with `subscriptionTier`, optional `premiumExpiresAt`, and
+  mandatory `reason` (maximum 500 characters). It accepts only `Freemium` or `Premium` case-insensitively.
+- Premium requires a future expiry and stores it in UTC. Freemium always clears expiry. The canonical Admin Premium
+  invariant remains tier `Premium` plus a non-null future expiry.
+- A same-tier/same-expiry request is an HTTP 200 no-op without audit. Successful changes write
+  `User.SubscriptionChanged` at `High` risk with safe tier/expiry-only JSON in the same serializable transaction.
+- The canonical subscription mutation route is under `/api/Admin/users`; do not add the duplicate backlog route
+  `/api/Admin/billing/users/{userId}/subscription`.
+- A successful payment webhook arriving later may extend Premium using the existing billing rule; the Admin mutation
+  does not alter payment orders or webhook history.
+- Status mutation does not exist yet.
 
 ### Audit logs
 
@@ -151,9 +162,9 @@ Schema rollout state:
 
 - Development DB rollout and DB-first scaffold completed on 2026-07-15.
 - Production rollout is still required using `Database/admin_audit_logs_rollout.sql` before deploying mutation code.
-- Focused Audit tests `12/12`, focused User role-command tests `17/17`, full suite `235/235`, and solution build passed.
+- Focused Audit tests `12/12`, focused User command tests `31/31`, full suite `249/249`, and solution build passed.
 - Manual Swagger smoke test for the list route against the development DB passed with HTTP 200 on 2026-07-15;
-  the empty `items` result is expected until the first Admin mutation writes an audit record.
+  a later role-mutation smoke test also succeeded and appeared as `User.RoleChanged` in audit history.
 
 ### Overview
 

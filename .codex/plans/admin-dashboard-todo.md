@@ -75,7 +75,7 @@ nhật trạng thái tích hợp; không đánh dấu backend hoàn thành chỉ
 Ưu tiên backend tiếp theo:
 
 1. [Hoàn tất 2026-07-15] `Admin_Audit_Logs` và API đọc audit.
-2. [Role hoàn tất 2026-07-15] Tiếp tục User subscription/status mutations có DTO riêng, reason và audit.
+2. [Role + subscription hoàn tất 2026-07-15] Tiếp tục User status mutation có DTO riêng, reason và audit.
 3. Document/Quiz hide-restore cho Admin có reason và audit.
 4. Admin end-session và Billing sync có audit, kiểm soát race/idempotency.
 5. AI/content processing telemetry, retry và overview alerts.
@@ -404,8 +404,19 @@ Trạng thái API:
   - Role update và audit `User.RoleChanged` (`High`, before/after chỉ chứa role) dùng chung serializable transaction;
     audit lỗi thì role update rollback.
   - Focused tests `17/17`, full suite `235/235` và solution build đã pass.
+  - Manual Swagger smoke test với development DB đã đổi role thành công và audit read API trả đúng lịch sử
+    `User.RoleChanged` ngày 2026-07-15.
   - Production DB vẫn phải chạy `Database/admin_audit_logs_rollout.sql` trước khi deploy mutation code.
-- [ ] `PATCH /api/Admin/users/{id}/subscription`
+- [x] `PATCH /api/Admin/users/{id}/subscription`
+  - Status: Completed (2026-07-15)
+  - Admin-only, DTO riêng nhận `Freemium|Premium` và `reason` bắt buộc; chỉ đổi user active.
+  - `Premium` bắt buộc có expiry tương lai và được chuẩn hoá UTC; `Freemium` luôn xoá expiry.
+  - Cùng tier + expiry trả HTTP 200 no-op, không ghi audit.
+  - Subscription update và audit `User.SubscriptionChanged` (`High`, before/after chỉ chứa tier + expiry) dùng chung
+    serializable transaction; audit lỗi thì subscription update rollback.
+  - Focused User command tests `31/31`, full suite `249/249` và solution build đã pass.
+  - Webhook thanh toán thành công đến sau vẫn gia hạn Premium theo billing invariant hiện có.
+  - Production DB vẫn phải rollout `Admin_Audit_Logs` trước khi deploy mutation code.
 - [ ] `PATCH /api/Admin/users/{id}/status`
 
 Admin list/detail đã trả aggregate riêng. Legacy `UserController.ToggleDelete` có thể soft-delete user nhưng chưa có
@@ -502,7 +513,8 @@ Trạng thái API:
 - [x] `GET /api/Admin/billing/webhook-events`
 - [x] Revenue summary và paid series trong `GET /api/Admin/overview`
 - [ ] `POST /api/Admin/billing/orders/{orderCode}/sync`
-- [ ] `PATCH /api/Admin/billing/users/{userId}/subscription`
+- [x] Không tạo route trùng `PATCH /api/Admin/billing/users/{userId}/subscription`; contract canonical là
+  `PATCH /api/Admin/users/{id}/subscription`.
 
 Không tạo lại revenue endpoint riêng. Billing mutations vẫn cần DTO riêng, reason, audit và xử lý race với webhook.
 
@@ -723,7 +735,7 @@ Các bảng nên thêm trước khi bật thao tác admin thật:
 - [x] `GET /api/Admin/users`
 - [x] `GET /api/Admin/users/{id}`
 - [x] `PATCH /api/Admin/users/{id}/role`
-- [ ] `PATCH /api/Admin/users/{id}/subscription`
+- [x] `PATCH /api/Admin/users/{id}/subscription`
 - [ ] `PATCH /api/Admin/users/{id}/status`
 - [ ] Thiết kế soft-delete/restore Admin route có audit; không dùng hard-delete cho dashboard thông thường.
 
@@ -755,7 +767,7 @@ Các bảng nên thêm trước khi bật thao tác admin thật:
 - [x] `GET /api/Admin/billing/webhook-events`
 - [x] Revenue summary và 12-month paid series qua `GET /api/Admin/overview`.
 - [ ] `POST /api/Admin/billing/orders/{id}/sync`
-- [ ] `PATCH /api/Admin/billing/users/{userId}/subscription`
+- [x] Không tạo route Billing trùng; dùng `PATCH /api/Admin/users/{id}/subscription`.
 
 ### AI Usage & Quota
 
