@@ -45,7 +45,33 @@ Files:
 `AdminRepository` intentionally does not extend `IGenericRepository<T>`. It owns read-only aggregate queries such
 as count, sum, grouping, filtering, and pagination over several existing tables.
 
-The module adds no database table, migration, runtime configuration, or deployment secret.
+The read-only analytics module adds no database table, migration, runtime configuration, or deployment secret.
+The separate Admin Audit module adds the append-only `Admin_Audit_Logs` table but still adds no EF migration,
+runtime configuration, or deployment secret.
+
+The Admin Audit module is the deliberate exception to the original read-only module shape:
+
+`AdminAuditController -> IAdminAuditService / IAdminAuditWriter -> AdminAuditService -> IAdminAuditLogRepository -> AdminAuditLogRepository -> MascoteachDbContext`
+
+- `AdminAuditController` is read-only and uses the explicit route `api/Admin/audit-logs`.
+- `IAdminAuditWriter` is internal service infrastructure used by Admin mutation services; there is no public audit
+  write route.
+- `AdminAuditLogRepository` is separate from `AdminRepository` so append-only audit persistence does not turn the
+  analytics repository into a mutation repository.
+
+The User command module is separate from analytics reads:
+
+`AdminUserCommandController -> IAdminUserCommandService -> AdminUserCommandService -> IAdminUserCommandRepository / IAdminAuditWriter -> MascoteachDbContext`
+
+- `AdminUserCommandRepository` and `AdminAuditLogRepository` share the same scoped DbContext.
+- Role mutation and its audit row commit in one serializable transaction.
+
+The Content command module follows the same separation:
+
+`AdminContentCommandController -> IAdminContentCommandService -> AdminContentCommandService -> IAdminContentCommandRepository / IAdminAuditWriter -> MascoteachDbContext`
+
+- Content mutation and audit use the same scoped DbContext and serializable transaction.
+- The command repository loads tracked moderation targets including soft-deleted rows; it does not own analytics reads.
 
 ## Authorization
 
@@ -61,7 +87,8 @@ Admin accounts are provisioned manually through database seed/controlled adminis
 never grant Admin. `AuthService` only accepts the self-registerable roles `Student`, `Teacher`, and `Parent`,
 case-insensitively, and normalizes them to those canonical values.
 
-There is currently no public API for creating, promoting, demoting, disabling, or deleting Admin accounts.
+There is no public API for creating, disabling, or deleting Admin accounts. The Admin-only role mutation can promote
+or demote another active account with the safeguards documented below.
 
 Related User API boundary:
 
@@ -78,9 +105,12 @@ Related User API boundary:
 ```http
 GET /api/Admin/users?search=&role=&subscription=&page=1&pageSize=20
 GET /api/Admin/users/{id}
+PATCH /api/Admin/users/{id}/role
+PATCH /api/Admin/users/{id}/subscription
+PATCH /api/Admin/users/{id}/status
 ```
 
-- Both endpoints are read-only and inherit `[Authorize(Roles = "Admin")]`.
+- All routes inherit `[Authorize(Roles = "Admin")]`; the two GET routes are read-only.
 - `role` accepts `Teacher`, `Student`, `Parent`, or `Admin`, case-insensitively.
 - `subscription` accepts `Freemium`, `Premium`, or `Expired`, case-insensitively.
 - `Premium` requires `SubscriptionTier == "Premium"` and a future `PremiumExpiresAt`.
@@ -95,9 +125,83 @@ GET /api/Admin/users/{id}
 - Legacy `GET /api/Admin/accounts`, `AdminAccountsResponse`, and their dedicated service/repository methods were
   removed because no frontend consumed them. `/api/Admin/users` is the only Admin user-list contract.
 - Repository reads use `AsNoTracking` SQL projections and filter deleted related rows.
+- Role mutation uses a dedicated request body `{ "role": "Teacher|Student|Parent|Admin", "reason": "..." }`;
+  values are normalized case-insensitively and `reason` is mandatory with a 500-character maximum.
+- Only active targets can be changed. Missing or soft-deleted targets return HTTP 404.
+- An Admin cannot change their own role, and the last active Admin cannot be demoted; both return HTTP 409.
+- Submitting the current role is an idempotent HTTP 200 no-op and does not create a misleading audit record.
+- A successful change writes `User.RoleChanged` at `High` risk with safe role-only before/after JSON in the same
+  serializable transaction. If audit persistence fails, the role change is rolled back.
+- Subscription mutation uses a dedicated request body with `subscriptionTier`, optional `premiumExpiresAt`, and
+  mandatory `reason` (maximum 500 characters). It accepts only `Freemium` or `Premium` case-insensitively.
+- Premium requires a future expiry and stores it in UTC. Freemium always clears expiry. The canonical Admin Premium
+  invariant remains tier `Premium` plus a non-null future expiry.
+- A same-tier/same-expiry request is an HTTP 200 no-op without audit. Successful changes write
+  `User.SubscriptionChanged` at `High` risk with safe tier/expiry-only JSON in the same serializable transaction.
+- The canonical subscription mutation route is under `/api/Admin/users`; do not add the duplicate backlog route
+  `/api/Admin/billing/users/{userId}/subscription`.
+- A successful payment webhook arriving later may extend Premium using the existing billing rule; the Admin mutation
+  does not alter payment orders or webhook history.
+- Status mutation accepts `Active` or `Deleted` case-insensitively plus mandatory `reason`; it maps only to
+  `Users.is_deleted` and never hard-deletes account data.
+- An Admin cannot lock their own account or the last active Admin. Same-status requests are HTTP 200 no-ops without
+  audit. Successful changes write `User.StatusChanged` at `High` risk with status-only before/after JSON in the same
+  serializable transaction.
+- Deleted accounts cannot use local login, Google login, re-register the same email, or authenticate with an already
+  issued JWT. JWT validation also rejects a role claim that no longer matches the database, so role changes require
+  a fresh login/token.
+- Deferred sequencing decision: add user email notifications for actual lock/restore changes near the end of the
+  Admin roadmap. No-op status requests must not send mail. Design delivery retry/outbox and observability first so an
+  email-provider failure cannot roll back or obscure the already-committed status/audit transaction.
+- Already-established SignalR connections are not forcibly disconnected when an account is locked. Immediate
+  realtime kick would require a connection-revocation registry integrated with `GameHub`.
+- Manual development smoke testing confirmed lock, blocked same-email registration without creating a replacement,
+  and `User.StatusChanged` audit history on 2026-07-15.
 
-There are no Admin role/subscription/status mutations yet. Do not add them before `Admin_Audit_Logs` and dedicated
-request DTOs are designed.
+Deferred GameHub/SignalR security review:
+
+- `GameHub` currently has no `[Authorize]`, and its methods do not enforce host/student role, session ownership, or
+  caller-to-game-PIN membership.
+- The frontend supplies an access token through SignalR `accessTokenFactory`, but the backend does not currently
+  configure the standard `access_token` query extraction needed by WebSocket/SSE transports.
+- Active connections are not closed automatically on JWT expiry or account lock.
+- Do not patch this flow piecemeal. When the game flow is revisited, audit join/reconnect/groups and every
+  start/question/answer/score/end-game call, then add authorization, ownership, expiry-close, connection revocation,
+  and integration/security tests together.
+- Project sequencing decision: complete the prioritized Admin flows first and handle this GameHub review last.
+
+### Audit logs
+
+```http
+GET /api/Admin/audit-logs?search=&actorUserId=&action=&targetType=&riskLevel=&from=&to=&page=1&pageSize=20
+GET /api/Admin/audit-logs/{id}
+```
+
+- Both routes require role `Admin`.
+- `riskLevel` accepts `Low`, `Medium`, `High`, or `Critical`, case-insensitively.
+- `from` is inclusive and `to` is exclusive; `from >= to` returns HTTP 400.
+- `page < 1` becomes 1; `pageSize` outside 1 through 100 becomes 20.
+- Search covers actor email, action, target type/id, and reason.
+- Results sort by `created_at` descending, then id descending.
+- List responses omit `beforeJson`, `afterJson`, and `userAgent`; detail includes them for Admin investigation.
+- Audit logs are append-only and have no `is_deleted`, update, delete, or public create endpoint.
+- `actor_user_id` is nullable with `ON DELETE SET NULL`; `actor_email` is the durable actor snapshot.
+- `target_id` is text so it can represent entity ids, PayOS order codes, or future setting keys.
+- `reason` is mandatory. Before/after JSON must be valid JSON and must contain only explicitly selected safe fields.
+- Never store password/token hashes, S3 keys, checkout/QR data, signatures, or raw webhook payloads in audit JSON.
+- Mutation services must use `IAdminAuditWriter` inside the same scoped DbContext transaction as the mutation
+  so a data change cannot commit without its audit record.
+
+Schema rollout state:
+
+- Development DB rollout and DB-first scaffold completed on 2026-07-15.
+- Production rollout is still required using `Database/admin_audit_logs_rollout.sql` before deploying mutation code.
+- Focused Audit tests `12/12`, focused status/Auth/JWT tests `67/67`, focused Document moderation tests `14/14`,
+  full suite `288/288`, and solution build passed.
+- Manual Swagger smoke test for the list route against the development DB passed with HTTP 200 on 2026-07-15;
+  a later role-mutation smoke test also succeeded and appeared as `User.RoleChanged` in audit history.
+- Manual subscription smoke testing also changed Premium to Freemium, cleared the current expiry, and appeared as
+  `User.SubscriptionChanged` in audit history on 2026-07-15.
 
 ### Overview
 
@@ -142,9 +246,11 @@ GET /api/Admin/documents?search=&ownerId=&deletion=Active&from=&to=&page=1&pageS
 GET /api/Admin/documents/{id}
 GET /api/Admin/quizzes?search=&ownerId=&activityType=&status=&deletion=Active&from=&to=&page=1&pageSize=20
 GET /api/Admin/quizzes/{id}
+PATCH /api/Admin/documents/{id}/hide
+PATCH /api/Admin/documents/{id}/restore
 ```
 
-- All four endpoints are read-only and inherit `[Authorize(Roles = "Admin")]`.
+- All routes inherit `[Authorize(Roles = "Admin")]`; the four GET routes are read-only.
 - Document search covers file name, owner name, and owner email.
 - Quiz search covers title, source file name, owner name, and owner email.
 - `deletion` accepts `Active`, `Deleted`, or `All`, case-insensitively; default is `Active`.
@@ -159,8 +265,17 @@ GET /api/Admin/quizzes/{id}
 - Responses never include `Document.FileUrl`, S3 keys, presigned URLs, question/option text, or correct answers.
 - Owner metadata is limited to id, name, email, and soft-delete state.
 - Repository reads use `AsNoTracking`, SQL-side filters/counts/pagination, and dedicated projections.
-- No hide, restore, retry, delete, or content-view action exists yet. Add mutations only after
-  `Admin_Audit_Logs`, dedicated request DTOs, and a reason policy are designed.
+- Document hide/restore accepts a dedicated request with mandatory `reason` (maximum 500 characters), changes only
+  `Documents.is_deleted`, and never deletes the database row or S3 object.
+- Same-state requests are HTTP 200 no-ops without audit. Successful changes write `Document.Hidden` or
+  `Document.Restored` at `Medium` risk with `isDeleted`-only JSON in the same serializable transaction.
+- Document moderation does not cascade changes to `Quizzes.is_deleted`; restore preserves each Quiz/Flashcard's own
+  state. Admin restore bypasses upload quota because it is moderation reversal rather than a new upload.
+- Normal Quiz, Question, and Option reads require the full hierarchy, Document, and owner to be active; this prevents
+  direct-id/list reads from bypassing a hidden Document.
+- Quiz/Flashcard hide/restore and processing retry do not exist yet.
+- Manual development smoke testing confirmed Document hide/restore and corresponding `Document.Hidden`/
+  `Document.Restored` audit history on 2026-07-16.
 
 ### Session monitoring
 

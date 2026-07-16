@@ -36,7 +36,7 @@ namespace Mascoteach.Service.Implementations
 
         public async Task<OptionResponse?> GetByIdAsync(int id)
         {
-            var option = await _optionRepository.GetByIdAsync(id);
+            var option = await _optionRepository.GetVisibleByIdAsync(id);
             return _mapper.Map<OptionResponse>(option);
         }
 

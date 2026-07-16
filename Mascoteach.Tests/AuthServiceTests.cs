@@ -39,7 +39,8 @@ public class AuthServiceTests
     [Fact]
     public async Task RegisterAsync_NewEmail_StoresVerificationTokenAndSendsEmail()
     {
-        _userRepo.Setup(r => r.GetByEmailAsync("new@test.com")).ReturnsAsync((User?)null);
+        _userRepo.Setup(r => r.GetByEmailIncludingDeletedAsync("new@test.com"))
+            .ReturnsAsync((User?)null);
         _userRepo.Setup(r => r.AddAsync(It.IsAny<User>())).Returns(Task.CompletedTask);
         _userRepo.Setup(r => r.SaveChangesAsync()).ReturnsAsync(1);
 
@@ -68,7 +69,7 @@ public class AuthServiceTests
     [Fact]
     public async Task RegisterAsync_ExistingEmail_ReturnsNull()
     {
-        _userRepo.Setup(r => r.GetByEmailAsync("exists@test.com"))
+        _userRepo.Setup(r => r.GetByEmailIncludingDeletedAsync("exists@test.com"))
             .ReturnsAsync(new User { Id = 1, Email = "exists@test.com", FullName = "X", PasswordHash = "h", Role = "Teacher", SubscriptionTier = "Freemium" });
 
         var result = await _sut.RegisterAsync(new RegisterRequest
@@ -77,6 +78,32 @@ public class AuthServiceTests
         });
 
         Assert.Null(result);
+    }
+
+    [Fact]
+    public async Task RegisterAsync_DeletedEmail_ReturnsNullWithoutCreatingReplacement()
+    {
+        _userRepo.Setup(r => r.GetByEmailIncludingDeletedAsync("locked@test.com"))
+            .ReturnsAsync(new User
+            {
+                Id = 1,
+                Email = "locked@test.com",
+                FullName = "Locked",
+                Role = "Teacher",
+                SubscriptionTier = "Freemium",
+                IsDeleted = true
+            });
+
+        var result = await _sut.RegisterAsync(new RegisterRequest
+        {
+            FullName = "Replacement",
+            Email = "locked@test.com",
+            Password = "pass",
+            Role = "Teacher"
+        });
+
+        Assert.Null(result);
+        _userRepo.Verify(r => r.AddAsync(It.IsAny<User>()), Times.Never);
     }
 
     // ── LoginAsync ──
@@ -383,8 +410,10 @@ public class AuthServiceTests
                 FullName = "Google User",
                 EmailVerified = true
             });
-        _userRepo.Setup(r => r.GetByGoogleSubjectAsync("google-sub")).ReturnsAsync((User?)null);
-        _userRepo.Setup(r => r.GetByEmailAsync("google@test.com")).ReturnsAsync((User?)null);
+        _userRepo.Setup(r => r.GetByGoogleSubjectIncludingDeletedAsync("google-sub"))
+            .ReturnsAsync((User?)null);
+        _userRepo.Setup(r => r.GetByEmailIncludingDeletedAsync("google@test.com"))
+            .ReturnsAsync((User?)null);
         _userRepo.Setup(r => r.AddAsync(It.IsAny<User>())).Returns(Task.CompletedTask)
             .Callback<User>(u => u.Id = 10);
         _userRepo.Setup(r => r.SaveChangesAsync()).ReturnsAsync(1);
@@ -402,5 +431,36 @@ public class AuthServiceTests
             u.EmailVerified &&
             u.EmailVerifiedAt != null &&
             u.Role == "Teacher")), Times.Once);
+    }
+
+    [Fact]
+    public async Task GoogleLoginAsync_DeletedAccount_ReturnsNullWithoutCreatingReplacement()
+    {
+        _googleTokenValidator.Setup(v => v.ValidateAsync("google-id-token"))
+            .ReturnsAsync(new GoogleUserInfo
+            {
+                Subject = "google-sub",
+                Email = "locked@test.com",
+                FullName = "Locked User",
+                EmailVerified = true
+            });
+        _userRepo.Setup(r => r.GetByGoogleSubjectIncludingDeletedAsync("google-sub"))
+            .ReturnsAsync(new User
+            {
+                Id = 10,
+                Email = "locked@test.com",
+                FullName = "Locked User",
+                Role = "Teacher",
+                SubscriptionTier = "Freemium",
+                GoogleSubject = "google-sub",
+                IsDeleted = true
+            });
+
+        var result = await _sut.GoogleLoginAsync(
+            new GoogleLoginRequest { Credential = "google-id-token" });
+
+        Assert.Null(result);
+        _userRepo.Verify(r => r.AddAsync(It.IsAny<User>()), Times.Never);
+        _userRepo.Verify(r => r.SaveChangesAsync(), Times.Never);
     }
 }

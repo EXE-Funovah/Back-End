@@ -16,10 +16,21 @@ namespace Mascoteach.Data.Repositories
                 .FirstOrDefaultAsync(u => u.Email == email && u.IsDeleted == false);
         }
 
+        public Task<User?> GetByEmailIncludingDeletedAsync(string email)
+        {
+            return _context.Users.FirstOrDefaultAsync(u => u.Email == email);
+        }
+
         public async Task<User?> GetByGoogleSubjectAsync(string googleSubject)
         {
             return await _context.Users
                 .FirstOrDefaultAsync(u => u.GoogleSubject == googleSubject && u.IsDeleted == false);
+        }
+
+        public Task<User?> GetByGoogleSubjectIncludingDeletedAsync(string googleSubject)
+        {
+            return _context.Users.FirstOrDefaultAsync(
+                u => u.GoogleSubject == googleSubject);
         }
 
         public async Task<User?> GetByResetTokenHashAsync(string resetTokenHash)

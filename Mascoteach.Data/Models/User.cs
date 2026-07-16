@@ -43,6 +43,8 @@ public partial class User
 
     public string? AvatarUrl { get; set; }
 
+    public virtual ICollection<AdminAuditLog> AdminAuditLogs { get; set; } = new List<AdminAuditLog>();
+
     public virtual ICollection<Document> Documents { get; set; } = new List<Document>();
 
     public virtual ICollection<LiveSession> LiveSessions { get; set; } = new List<LiveSession>();

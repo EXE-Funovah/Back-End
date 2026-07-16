@@ -193,7 +193,7 @@ public class QuizServiceTests
     [Fact]
     public async Task GetByIdAsync_Exists_ReturnsResponse()
     {
-        _quizRepo.Setup(r => r.GetByIdAsync(1)).ReturnsAsync(MakeQuiz());
+        _quizRepo.Setup(r => r.GetVisibleByIdAsync(1)).ReturnsAsync(MakeQuiz());
 
         var result = await _sut.GetByIdAsync(1);
 
@@ -204,7 +204,7 @@ public class QuizServiceTests
     [Fact]
     public async Task GetByIdAsync_NotFound_ReturnsNull()
     {
-        _quizRepo.Setup(r => r.GetByIdAsync(1)).ReturnsAsync((Quiz?)null);
+        _quizRepo.Setup(r => r.GetVisibleByIdAsync(1)).ReturnsAsync((Quiz?)null);
 
         Assert.Null(await _sut.GetByIdAsync(1));
     }
