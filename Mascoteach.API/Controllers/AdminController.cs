@@ -236,6 +236,23 @@ public class AdminController : BaseController
         return Ok(result);
     }
 
+    [HttpGet("billing/revenue/export")]
+    public async Task<IActionResult> ExportBillingRevenue(
+        [FromQuery] DateTime? from,
+        [FromQuery] DateTime? to,
+        [FromQuery] string? plan)
+    {
+        try
+        {
+            var result = await _admin.ExportBillingRevenueAsync(from, to, plan);
+            return File(result.Content, "text/csv; charset=utf-8", result.FileName);
+        }
+        catch (ArgumentException ex)
+        {
+            return BadRequest(ex.Message);
+        }
+    }
+
     [HttpGet("billing/webhook-events")]
     public async Task<IActionResult> BillingWebhookEvents(
         [FromQuery] string? search,

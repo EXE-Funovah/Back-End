@@ -46,7 +46,7 @@ namespace Mascoteach.Service.Implementations
 
         public async Task<RegisterResponse?> RegisterAsync(RegisterRequest request)
         {
-            var existingUser = await _userRepository.GetByEmailAsync(request.Email);
+            var existingUser = await _userRepository.GetByEmailIncludingDeletedAsync(request.Email);
             if (existingUser != null) return null;
 
             // Bảo mật: chỉ chấp nhận role tự đăng ký hợp lệ; chặn "Admin".
@@ -112,8 +112,12 @@ namespace Mascoteach.Service.Implementations
             var googleUser = await _googleTokenValidator.ValidateAsync(request.Credential);
             if (googleUser == null || !googleUser.EmailVerified) return null;
 
-            var user = await _userRepository.GetByGoogleSubjectAsync(googleUser.Subject)
-                ?? await _userRepository.GetByEmailAsync(googleUser.Email);
+            var user = await _userRepository.GetByGoogleSubjectIncludingDeletedAsync(
+                    googleUser.Subject)
+                ?? await _userRepository.GetByEmailIncludingDeletedAsync(googleUser.Email);
+
+            if (user?.IsDeleted == true)
+                return null;
 
             if (user == null)
             {

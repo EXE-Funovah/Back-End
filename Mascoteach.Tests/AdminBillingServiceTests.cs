@@ -3,6 +3,7 @@ using Mascoteach.Data.Projections;
 using Mascoteach.Service.DTOs.Admin;
 using Mascoteach.Service.Implementations;
 using Moq;
+using System.Text;
 using Xunit;
 
 namespace Mascoteach.Tests;
@@ -173,6 +174,59 @@ public class AdminBillingServiceTests
             It.IsAny<DateTime?>(),
             It.IsAny<int>(),
             It.IsAny<int>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task ExportBillingRevenueAsync_ExportsOnlyRepositoryRowsAsExcelSafeUtf8Csv()
+    {
+        var from = new DateTime(2026, 1, 1);
+        var to = new DateTime(2026, 2, 1);
+        var projection = CreateOrderProjection();
+        projection.UserName = "Nguyễn, \"An\"";
+        projection.UserEmail = "=HYPERLINK(\"https://evil.example\")";
+        projection.PayosReference = "+REF-01";
+        projection.PaidAt = new DateTime(2026, 1, 15, 10, 30, 0, DateTimeKind.Utc);
+        _repo.Setup(repository => repository.GetPaidRevenueExportAsync(
+                from, to, "PRO_MONTHLY"))
+            .ReturnsAsync([projection]);
+
+        var result = await _sut.ExportBillingRevenueAsync(
+            from, to, "pro_monthly");
+
+        Assert.Equal("mascoteach-revenue-20260101-20260201.csv", result.FileName);
+        Assert.True(result.Content.AsSpan().StartsWith(new byte[] { 0xEF, 0xBB, 0xBF }));
+        var csv = Encoding.UTF8.GetString(result.Content);
+        Assert.Contains("OrderCode,UserEmail,UserName,PlanCode,Amount,Currency,PaidAt,PayOSReference", csv);
+        Assert.Contains("\"'=HYPERLINK(\"\"https://evil.example\"\")\"", csv);
+        Assert.Contains("\"Nguyễn, \"\"An\"\"\"", csv);
+        Assert.Contains("'+REF-01", csv);
+        Assert.Contains("2026-01-15T10:30:00.0000000Z", csv);
+        Assert.DoesNotContain("CheckoutUrl", csv);
+        Assert.DoesNotContain("QrCode", csv);
+        _repo.VerifyAll();
+    }
+
+    [Theory]
+    [InlineData(null, "2026-02-01", null)]
+    [InlineData("2026-01-01", null, null)]
+    [InlineData("2026-02-01", "2026-01-01", null)]
+    [InlineData("2025-01-01", "2026-01-03", null)]
+    [InlineData("2026-01-01", "2026-02-01", "PRO_WEEKLY")]
+    public async Task ExportBillingRevenueAsync_InvalidRequest_ThrowsBeforeRepositoryAccess(
+        string? fromText,
+        string? toText,
+        string? plan)
+    {
+        DateTime? from = fromText == null ? null : DateTime.Parse(fromText);
+        DateTime? to = toText == null ? null : DateTime.Parse(toText);
+
+        await Assert.ThrowsAsync<ArgumentException>(() =>
+            _sut.ExportBillingRevenueAsync(from, to, plan));
+
+        _repo.Verify(repository => repository.GetPaidRevenueExportAsync(
+            It.IsAny<DateTime>(),
+            It.IsAny<DateTime>(),
+            It.IsAny<string?>()), Times.Never);
     }
 
     private static void AssertNoSensitiveProperties(Type dtoType)

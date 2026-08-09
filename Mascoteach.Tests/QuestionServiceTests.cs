@@ -35,6 +35,32 @@ public class QuestionServiceTests
         _docRepo.Setup(r => r.GetByIdAsync(1)).ReturnsAsync(MakeDoc(teacherId));
     }
 
+    [Fact]
+    public async Task GetByIdAsync_UsesHierarchyVisibleRead()
+    {
+        _questionRepo.Setup(r => r.GetVisibleByIdAsync(1))
+            .ReturnsAsync(MakeQuestion());
+        _optionRepo.Setup(r => r.GetByQuestionIdAsync(1))
+            .ReturnsAsync(new List<Option>());
+
+        var result = await _sut.GetByIdAsync(1);
+
+        Assert.NotNull(result);
+        _questionRepo.Verify(r => r.GetVisibleByIdAsync(1), Times.Once);
+    }
+
+    [Fact]
+    public async Task GetByIdAsync_HiddenHierarchy_ReturnsNull()
+    {
+        _questionRepo.Setup(r => r.GetVisibleByIdAsync(1))
+            .ReturnsAsync((Question?)null);
+
+        Assert.Null(await _sut.GetByIdAsync(1));
+        _optionRepo.Verify(
+            r => r.GetByQuestionIdAsync(It.IsAny<int>()),
+            Times.Never);
+    }
+
     // ── CreateAsync ──
 
     [Fact]

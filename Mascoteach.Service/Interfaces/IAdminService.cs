@@ -60,6 +60,10 @@ public interface IAdminService
         int page,
         int pageSize);
     Task<AdminPaymentOrderItemDto?> GetBillingOrderByIdAsync(int id);
+    Task<AdminRevenueExportResult> ExportBillingRevenueAsync(
+        DateTime? from,
+        DateTime? to,
+        string? plan);
     Task<AdminWebhookEventsResponse> GetBillingWebhookEventsAsync(
         string? search,
         bool? processed,

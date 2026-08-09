@@ -10,6 +10,7 @@ using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
+using System.Security.Claims;
 using System.Text;
 
 
@@ -42,6 +43,9 @@ builder.Services.AddScoped<IQuizAttemptRepository, QuizAttemptRepository>();
 builder.Services.AddScoped<IPaymentOrderRepository, PaymentOrderRepository>();
 builder.Services.AddScoped<IPaymentWebhookEventRepository, PaymentWebhookEventRepository>();
 builder.Services.AddScoped<IAdminRepository, AdminRepository>();
+builder.Services.AddScoped<IAdminAuditLogRepository, AdminAuditLogRepository>();
+builder.Services.AddScoped<IAdminUserCommandRepository, AdminUserCommandRepository>();
+builder.Services.AddScoped<IAdminContentCommandRepository, AdminContentCommandRepository>();
 
 
 
@@ -63,6 +67,13 @@ builder.Services.AddScoped<IQuizAttemptService, QuizAttemptService>();
 builder.Services.AddScoped<IGoogleTokenValidator, GoogleTokenValidator>();
 builder.Services.AddScoped<IBillingService, BillingService>();
 builder.Services.AddScoped<IAdminService, AdminService>();
+builder.Services.AddScoped<AdminAuditService>();
+builder.Services.AddScoped<IAdminAuditService>(provider => provider.GetRequiredService<AdminAuditService>());
+builder.Services.AddScoped<IAdminAuditWriter>(provider => provider.GetRequiredService<AdminAuditService>());
+builder.Services.AddScoped<IAdminUserCommandService, AdminUserCommandService>();
+builder.Services.AddScoped<IAdminContentCommandService, AdminContentCommandService>();
+builder.Services.AddScoped<IAuthenticatedAccountValidator, AuthenticatedAccountValidator>();
+builder.Services.AddSingleton(TimeProvider.System);
 builder.Services.AddScoped<IPayOsSignatureService, PayOsSignatureService>();
 builder.Services.AddHttpClient<IPayOsClient, PayOsClient>();
 builder.Services.AddSignalR(); // signalR
@@ -161,6 +172,25 @@ builder.Services.AddAuthentication(options =>
         ValidIssuer = jwtSettings["Issuer"],
         ValidAudience = jwtSettings["Audience"],
         IssuerSigningKey = new SymmetricSecurityKey(key)
+    };
+    options.Events = new JwtBearerEvents
+    {
+        OnTokenValidated = async context =>
+        {
+            var userIdValue = context.Principal?.FindFirst("UserId")?.Value;
+            var role = context.Principal?.FindFirst(ClaimTypes.Role)?.Value;
+            if (!int.TryParse(userIdValue, out var userId)
+                || string.IsNullOrWhiteSpace(role))
+            {
+                context.Fail("Authenticated account claims are invalid.");
+                return;
+            }
+
+            var validator = context.HttpContext.RequestServices
+                .GetRequiredService<IAuthenticatedAccountValidator>();
+            if (!await validator.IsAllowedAsync(userId, role))
+                context.Fail("Authenticated account is inactive or its role changed.");
+        }
     };
 });
 

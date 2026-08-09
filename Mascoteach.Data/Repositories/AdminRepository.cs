@@ -530,6 +530,31 @@ public class AdminRepository : IAdminRepository
             .Select(PaymentOrderProjection)
             .FirstOrDefaultAsync();
 
+    public Task<List<AdminPaymentOrderProjection>> GetPaidRevenueExportAsync(
+        DateTime from,
+        DateTime to,
+        string? plan)
+    {
+        var query = _ctx.PaymentOrders
+            .AsNoTracking()
+            .Where(order =>
+                !order.IsDeleted
+                && !order.User.IsDeleted
+                && order.Status == "Paid"
+                && order.PaidAt != null
+                && order.PaidAt >= from
+                && order.PaidAt < to);
+
+        if (plan != null)
+            query = query.Where(order => order.PlanCode == plan);
+
+        return query
+            .OrderByDescending(order => order.PaidAt)
+            .ThenByDescending(order => order.Id)
+            .Select(PaymentOrderProjection)
+            .ToListAsync();
+    }
+
     public async Task<(List<AdminWebhookEventProjection> Items, int Total)>
         GetWebhookEventsPageAsync(
             string? search,

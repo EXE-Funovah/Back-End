@@ -74,9 +74,9 @@ nhật trạng thái tích hợp; không đánh dấu backend hoàn thành chỉ
 
 Ưu tiên backend tiếp theo:
 
-1. `Admin_Audit_Logs` và API đọc audit.
-2. User role/subscription/status mutations có DTO riêng, reason và audit.
-3. Document/Quiz hide-restore cho Admin có reason và audit.
+1. [Hoàn tất 2026-07-15] `Admin_Audit_Logs` và API đọc audit.
+2. [Hoàn tất 2026-07-15] User role/subscription/status mutations có DTO riêng, reason và audit.
+3. [Document hoàn tất 2026-07-15] Tiếp tục Quiz/Flashcard hide-restore cho Admin có reason và audit.
 4. Admin end-session và Billing sync có audit, kiểm soát race/idempotency.
 5. AI/content processing telemetry, retry và overview alerts.
 6. Quota overrides, Support Console và Settings sau khi product chốt contract.
@@ -397,12 +397,48 @@ Trạng thái API:
 
 - [x] `GET /api/Admin/users`
 - [x] `GET /api/Admin/users/{id}`
-- [ ] `PATCH /api/Admin/users/{id}/role`
-- [ ] `PATCH /api/Admin/users/{id}/subscription`
-- [ ] `PATCH /api/Admin/users/{id}/status`
+- [x] `PATCH /api/Admin/users/{id}/role`
+  - Status: Completed (2026-07-15)
+  - Admin-only, DTO riêng với role chuẩn hoá và `reason` bắt buộc; chỉ đổi user active.
+  - Chặn tự đổi role và hạ role của Admin active cuối cùng (HTTP 409); cùng role trả HTTP 200 no-op, không ghi audit.
+  - Role update và audit `User.RoleChanged` (`High`, before/after chỉ chứa role) dùng chung serializable transaction;
+    audit lỗi thì role update rollback.
+  - Focused tests `17/17`, full suite `235/235` và solution build đã pass.
+  - Manual Swagger smoke test với development DB đã đổi role thành công và audit read API trả đúng lịch sử
+    `User.RoleChanged` ngày 2026-07-15.
+  - Production DB vẫn phải chạy `Database/admin_audit_logs_rollout.sql` trước khi deploy mutation code.
+- [x] `PATCH /api/Admin/users/{id}/subscription`
+  - Status: Completed (2026-07-15)
+  - Admin-only, DTO riêng nhận `Freemium|Premium` và `reason` bắt buộc; chỉ đổi user active.
+  - `Premium` bắt buộc có expiry tương lai và được chuẩn hoá UTC; `Freemium` luôn xoá expiry.
+  - Cùng tier + expiry trả HTTP 200 no-op, không ghi audit.
+  - Subscription update và audit `User.SubscriptionChanged` (`High`, before/after chỉ chứa tier + expiry) dùng chung
+    serializable transaction; audit lỗi thì subscription update rollback.
+  - Focused User command tests `31/31`, full suite `249/249` và solution build đã pass.
+  - Manual Swagger smoke test trên development DB đã đổi Premium về Freemium, xoá expiry hiện tại và audit read
+    API trả đúng lịch sử `User.SubscriptionChanged` ngày 2026-07-15.
+  - Webhook thanh toán thành công đến sau vẫn gia hạn Premium theo billing invariant hiện có.
+  - Production DB vẫn phải rollout `Admin_Audit_Logs` trước khi deploy mutation code.
+- [x] `PATCH /api/Admin/users/{id}/status`
+  - Status: Completed (2026-07-15)
+  - Admin-only soft-delete/restore qua `Active|Deleted`, `reason` bắt buộc; không hard-delete dữ liệu user.
+  - Chặn Admin tự khóa và khóa Admin active cuối cùng (HTTP 409); cùng status trả HTTP 200 no-op, không audit.
+  - Status update và audit `User.StatusChanged` (`High`, before/after chỉ chứa status) dùng chung serializable
+    transaction; audit lỗi thì status update rollback.
+  - Tài khoản Deleted bị chặn local login, Google login, đăng ký lại cùng email và request dùng JWT cũ.
+  - JWT có role không còn khớp DB cũng bị từ chối, nên user đổi role phải đăng nhập lại để nhận token mới.
+  - Focused status/Auth/JWT tests `67/67`, full suite `270/270` và solution build đã pass.
+  - Manual Swagger smoke test trên development DB đã khóa account thành công; đăng ký lại cùng email trả HTTP 400
+    và không tạo user mới. Audit read API trả đúng `User.StatusChanged` ngày 2026-07-15.
+  - Giới hạn: kết nối SignalR đã thiết lập trước lúc khóa chưa bị cưỡng chế disconnect ngay; cần connection-revocation
+    registry nếu product yêu cầu realtime kick.
+  - [Deferred - làm sau cùng] Khi status thực sự đổi sang `Deleted` hoặc `Active`, gửi email thông báo khóa/mở khóa
+    cho user; no-op không gửi. Cần chốt template/nội dung an toàn, retry/outbox và observability để lỗi email không
+    rollback mutation đã commit hoặc làm mất lịch sử audit.
+  - Production DB vẫn phải rollout `Admin_Audit_Logs` trước khi deploy mutation code.
 
-Admin list/detail đã trả aggregate riêng. Legacy `UserController.ToggleDelete` có thể soft-delete user nhưng chưa có
-reason/audit nên chưa được xem là mutation contract hoàn chỉnh cho dashboard.
+Admin list/detail đã trả aggregate riêng. Admin Dashboard dùng status route có reason/audit; không dùng legacy
+`UserController.ToggleDelete` cho thao tác quản trị.
 
 #### Content: tài liệu, quiz, flashcard
 
@@ -429,8 +465,21 @@ Trạng thái API:
 - [x] `GET /api/Admin/documents/{id}`
 - [x] `GET /api/Admin/quizzes`
 - [x] `GET /api/Admin/quizzes/{id}`
-- [ ] `PATCH /api/Admin/documents/{id}/hide`
-- [ ] `PATCH /api/Admin/documents/{id}/restore`
+- [x] `PATCH /api/Admin/documents/{id}/hide`
+- [x] `PATCH /api/Admin/documents/{id}/restore`
+  - Status: Completed (2026-07-15)
+  - Admin-only soft-hide/restore với `reason` bắt buộc; không hard-delete hoặc xoá S3 object.
+  - Idempotent HTTP 200 no-op không audit; thay đổi thật ghi `Document.Hidden`/`Document.Restored` ở risk `Medium`.
+  - Document update và audit dùng chung serializable transaction; audit lỗi thì Document update rollback.
+  - Không cascade sửa `Quizzes.is_deleted`; restore giữ nguyên moderation state riêng của từng Quiz/Flashcard.
+  - Normal Quiz/Question/Option reads đã chặn hierarchy có Document/owner bị deleted để hide có hiệu lực theo mọi
+    direct-id/list read path hiện có.
+  - Admin restore bypass quota upload vì đây là hoàn tác moderation, không phải upload document mới.
+  - Focused Admin Content command tests `14/14`, related content regression `62/62`, full suite `288/288` và solution
+    build đã pass.
+  - Manual Swagger smoke test trên development DB đã hide/restore Document thành công và audit read API trả đúng
+    `Document.Hidden`/`Document.Restored` ngày 2026-07-16.
+  - Production DB vẫn phải rollout `Admin_Audit_Logs` trước khi deploy mutation code.
 - [ ] `PATCH /api/Admin/quizzes/{id}/hide`
 - [ ] `PATCH /api/Admin/quizzes/{id}/restore`
 
@@ -495,13 +544,25 @@ Trạng thái API:
 - [x] `GET /api/Admin/billing/webhook-events`
 - [x] Revenue summary và paid series trong `GET /api/Admin/overview`
 - [ ] `POST /api/Admin/billing/orders/{orderCode}/sync`
-- [ ] `PATCH /api/Admin/billing/users/{userId}/subscription`
+- [x] Không tạo route trùng `PATCH /api/Admin/billing/users/{userId}/subscription`; contract canonical là
+  `PATCH /api/Admin/users/{id}/subscription`.
 
 Không tạo lại revenue endpoint riêng. Billing mutations vẫn cần DTO riêng, reason, audit và xử lý race với webhook.
 
 ### Nên thêm table mới
 
 #### 1. `Admin_Audit_Logs` - bắt buộc cho Admin Dashboard
+
+- Status: Completed (2026-07-15)
+- Schema đã chốt: audit log append-only, không có `is_deleted`; `actor_user_id` nullable với `ON DELETE SET NULL`,
+  `actor_email` là snapshot, `target_id` dùng chuỗi và `reason` bắt buộc.
+- Rollout: `Database/admin_audit_logs_rollout.sql` đã chạy thành công trên development DB và model/DbContext đã
+  scaffold DB-first. Production DB chưa rollout.
+- Read API đã hoàn tất qua module riêng `AdminAuditController -> IAdminAuditService/IAdminAuditWriter ->
+  AdminAuditService -> IAdminAuditLogRepository -> AdminAuditLogRepository`.
+- Focused Audit tests `12/12`, full suite `218/218` và solution build đã pass.
+- Manual Swagger smoke test `GET /api/Admin/audit-logs?page=1&pageSize=20` với Admin JWT và development DB thật
+  trả HTTP 200, `total: 0`, `items: []` ngày 2026-07-15.
 
 Lý do:
 
@@ -704,10 +765,10 @@ Các bảng nên thêm trước khi bật thao tác admin thật:
 
 - [x] `GET /api/Admin/users`
 - [x] `GET /api/Admin/users/{id}`
-- [ ] `PATCH /api/Admin/users/{id}/role`
-- [ ] `PATCH /api/Admin/users/{id}/subscription`
-- [ ] `PATCH /api/Admin/users/{id}/status`
-- [ ] Thiết kế soft-delete/restore Admin route có audit; không dùng hard-delete cho dashboard thông thường.
+- [x] `PATCH /api/Admin/users/{id}/role`
+- [x] `PATCH /api/Admin/users/{id}/subscription`
+- [x] `PATCH /api/Admin/users/{id}/status`
+- [x] Soft-delete/restore Admin route có audit; không dùng hard-delete cho dashboard thông thường.
 
 ### Content
 
@@ -715,8 +776,8 @@ Các bảng nên thêm trước khi bật thao tác admin thật:
 - [x] `GET /api/Admin/documents/{id}`
 - [x] `GET /api/Admin/quizzes`
 - [x] `GET /api/Admin/quizzes/{id}`
-- [ ] `PATCH /api/Admin/documents/{id}/hide`
-- [ ] `PATCH /api/Admin/documents/{id}/restore`
+- [x] `PATCH /api/Admin/documents/{id}/hide`
+- [x] `PATCH /api/Admin/documents/{id}/restore`
 - [ ] `POST /api/Admin/documents/{id}/retry-processing`
 - [ ] `PATCH /api/Admin/quizzes/{id}/hide`
 - [ ] `PATCH /api/Admin/quizzes/{id}/restore`
@@ -737,7 +798,7 @@ Các bảng nên thêm trước khi bật thao tác admin thật:
 - [x] `GET /api/Admin/billing/webhook-events`
 - [x] Revenue summary và 12-month paid series qua `GET /api/Admin/overview`.
 - [ ] `POST /api/Admin/billing/orders/{id}/sync`
-- [ ] `PATCH /api/Admin/billing/users/{userId}/subscription`
+- [x] Không tạo route Billing trùng; dùng `PATCH /api/Admin/users/{id}/subscription`.
 
 ### AI Usage & Quota
 
@@ -749,8 +810,14 @@ Các bảng nên thêm trước khi bật thao tác admin thật:
 
 ### Audit
 
-- [ ] `GET /api/Admin/audit-logs`
-- [ ] `GET /api/Admin/audit-logs/{id}`
+- [x] `GET /api/Admin/audit-logs`
+  - Search theo actor email, action, target type/id và reason.
+  - Filter theo `actorUserId`, `action`, `targetType`, `riskLevel`, `from`, `to`; có pagination và validation.
+  - List không trả `beforeJson`, `afterJson` hoặc `userAgent`.
+- [x] `GET /api/Admin/audit-logs/{id}`
+  - Detail trả snapshot JSON và user agent; id không tồn tại trả HTTP 404.
+  - Cả hai route yêu cầu role `Admin`.
+  - Manual Swagger smoke test list trên development DB trả HTTP 200 ngày 2026-07-15.
 
 ### Settings
 
@@ -864,6 +931,21 @@ Admin Dashboard nên mang cảm giác vận hành, rõ ràng, scan nhanh:
   - Payload chứa `Role` hoặc `SubscriptionTier` bị JSON binding bỏ qua; service bảo toàn giá trị đang lưu.
   - Thay đổi role/subscription sau này phải đi qua Admin API riêng có audit log.
   - Verified by attacker-payload regression tests; full suite `137/137` passed and solution build succeeded.
+- [ ] [Deferred - làm khi review lại game flow] Audit và harden toàn bộ `GameHub`/SignalR trước production.
+  - Thứ tự đã chốt: làm cuối sau khi hoàn tất các luồng Admin ưu tiên; không chen vào content/billing/admin mutations.
+  - Hiện `GameHub` chưa có `[Authorize]`; các hub method chưa kiểm tra role host/student, quyền sở hữu session hoặc
+    ràng buộc caller với game PIN.
+  - Frontend có `accessTokenFactory`, nhưng backend chưa cấu hình đọc `access_token` query cho WebSocket/SSE và chưa
+    cấu hình đóng connection khi JWT hết hạn.
+  - Account lock chặn REST/Auth/JWT mới, nhưng connection SignalR đã mở chưa bị cưỡng chế disconnect.
+  - Khi triển khai phải review end-to-end host join, student join, reconnect, group membership, start/question/answer/
+    score/end-game và ownership; không vá authorization rời rạc làm gãy luồng game cũ.
+  - Scope dự kiến: `[Authorize]`, SignalR JWT extraction, role/ownership policy theo từng hub method, token-expiry close,
+    connection revocation/kick và focused integration/security tests.
+- [ ] [Deferred - làm sau cùng] Gửi email cho user sau khi Admin khóa hoặc mở khóa tài khoản.
+  - Chỉ gửi khi `User.StatusChanged` đã commit; no-op không gửi.
+  - Email phải phân biệt lock/restore, không lộ dữ liệu nội bộ hoặc audit payload nhạy cảm.
+  - Thiết kế retry/outbox + log delivery trước khi triển khai; lỗi nhà cung cấp email không rollback status/audit.
 
 ### Giai đoạn 0 - Backend schema/API audit
 
@@ -872,7 +954,9 @@ Admin Dashboard nên mang cảm giác vận hành, rõ ràng, scan nhanh:
 - [x] Tạo service/repository đọc aggregate trực tiếp từ bảng hiện có.
 - [x] Tạo DTO riêng cho Admin list/detail để trả count, owner, status và timestamps.
 - [x] Đăng ký `IAdminRepository` và `IAdminService` trong DI.
-- [ ] Thêm bảng `Admin_Audit_Logs` trước khi bật thao tác thay đổi dữ liệu.
+- [x] Thêm bảng `Admin_Audit_Logs` trước khi bật thao tác thay đổi dữ liệu.
+  - Development rollout và DB-first scaffold hoàn tất ngày 2026-07-15; production rollout còn chờ.
+  - Bảng append-only, không có `is_deleted`; actor FK dùng `ON DELETE SET NULL` và giữ snapshot email.
 - [ ] Thêm bảng `Admin_Settings` nếu muốn chỉnh hạn mức/tính năng/ngưỡng cảnh báo từ dashboard.
 - [ ] Thêm bảng `Content_Processing_Logs` hoặc `Ai_Processing_Logs` nếu muốn hiển thị lỗi AI/retry/duration/token/cost.
 - [x] Chưa cần thêm bảng mới cho overview cards, users, documents, quizzes, sessions và billing orders.
@@ -989,6 +1073,13 @@ Admin Dashboard nên mang cảm giác vận hành, rõ ràng, scan nhanh:
 
 #### Backend Admin Billing read-only API
 
+- [x] `GET /api/Admin/billing/revenue/export` xuất CSV doanh thu Paid theo khoảng `paid_at` và gói.
+  - Status: Completed 2026-08-09.
+  - Bắt buộc `from`/`to`, `from` inclusive, `to` exclusive, tối đa 366 ngày; `plan` tùy chọn và chỉ nhận
+    `PRO_MONTHLY|PRO_YEARLY`.
+  - Chỉ xuất order/user đang active, `status = Paid`, `paid_at` khác null; CSV UTF-8 BOM có chống formula injection
+    và không chứa checkout URL, QR, payment-link id, chữ ký hoặc raw webhook payload.
+  - Verification: focused Admin Billing/Controller `43/43`, full suite `297/297`, Release build thành công.
 - [x] `GET /api/Admin/billing/orders` với search/filter/date/deletion/pagination.
   - Status: Completed
 - [x] `GET /api/Admin/billing/orders/{id}` trả order/user/subscription metadata an toàn.
@@ -1024,7 +1115,9 @@ Admin Dashboard nên mang cảm giác vận hành, rõ ràng, scan nhanh:
 - [x] Frontend có UI mock cho Support Console.
 - [x] Frontend có UI mock cho Audit Logs.
 - [x] Frontend có UI mock cho Admin Settings.
-- [ ] Backend tạo `Admin_Audit_Logs` và audit read API trước khi bật mutation.
+- [x] Backend tạo `Admin_Audit_Logs` và audit read API trước khi bật mutation.
+  - Có `IAdminAuditWriter` nội bộ để các Admin mutation tương lai ghi log bắt buộc.
+  - Verification: focused `12/12`, full suite `218/218`, solution build pass.
 - [ ] Backend tạo processing/AI logs trước khi nối AI Usage và retry thật.
 - [ ] Backend tạo quota API trước khi bật quota management.
 - [ ] Backend tạo support timeline/notes nếu Support Console cần dữ liệu bền vững.
@@ -1042,8 +1135,8 @@ Admin Dashboard nên mang cảm giác vận hành, rõ ràng, scan nhanh:
 - [Đã chốt MVP] Không cho chỉnh subscription thủ công trong Admin read-only MVP. Nếu bổ sung sau này phải dùng
   endpoint/DTO riêng, validation, lý do thao tác và `Admin_Audit_Logs`.
 - Quota Free/Pro hiện mới có `Plans:FreemiumActiveDocumentLimit` và đếm active documents; cần chốt quota cho quiz, flashcard, live session, AI generation.
-- [Đã chốt MVP] Chưa có Admin delete/hide/restore mutation. Khi bổ sung moderation sau này, Admin phải dùng
-  soft delete/restore kèm audit; không dùng hard delete cho thao tác dashboard thông thường.
+- [Đã triển khai một phần] Document đã có Admin soft hide/restore kèm audit; Quiz/Flashcard moderation còn chờ.
+  Không dùng hard delete cho thao tác dashboard thông thường.
 - AI generate hiện chưa có bảng log lỗi đủ chi tiết; cần chốt tạo `Content_Processing_Logs`/`Ai_Processing_Logs`.
 - [Đã chốt MVP] Chưa tạo `Live_Session_Events`; Admin Sessions chỉ hiển thị session/participant metadata hiện có.
   Chỉ bổ sung event/reconnect history khi product cần giám sát realtime sâu.

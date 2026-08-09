@@ -36,6 +36,27 @@ public class OptionServiceTests
         _docRepo.Setup(r => r.GetByIdAsync(1)).ReturnsAsync(MakeDoc(teacherId));
     }
 
+    [Fact]
+    public async Task GetByIdAsync_UsesHierarchyVisibleRead()
+    {
+        _optionRepo.Setup(r => r.GetVisibleByIdAsync(1))
+            .ReturnsAsync(MakeOption());
+
+        var result = await _sut.GetByIdAsync(1);
+
+        Assert.NotNull(result);
+        _optionRepo.Verify(r => r.GetVisibleByIdAsync(1), Times.Once);
+    }
+
+    [Fact]
+    public async Task GetByIdAsync_HiddenHierarchy_ReturnsNull()
+    {
+        _optionRepo.Setup(r => r.GetVisibleByIdAsync(1))
+            .ReturnsAsync((Option?)null);
+
+        Assert.Null(await _sut.GetByIdAsync(1));
+    }
+
     // ── CreateAsync ──
 
     [Fact]

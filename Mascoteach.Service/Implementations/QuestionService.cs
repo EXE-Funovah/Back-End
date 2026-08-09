@@ -44,7 +44,7 @@ namespace Mascoteach.Service.Implementations
 
         public async Task<QuestionResponse?> GetByIdAsync(int id)
         {
-            var question = await _questionRepository.GetByIdAsync(id);
+            var question = await _questionRepository.GetVisibleByIdAsync(id);
             if (question == null) return null;
 
             var response = _mapper.Map<QuestionResponse>(question);

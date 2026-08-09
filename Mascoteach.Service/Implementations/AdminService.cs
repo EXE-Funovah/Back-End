@@ -2,6 +2,8 @@ using Mascoteach.Data.Interfaces;
 using Mascoteach.Data.Projections;
 using Mascoteach.Service.DTOs.Admin;
 using Mascoteach.Service.Interfaces;
+using System.Globalization;
+using System.Text;
 
 namespace Mascoteach.Service.Implementations;
 
@@ -373,6 +375,55 @@ public class AdminService : IAdminService
             : ToPaymentOrderItem(order, DateTime.UtcNow);
     }
 
+    public async Task<AdminRevenueExportResult> ExportBillingRevenueAsync(
+        DateTime? from,
+        DateTime? to,
+        string? plan)
+    {
+        if (!from.HasValue || !to.HasValue)
+            throw new ArgumentException("'from' and 'to' are required.");
+        ValidateDateRange(from, to);
+        if (to.Value - from.Value > TimeSpan.FromDays(366))
+            throw new ArgumentException("Revenue export range cannot exceed 366 days.");
+
+        var normalizedPlan = NormalizeFilter(
+            plan,
+            AllowedBillingPlans,
+            "plan");
+        var rows = await _repo.GetPaidRevenueExportAsync(
+            from.Value,
+            to.Value,
+            normalizedPlan);
+
+        var csv = new StringBuilder();
+        csv.AppendLine(
+            "OrderCode,UserEmail,UserName,PlanCode,Amount,Currency,PaidAt,PayOSReference");
+        foreach (var row in rows)
+        {
+            csv.Append(row.OrderCode.ToString(CultureInfo.InvariantCulture)).Append(',')
+                .Append(ToCsvCell(row.UserEmail)).Append(',')
+                .Append(ToCsvCell(row.UserName)).Append(',')
+                .Append(ToCsvCell(row.PlanCode)).Append(',')
+                .Append(row.Amount.ToString(CultureInfo.InvariantCulture)).Append(',')
+                .Append(ToCsvCell(row.Currency)).Append(',')
+                .Append(FormatUtc(row.PaidAt!.Value)).Append(',')
+                .Append(ToCsvCell(row.PayosReference))
+                .AppendLine();
+        }
+
+        var preamble = Encoding.UTF8.GetPreamble();
+        var body = Encoding.UTF8.GetBytes(csv.ToString());
+        var content = new byte[preamble.Length + body.Length];
+        preamble.CopyTo(content, 0);
+        body.CopyTo(content, preamble.Length);
+
+        return new AdminRevenueExportResult
+        {
+            Content = content,
+            FileName = $"mascoteach-revenue-{from.Value:yyyyMMdd}-{to.Value:yyyyMMdd}.csv"
+        };
+    }
+
     public async Task<AdminWebhookEventsResponse> GetBillingWebhookEventsAsync(
         string? search,
         bool? processed,
@@ -551,6 +602,28 @@ public class AdminService : IAdminService
             throw new ArgumentException($"Unknown {filterName} filter.");
 
         return normalized;
+    }
+
+    private static string FormatUtc(DateTime value)
+    {
+        var utc = value.Kind switch
+        {
+            DateTimeKind.Utc => value,
+            DateTimeKind.Local => value.ToUniversalTime(),
+            _ => DateTime.SpecifyKind(value, DateTimeKind.Utc)
+        };
+        return utc.ToString("O", CultureInfo.InvariantCulture);
+    }
+
+    private static string ToCsvCell(string? value)
+    {
+        var safe = value ?? string.Empty;
+        if (safe.Length > 0 && safe[0] is '=' or '+' or '-' or '@' or '\t' or '\r')
+            safe = "'" + safe;
+
+        return safe.IndexOfAny([',', '"', '\r', '\n']) >= 0
+            ? $"\"{safe.Replace("\"", "\"\"")}\""
+            : safe;
     }
 
     private static string NormalizeOverviewRange(string range)
