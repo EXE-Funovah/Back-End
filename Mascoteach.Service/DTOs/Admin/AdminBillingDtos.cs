@@ -50,3 +50,9 @@ public class AdminWebhookEventsResponse
     public int Total { get; set; }
     public List<AdminWebhookEventItemDto> Items { get; set; } = new();
 }
+
+public class AdminRevenueExportResult
+{
+    public byte[] Content { get; set; } = [];
+    public string FileName { get; set; } = null!;
+}

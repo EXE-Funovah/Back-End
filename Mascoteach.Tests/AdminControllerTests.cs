@@ -206,6 +206,7 @@ public class AdminControllerTests
     [InlineData("BillingOrders", "billing/orders")]
     [InlineData("BillingOrderDetail", "billing/orders/{id:int}")]
     [InlineData("BillingWebhookEvents", "billing/webhook-events")]
+    [InlineData("ExportBillingRevenue", "billing/revenue/export")]
     public void BillingReadActions_ExposeExpectedGetRoutes(
         string actionName,
         string expectedTemplate)
@@ -266,6 +267,42 @@ public class AdminControllerTests
 
         var result = await controller.BillingWebhookEvents(
             null, null, null, instant, instant, 1, 20);
+
+        Assert.IsType<BadRequestObjectResult>(result);
+    }
+
+    [Fact]
+    public async Task ExportBillingRevenue_ValidRequest_ReturnsCsvFile()
+    {
+        var from = new DateTime(2026, 1, 1);
+        var to = new DateTime(2026, 2, 1);
+        var export = new Mascoteach.Service.DTOs.Admin.AdminRevenueExportResult
+        {
+            Content = [0xEF, 0xBB, 0xBF, 0x41],
+            FileName = "mascoteach-revenue-20260101-20260201.csv"
+        };
+        var service = new Mock<IAdminService>();
+        service.Setup(admin => admin.ExportBillingRevenueAsync(from, to, "pro_monthly"))
+            .ReturnsAsync(export);
+        var controller = new AdminController(service.Object);
+
+        var result = await controller.ExportBillingRevenue(from, to, "pro_monthly");
+
+        var file = Assert.IsType<FileContentResult>(result);
+        Assert.Equal("text/csv; charset=utf-8", file.ContentType);
+        Assert.Equal(export.FileName, file.FileDownloadName);
+        Assert.Equal(export.Content, file.FileContents);
+    }
+
+    [Fact]
+    public async Task ExportBillingRevenue_InvalidRange_ReturnsBadRequest()
+    {
+        var service = new Mock<IAdminService>();
+        service.Setup(admin => admin.ExportBillingRevenueAsync(null, null, null))
+            .ThrowsAsync(new ArgumentException("'from' and 'to' are required."));
+        var controller = new AdminController(service.Object);
+
+        var result = await controller.ExportBillingRevenue(null, null, null);
 
         Assert.IsType<BadRequestObjectResult>(result);
     }

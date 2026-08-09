@@ -67,6 +67,10 @@ public interface IAdminRepository
         int page,
         int pageSize);
     Task<AdminPaymentOrderProjection?> GetPaymentOrderDetailAsync(int id);
+    Task<List<AdminPaymentOrderProjection>> GetPaidRevenueExportAsync(
+        DateTime from,
+        DateTime to,
+        string? plan);
     Task<(List<AdminWebhookEventProjection> Items, int Total)> GetWebhookEventsPageAsync(
         string? search,
         bool? processed,

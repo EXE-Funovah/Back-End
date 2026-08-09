@@ -309,9 +309,10 @@ GET /api/Admin/sessions/{id}/participants?search=&deletion=Active&page=1&pageSiz
 GET /api/Admin/billing/orders?search=&userId=&status=&plan=&deletion=Active&from=&to=&page=1&pageSize=20
 GET /api/Admin/billing/orders/{id}
 GET /api/Admin/billing/webhook-events?search=&processed=&hasError=&from=&to=&page=1&pageSize=20
+GET /api/Admin/billing/revenue/export?from=&to=&plan=
 ```
 
-- All three endpoints are read-only and inherit `[Authorize(Roles = "Admin")]`.
+- All four endpoints are read-only and inherit `[Authorize(Roles = "Admin")]`.
 - Order search covers numeric order code, PayOS reference, user name, and user email.
 - `status` accepts `Pending`, `Paid`, `Cancelled`, `Expired`, or `Failed`, case-insensitively.
 - `plan` accepts `PRO_MONTHLY` or `PRO_YEARLY`, case-insensitively.
@@ -327,6 +328,15 @@ GET /api/Admin/billing/webhook-events?search=&processed=&hasError=&from=&to=&pag
 - Stored `ProcessingError` is returned for support/debugging.
 - Orders never expose payment-link id, checkout URL, or QR code.
 - Webhook events never expose payment-link id, signature, or raw payload.
+- Revenue export requires both `from` and `to`, uses `PaidAt` with an inclusive lower bound and exclusive upper
+  bound, and limits one export to 366 days. Optional `plan` accepts `PRO_MONTHLY` or `PRO_YEARLY`.
+- Revenue export includes only active orders owned by active users with `status == Paid` and non-null `PaidAt`.
+  It returns an Excel-compatible UTF-8 BOM CSV ordered by newest payment first and protects text cells from CSV
+  formula injection.
+- Export columns are limited to order code, user email/name, plan, amount, currency, paid timestamp, and PayOS
+  reference. It never exports checkout URL, QR, payment-link id, signature, or raw webhook payload.
+- Revenue export is a read-only file operation and does not create an Admin audit row. Dashboard revenue JSON remains
+  in `GET /api/Admin/overview`; do not restore the removed legacy `GET /api/Admin/revenue` route.
 - No sync, retry, cancellation, or manual subscription mutation exists. Add mutations only after
   `Admin_Audit_Logs`, dedicated request DTOs, and a reason policy are designed.
 

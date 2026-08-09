@@ -1073,6 +1073,13 @@ Admin Dashboard nên mang cảm giác vận hành, rõ ràng, scan nhanh:
 
 #### Backend Admin Billing read-only API
 
+- [x] `GET /api/Admin/billing/revenue/export` xuất CSV doanh thu Paid theo khoảng `paid_at` và gói.
+  - Status: Completed 2026-08-09.
+  - Bắt buộc `from`/`to`, `from` inclusive, `to` exclusive, tối đa 366 ngày; `plan` tùy chọn và chỉ nhận
+    `PRO_MONTHLY|PRO_YEARLY`.
+  - Chỉ xuất order/user đang active, `status = Paid`, `paid_at` khác null; CSV UTF-8 BOM có chống formula injection
+    và không chứa checkout URL, QR, payment-link id, chữ ký hoặc raw webhook payload.
+  - Verification: focused Admin Billing/Controller `43/43`, full suite `297/297`, Release build thành công.
 - [x] `GET /api/Admin/billing/orders` với search/filter/date/deletion/pagination.
   - Status: Completed
 - [x] `GET /api/Admin/billing/orders/{id}` trả order/user/subscription metadata an toàn.
