@@ -56,3 +56,25 @@ public class AdminRevenueExportResult
     public byte[] Content { get; set; } = [];
     public string FileName { get; set; } = null!;
 }
+
+public class AdminRevenueSeriesPointDto
+{
+    public string Period { get; set; } = null!;
+    public string Label { get; set; } = null!;
+    public long Revenue { get; set; }
+    public int PaidOrderCount { get; set; }
+}
+
+public class AdminRevenueSeriesResponse
+{
+    public DateTimeOffset From { get; set; }
+    public DateTimeOffset To { get; set; }
+    public string? Plan { get; set; }
+    public string Granularity { get; set; } = null!;
+    public string Timezone { get; set; } = null!;
+    public string Currency { get; set; } = null!;
+    public long TotalRevenue { get; set; }
+    public int PaidOrderCount { get; set; }
+    public long AverageOrderValue { get; set; }
+    public List<AdminRevenueSeriesPointDto> Series { get; set; } = [];
+}

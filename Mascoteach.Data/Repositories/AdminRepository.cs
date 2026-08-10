@@ -555,6 +555,33 @@ public class AdminRepository : IAdminRepository
             .ToListAsync();
     }
 
+    public Task<List<AdminPaymentOrderProjection>> GetPaidRevenueSeriesRowsAsync(
+        DateTime from,
+        DateTime to,
+        string? plan,
+        string currency)
+    {
+        var query = _ctx.PaymentOrders
+            .AsNoTracking()
+            .Where(order =>
+                !order.IsDeleted
+                && !order.User.IsDeleted
+                && order.Status == "Paid"
+                && order.Currency == currency
+                && order.PaidAt != null
+                && order.PaidAt >= from
+                && order.PaidAt < to);
+
+        if (plan != null)
+            query = query.Where(order => order.PlanCode == plan);
+
+        return query
+            .OrderBy(order => order.PaidAt)
+            .ThenBy(order => order.Id)
+            .Select(PaymentOrderProjection)
+            .ToListAsync();
+    }
+
     public async Task<(List<AdminWebhookEventProjection> Items, int Total)>
         GetWebhookEventsPageAsync(
             string? search,

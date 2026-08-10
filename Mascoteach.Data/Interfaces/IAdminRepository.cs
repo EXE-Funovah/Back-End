@@ -71,6 +71,11 @@ public interface IAdminRepository
         DateTime from,
         DateTime to,
         string? plan);
+    Task<List<AdminPaymentOrderProjection>> GetPaidRevenueSeriesRowsAsync(
+        DateTime from,
+        DateTime to,
+        string? plan,
+        string currency);
     Task<(List<AdminWebhookEventProjection> Items, int Total)> GetWebhookEventsPageAsync(
         string? search,
         bool? processed,
