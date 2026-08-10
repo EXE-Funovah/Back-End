@@ -229,6 +229,94 @@ public class AdminBillingServiceTests
             It.IsAny<string?>()), Times.Never);
     }
 
+    [Fact]
+    public async Task GetBillingRevenueSeriesAsync_BucketsPaidOrdersByVietnamDayAndFillsEmptyDays()
+    {
+        var from = DateTimeOffset.Parse("2026-07-12T17:00:00Z");
+        var to = DateTimeOffset.Parse("2026-07-15T17:00:00Z");
+        var first = CreateOrderProjection();
+        first.Amount = 119_000;
+        first.PaidAt = new DateTime(2026, 7, 13, 16, 0, 0, DateTimeKind.Utc);
+        var second = CreateOrderProjection();
+        second.Id = 11;
+        second.OrderCode = 123457;
+        second.Amount = 1_188_000;
+        second.PaidAt = new DateTime(2026, 7, 13, 18, 0, 0, DateTimeKind.Utc);
+        _repo.Setup(repository => repository.GetPaidRevenueSeriesRowsAsync(
+                from.UtcDateTime,
+                to.UtcDateTime,
+                "PRO_MONTHLY",
+                "VND"))
+            .ReturnsAsync([first, second]);
+
+        var result = await _sut.GetBillingRevenueSeriesAsync(
+            from,
+            to,
+            "pro_monthly",
+            "day",
+            "Asia/Ho_Chi_Minh");
+
+        Assert.Equal(from, result.From);
+        Assert.Equal(to, result.To);
+        Assert.Equal("PRO_MONTHLY", result.Plan);
+        Assert.Equal("day", result.Granularity);
+        Assert.Equal("Asia/Ho_Chi_Minh", result.Timezone);
+        Assert.Equal("VND", result.Currency);
+        Assert.Equal(1_307_000, result.TotalRevenue);
+        Assert.Equal(2, result.PaidOrderCount);
+        Assert.Equal(653_500, result.AverageOrderValue);
+        Assert.Collection(
+            result.Series,
+            point =>
+            {
+                Assert.Equal("2026-07-13", point.Period);
+                Assert.Equal("13/07", point.Label);
+                Assert.Equal(119_000, point.Revenue);
+                Assert.Equal(1, point.PaidOrderCount);
+            },
+            point =>
+            {
+                Assert.Equal("2026-07-14", point.Period);
+                Assert.Equal(1_188_000, point.Revenue);
+                Assert.Equal(1, point.PaidOrderCount);
+            },
+            point =>
+            {
+                Assert.Equal("2026-07-15", point.Period);
+                Assert.Equal(0, point.Revenue);
+                Assert.Equal(0, point.PaidOrderCount);
+            });
+        _repo.VerifyAll();
+    }
+
+    [Theory]
+    [InlineData(null, "2026-08-10T17:00:00Z", null, "day", "Asia/Ho_Chi_Minh")]
+    [InlineData("2026-08-10T17:00:00Z", null, null, "day", "Asia/Ho_Chi_Minh")]
+    [InlineData("2026-08-10T17:00:00Z", "2026-07-12T17:00:00Z", null, "day", "Asia/Ho_Chi_Minh")]
+    [InlineData("2025-01-01T00:00:00Z", "2026-01-03T00:00:00Z", null, "day", "Asia/Ho_Chi_Minh")]
+    [InlineData("2026-07-12T17:00:00Z", "2026-08-10T17:00:00Z", "PRO_WEEKLY", "day", "Asia/Ho_Chi_Minh")]
+    [InlineData("2026-07-12T17:00:00Z", "2026-08-10T17:00:00Z", null, "week", "Asia/Ho_Chi_Minh")]
+    [InlineData("2026-07-12T17:00:00Z", "2026-08-10T17:00:00Z", null, "day", "Mars/Olympus")]
+    public async Task GetBillingRevenueSeriesAsync_InvalidRequest_ThrowsBeforeRepositoryAccess(
+        string? fromText,
+        string? toText,
+        string? plan,
+        string granularity,
+        string timezone)
+    {
+        DateTimeOffset? from = fromText == null ? null : DateTimeOffset.Parse(fromText);
+        DateTimeOffset? to = toText == null ? null : DateTimeOffset.Parse(toText);
+
+        await Assert.ThrowsAsync<ArgumentException>(() =>
+            _sut.GetBillingRevenueSeriesAsync(from, to, plan, granularity, timezone));
+
+        _repo.Verify(repository => repository.GetPaidRevenueSeriesRowsAsync(
+            It.IsAny<DateTime>(),
+            It.IsAny<DateTime>(),
+            It.IsAny<string?>(),
+            It.IsAny<string>()), Times.Never);
+    }
+
     private static void AssertNoSensitiveProperties(Type dtoType)
     {
         var propertyNames = dtoType.GetProperties()

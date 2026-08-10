@@ -64,6 +64,12 @@ public interface IAdminService
         DateTime? from,
         DateTime? to,
         string? plan);
+    Task<AdminRevenueSeriesResponse> GetBillingRevenueSeriesAsync(
+        DateTimeOffset? from,
+        DateTimeOffset? to,
+        string? plan,
+        string granularity,
+        string timezone);
     Task<AdminWebhookEventsResponse> GetBillingWebhookEventsAsync(
         string? search,
         bool? processed,

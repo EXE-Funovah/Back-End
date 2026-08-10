@@ -236,6 +236,29 @@ public class AdminController : BaseController
         return Ok(result);
     }
 
+    [HttpGet("billing/revenue/series")]
+    public async Task<IActionResult> BillingRevenueSeries(
+        [FromQuery] DateTimeOffset? from,
+        [FromQuery] DateTimeOffset? to,
+        [FromQuery] string? plan,
+        [FromQuery] string granularity = "day",
+        [FromQuery] string timezone = "Asia/Ho_Chi_Minh")
+    {
+        try
+        {
+            return Ok(await _admin.GetBillingRevenueSeriesAsync(
+                from,
+                to,
+                plan,
+                granularity,
+                timezone));
+        }
+        catch (ArgumentException ex)
+        {
+            return BadRequest(ex.Message);
+        }
+    }
+
     [HttpGet("billing/revenue/export")]
     public async Task<IActionResult> ExportBillingRevenue(
         [FromQuery] DateTime? from,

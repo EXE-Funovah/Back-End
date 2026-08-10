@@ -1073,6 +1073,13 @@ Admin Dashboard nên mang cảm giác vận hành, rõ ràng, scan nhanh:
 
 #### Backend Admin Billing read-only API
 
+- [x] `GET /api/Admin/billing/revenue/series` trả doanh thu Paid theo ngày, khoảng thời gian, gói và múi giờ.
+  - Status: Completed 2026-08-11.
+  - Bắt buộc `from`/`to`, tối đa 366 ngày; `plan` tùy chọn; bản đầu chỉ nhận `granularity=day` và
+    `timezone=Asia/Ho_Chi_Minh`.
+  - Chỉ tính order/user active, `status = Paid`, `paid_at` khác null và currency `VND`; bucket theo ngày Việt Nam,
+    lấp ngày trống bằng 0 và trả tổng doanh thu, số đơn Paid, giá trị đơn trung bình.
+  - Verification: focused Admin Billing/Controller `54/54`, full suite `308/308`, Release build thành công.
 - [x] `GET /api/Admin/billing/revenue/export` xuất CSV doanh thu Paid theo khoảng `paid_at` và gói.
   - Status: Completed 2026-08-09.
   - Bắt buộc `from`/`to`, `from` inclusive, `to` exclusive, tối đa 366 ngày; `plan` tùy chọn và chỉ nhận

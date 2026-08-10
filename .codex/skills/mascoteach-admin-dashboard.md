@@ -310,9 +310,10 @@ GET /api/Admin/billing/orders?search=&userId=&status=&plan=&deletion=Active&from
 GET /api/Admin/billing/orders/{id}
 GET /api/Admin/billing/webhook-events?search=&processed=&hasError=&from=&to=&page=1&pageSize=20
 GET /api/Admin/billing/revenue/export?from=&to=&plan=
+GET /api/Admin/billing/revenue/series?from=&to=&plan=&granularity=day&timezone=Asia/Ho_Chi_Minh
 ```
 
-- All four endpoints are read-only and inherit `[Authorize(Roles = "Admin")]`.
+- All five endpoints are read-only and inherit `[Authorize(Roles = "Admin")]`.
 - Order search covers numeric order code, PayOS reference, user name, and user email.
 - `status` accepts `Pending`, `Paid`, `Cancelled`, `Expired`, or `Failed`, case-insensitively.
 - `plan` accepts `PRO_MONTHLY` or `PRO_YEARLY`, case-insensitively.
@@ -337,6 +338,13 @@ GET /api/Admin/billing/revenue/export?from=&to=&plan=
   reference. It never exports checkout URL, QR, payment-link id, signature, or raw webhook payload.
 - Revenue export is a read-only file operation and does not create an Admin audit row. Dashboard revenue JSON remains
   in `GET /api/Admin/overview`; do not restore the removed legacy `GET /api/Admin/revenue` route.
+- Revenue series requires `from` and `to`, accepts an optional paid plan, and limits a request to 366 days. The first
+  version supports only `granularity=day`, `timezone=Asia/Ho_Chi_Minh`, and currency `VND`.
+- Revenue series uses an inclusive `from`, exclusive `to`, active users/orders, `status == Paid`, and non-null
+  `PaidAt`. It buckets payment instants by Vietnam-local calendar day, returns zero-filled missing days, and includes
+  total revenue, Paid order count, and rounded average order value for the same filtered rows.
+- Revenue series is read-only and does not create an Admin audit row. It is the dynamic chart/filter contract;
+  Overview remains the fixed dashboard KPI/12-month series contract and export remains the CSV download contract.
 - No sync, retry, cancellation, or manual subscription mutation exists. Add mutations only after
   `Admin_Audit_Logs`, dedicated request DTOs, and a reason policy are designed.
 

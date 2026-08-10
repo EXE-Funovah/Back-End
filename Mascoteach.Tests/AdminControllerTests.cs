@@ -207,6 +207,7 @@ public class AdminControllerTests
     [InlineData("BillingOrderDetail", "billing/orders/{id:int}")]
     [InlineData("BillingWebhookEvents", "billing/webhook-events")]
     [InlineData("ExportBillingRevenue", "billing/revenue/export")]
+    [InlineData("BillingRevenueSeries", "billing/revenue/series")]
     public void BillingReadActions_ExposeExpectedGetRoutes(
         string actionName,
         string expectedTemplate)
@@ -303,6 +304,64 @@ public class AdminControllerTests
         var controller = new AdminController(service.Object);
 
         var result = await controller.ExportBillingRevenue(null, null, null);
+
+        Assert.IsType<BadRequestObjectResult>(result);
+    }
+
+    [Fact]
+    public async Task BillingRevenueSeries_ValidRequest_ReturnsJsonContract()
+    {
+        var from = DateTimeOffset.Parse("2026-07-12T17:00:00Z");
+        var to = DateTimeOffset.Parse("2026-08-10T17:00:00Z");
+        var response = new Mascoteach.Service.DTOs.Admin.AdminRevenueSeriesResponse
+        {
+            From = from,
+            To = to,
+            Plan = "PRO_MONTHLY",
+            Granularity = "day",
+            Timezone = "Asia/Ho_Chi_Minh",
+            Currency = "VND"
+        };
+        var service = new Mock<IAdminService>();
+        service.Setup(admin => admin.GetBillingRevenueSeriesAsync(
+                from,
+                to,
+                "pro_monthly",
+                "day",
+                "Asia/Ho_Chi_Minh"))
+            .ReturnsAsync(response);
+        var controller = new AdminController(service.Object);
+
+        var result = await controller.BillingRevenueSeries(
+            from,
+            to,
+            "pro_monthly",
+            "day",
+            "Asia/Ho_Chi_Minh");
+
+        var ok = Assert.IsType<OkObjectResult>(result);
+        Assert.Same(response, ok.Value);
+    }
+
+    [Fact]
+    public async Task BillingRevenueSeries_InvalidRequest_ReturnsBadRequest()
+    {
+        var service = new Mock<IAdminService>();
+        service.Setup(admin => admin.GetBillingRevenueSeriesAsync(
+                null,
+                null,
+                null,
+                "day",
+                "Asia/Ho_Chi_Minh"))
+            .ThrowsAsync(new ArgumentException("'from' and 'to' are required."));
+        var controller = new AdminController(service.Object);
+
+        var result = await controller.BillingRevenueSeries(
+            null,
+            null,
+            null,
+            "day",
+            "Asia/Ho_Chi_Minh");
 
         Assert.IsType<BadRequestObjectResult>(result);
     }

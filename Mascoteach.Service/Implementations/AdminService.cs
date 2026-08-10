@@ -9,6 +9,8 @@ namespace Mascoteach.Service.Implementations;
 
 public class AdminService : IAdminService
 {
+    private const string RevenueCurrency = "VND";
+    private const string VietnamTimezone = "Asia/Ho_Chi_Minh";
     private static readonly string[] AllowedRoles = ["Teacher", "Student", "Parent", "Admin"];
     private static readonly string[] AllowedSubscriptions = ["Freemium", "Premium", "Expired"];
     private static readonly string[] AllowedDeletionFilters = ["Active", "Deleted", "All"];
@@ -424,6 +426,101 @@ public class AdminService : IAdminService
         };
     }
 
+    public async Task<AdminRevenueSeriesResponse> GetBillingRevenueSeriesAsync(
+        DateTimeOffset? from,
+        DateTimeOffset? to,
+        string? plan,
+        string granularity,
+        string timezone)
+    {
+        if (!from.HasValue || !to.HasValue)
+            throw new ArgumentException("'from' and 'to' are required.");
+
+        var fromUtc = from.Value.ToUniversalTime();
+        var toUtc = to.Value.ToUniversalTime();
+        if (fromUtc >= toUtc)
+            throw new ArgumentException("'from' must be earlier than 'to'.");
+        if (toUtc - fromUtc > TimeSpan.FromDays(366))
+            throw new ArgumentException("Revenue series range cannot exceed 366 days.");
+
+        var normalizedPlan = NormalizeFilter(plan, AllowedBillingPlans, "plan");
+        var normalizedGranularity = NormalizeRequiredFilter(
+            granularity,
+            ["day"],
+            "granularity");
+        if (!string.Equals(timezone?.Trim(), VietnamTimezone, StringComparison.OrdinalIgnoreCase))
+            throw new ArgumentException("Unknown timezone filter.");
+
+        TimeZoneInfo timezoneInfo;
+        try
+        {
+            timezoneInfo = TimeZoneInfo.FindSystemTimeZoneById(VietnamTimezone);
+        }
+        catch (TimeZoneNotFoundException ex)
+        {
+            throw new ArgumentException("Vietnam timezone is unavailable on this server.", ex);
+        }
+        catch (InvalidTimeZoneException ex)
+        {
+            throw new ArgumentException("Vietnam timezone is invalid on this server.", ex);
+        }
+
+        var rows = await _repo.GetPaidRevenueSeriesRowsAsync(
+            fromUtc.UtcDateTime,
+            toUtc.UtcDateTime,
+            normalizedPlan,
+            RevenueCurrency);
+        var buckets = new Dictionary<DateOnly, (long Revenue, int Count)>();
+        foreach (var row in rows)
+        {
+            var paidAtUtc = AsUtcOffset(row.PaidAt!.Value);
+            var localDate = DateOnly.FromDateTime(
+                TimeZoneInfo.ConvertTime(paidAtUtc, timezoneInfo).Date);
+            buckets.TryGetValue(localDate, out var bucket);
+            buckets[localDate] = (bucket.Revenue + row.Amount, bucket.Count + 1);
+        }
+
+        var firstDate = DateOnly.FromDateTime(
+            TimeZoneInfo.ConvertTime(fromUtc, timezoneInfo).Date);
+        var lastDate = DateOnly.FromDateTime(
+            TimeZoneInfo.ConvertTime(toUtc.AddTicks(-1), timezoneInfo).Date);
+        var series = new List<AdminRevenueSeriesPointDto>();
+        for (var date = firstDate; date <= lastDate; date = date.AddDays(1))
+        {
+            buckets.TryGetValue(date, out var bucket);
+            series.Add(new AdminRevenueSeriesPointDto
+            {
+                Period = date.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),
+                Label = date.ToString("dd/MM", CultureInfo.InvariantCulture),
+                Revenue = bucket.Revenue,
+                PaidOrderCount = bucket.Count
+            });
+        }
+
+        var totalRevenue = rows.Sum(row => (long)row.Amount);
+        var paidOrderCount = rows.Count;
+        var averageOrderValue = paidOrderCount == 0
+            ? 0
+            : decimal.ToInt64(Math.Round(
+                (decimal)totalRevenue / paidOrderCount,
+                0,
+                MidpointRounding.AwayFromZero));
+
+        return new AdminRevenueSeriesResponse
+        {
+            From = fromUtc,
+            To = toUtc,
+            Plan = normalizedPlan,
+            Granularity = normalizedGranularity,
+            Timezone = VietnamTimezone,
+            Currency = RevenueCurrency,
+            TotalRevenue = totalRevenue,
+            PaidOrderCount = paidOrderCount,
+            AverageOrderValue = averageOrderValue,
+            Series = series
+        };
+    }
+
     public async Task<AdminWebhookEventsResponse> GetBillingWebhookEventsAsync(
         string? search,
         bool? processed,
@@ -613,6 +710,17 @@ public class AdminService : IAdminService
             _ => DateTime.SpecifyKind(value, DateTimeKind.Utc)
         };
         return utc.ToString("O", CultureInfo.InvariantCulture);
+    }
+
+    private static DateTimeOffset AsUtcOffset(DateTime value)
+    {
+        var utc = value.Kind switch
+        {
+            DateTimeKind.Utc => value,
+            DateTimeKind.Local => value.ToUniversalTime(),
+            _ => DateTime.SpecifyKind(value, DateTimeKind.Utc)
+        };
+        return new DateTimeOffset(utc);
     }
 
     private static string ToCsvCell(string? value)
