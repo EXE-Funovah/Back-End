@@ -1,6 +1,7 @@
 using Amazon.Runtime;
 using Amazon.S3;
 using Mascoteach.API.Hubs;
+using Mascoteach.API.Services;
 using Mascoteach.Data.Interfaces;
 using Mascoteach.Data.Models;
 using Mascoteach.Data.Repositories;
@@ -38,6 +39,7 @@ builder.Services.AddScoped<IOptionRepository, OptionRepository>();
 builder.Services.AddScoped<IGameTemplateRepository, GameTemplateRepository>();
 builder.Services.AddScoped<ILiveSessionRepository, LiveSessionRepository>();
 builder.Services.AddScoped<ISessionParticipantRepository, SessionParticipantRepository>();
+builder.Services.AddScoped<ISessionAnswerRepository, SessionAnswerRepository>();
 builder.Services.AddScoped<IUserStatRepository, UserStatRepository>();
 builder.Services.AddScoped<IQuizAttemptRepository, QuizAttemptRepository>();
 builder.Services.AddScoped<IPaymentOrderRepository, PaymentOrderRepository>();
@@ -60,6 +62,8 @@ builder.Services.AddScoped<IAuthService, AuthService>();
 builder.Services.AddScoped<IGameTemplateService, GameTemplateService>();
 builder.Services.AddScoped<ILiveSessionService, LiveSessionService>();
 builder.Services.AddScoped<ISessionParticipantService, SessionParticipantService>();
+builder.Services.AddScoped<ISessionAnswerService, SessionAnswerService>();
+builder.Services.AddScoped<ILiveGameQuestionService, LiveGameQuestionService>();
 builder.Services.AddScoped<IS3Service, S3Service>();
 builder.Services.AddScoped<IEmailService, EmailService>();
 builder.Services.AddScoped<IUserStatService, UserStatService>();
@@ -74,6 +78,8 @@ builder.Services.AddScoped<IAdminUserCommandService, AdminUserCommandService>();
 builder.Services.AddScoped<IAdminContentCommandService, AdminContentCommandService>();
 builder.Services.AddScoped<IAuthenticatedAccountValidator, AuthenticatedAccountValidator>();
 builder.Services.AddSingleton(TimeProvider.System);
+builder.Services.AddDataProtection();
+builder.Services.AddSingleton<IGuestGameTokenService, GuestGameTokenService>();
 builder.Services.AddScoped<IPayOsSignatureService, PayOsSignatureService>();
 builder.Services.AddHttpClient<IPayOsClient, PayOsClient>();
 builder.Services.AddSignalR(); // signalR
@@ -175,6 +181,19 @@ builder.Services.AddAuthentication(options =>
     };
     options.Events = new JwtBearerEvents
     {
+        OnMessageReceived = context =>
+        {
+            var accessToken = context.Request.Query["access_token"];
+            var path = context.HttpContext.Request.Path;
+
+            if (!string.IsNullOrEmpty(accessToken)
+                && path.StartsWithSegments("/hubs/game"))
+            {
+                context.Token = accessToken;
+            }
+
+            return Task.CompletedTask;
+        },
         OnTokenValidated = async context =>
         {
             var userIdValue = context.Principal?.FindFirst("UserId")?.Value;

@@ -20,7 +20,17 @@ namespace Mascoteach.Data.Repositories
         {
             return await _context.Documents
                         .Where(d => d.OwnerId == ownerId && d.IsDeleted == false)
+                        .OrderByDescending(d => d.UploadedAt)
                         .ToListAsync();
+        }
+
+        public async Task<IEnumerable<Document>> GetDeletedByOwnerIdAsync(int ownerId)
+        {
+            return await _context.Documents
+                .AsNoTracking()
+                .Where(document => document.OwnerId == ownerId && document.IsDeleted)
+                .OrderByDescending(document => document.UploadedAt)
+                .ToListAsync();
         }
 
         public async Task<Document?> GetByIdIncludingDeletedAsync(int id)

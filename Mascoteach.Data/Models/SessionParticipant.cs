@@ -16,4 +16,6 @@ public partial class SessionParticipant
     public bool IsDeleted { get; set; }
 
     public virtual LiveSession Session { get; set; } = null!;
+
+    public virtual ICollection<SessionAnswer> SessionAnswers { get; set; } = new List<SessionAnswer>();
 }

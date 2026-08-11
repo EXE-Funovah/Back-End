@@ -31,6 +31,8 @@ public partial class MascoteachDbContext : DbContext
 
     public virtual DbSet<QuizAttempt> QuizAttempts { get; set; }
 
+    public virtual DbSet<SessionAnswer> SessionAnswers { get; set; }
+
     public virtual DbSet<SessionParticipant> SessionParticipants { get; set; }
 
     public virtual DbSet<User> Users { get; set; }
@@ -371,6 +373,47 @@ public partial class MascoteachDbContext : DbContext
                 .HasForeignKey(d => d.UserId)
                 .OnDelete(DeleteBehavior.ClientSetNull)
                 .HasConstraintName("FK_QuizAttempts_Users");
+        });
+
+        modelBuilder.Entity<SessionAnswer>(entity =>
+        {
+            entity.ToTable("Session_Answers");
+
+            entity.HasIndex(e => new { e.SessionId, e.AnsweredAt }, "IX_SessionAnswers_Session_AnsweredAt");
+
+            entity.HasIndex(e => new { e.SessionId, e.ParticipantId, e.QuestionId }, "UQ_SessionAnswers_Participant_Question").IsUnique();
+
+            entity.Property(e => e.Id).HasColumnName("id");
+            entity.Property(e => e.AnsweredAt)
+                .HasPrecision(3)
+                .HasDefaultValueSql("(sysutcdatetime())")
+                .HasColumnName("answered_at");
+            entity.Property(e => e.IsCorrect).HasColumnName("is_correct");
+            entity.Property(e => e.ParticipantId).HasColumnName("participant_id");
+            entity.Property(e => e.QuestionId).HasColumnName("question_id");
+            entity.Property(e => e.ScoreAwarded).HasColumnName("score_awarded");
+            entity.Property(e => e.SelectedOptionId).HasColumnName("selected_option_id");
+            entity.Property(e => e.SessionId).HasColumnName("session_id");
+
+            entity.HasOne(d => d.Participant).WithMany(p => p.SessionAnswers)
+                .HasForeignKey(d => d.ParticipantId)
+                .OnDelete(DeleteBehavior.ClientSetNull)
+                .HasConstraintName("FK_SessionAnswers_Participants");
+
+            entity.HasOne(d => d.Question).WithMany(p => p.SessionAnswers)
+                .HasForeignKey(d => d.QuestionId)
+                .OnDelete(DeleteBehavior.ClientSetNull)
+                .HasConstraintName("FK_SessionAnswers_Questions");
+
+            entity.HasOne(d => d.SelectedOption).WithMany(p => p.SessionAnswers)
+                .HasForeignKey(d => d.SelectedOptionId)
+                .OnDelete(DeleteBehavior.ClientSetNull)
+                .HasConstraintName("FK_SessionAnswers_Options");
+
+            entity.HasOne(d => d.Session).WithMany(p => p.SessionAnswers)
+                .HasForeignKey(d => d.SessionId)
+                .OnDelete(DeleteBehavior.ClientSetNull)
+                .HasConstraintName("FK_SessionAnswers_LiveSessions");
         });
 
         modelBuilder.Entity<SessionParticipant>(entity =>

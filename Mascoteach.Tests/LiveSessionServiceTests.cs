@@ -116,6 +116,30 @@ public class LiveSessionServiceTests
         Assert.False(await _sut.UpdateStatusByPinAsync("000000", "Active"));
     }
 
+    [Fact]
+    public async Task UpdateStatusByPinAsync_CannotReturnActiveSessionToWaiting()
+    {
+        var session = MakeSession();
+        session.Status = "Active";
+        _repo.Setup(r => r.GetByPinAsync("123456")).ReturnsAsync(session);
+
+        Assert.False(await _sut.UpdateStatusByPinAsync("123456", "Waiting"));
+        Assert.Equal("Active", session.Status);
+        _repo.Verify(r => r.SaveChangesAsync(), Times.Never);
+    }
+
+    [Fact]
+    public async Task UpdateStatusByPinAsync_ActiveSessionCanEnd()
+    {
+        var session = MakeSession();
+        session.Status = "Active";
+        _repo.Setup(r => r.GetByPinAsync("123456")).ReturnsAsync(session);
+        _repo.Setup(r => r.SaveChangesAsync()).ReturnsAsync(1);
+
+        Assert.True(await _sut.UpdateStatusByPinAsync("123456", "Ended"));
+        Assert.Equal("Ended", session.Status);
+    }
+
     // ── GetByPinAsync ──
 
     [Fact]
@@ -139,5 +163,133 @@ public class LiveSessionServiceTests
 
         Assert.NotNull(result);
         Assert.Equal("123456", result!.GamePin);
+    }
+
+    // GetReportAsync
+
+    [Fact]
+    public async Task GetReportAsync_OwnerTeacher_ReturnsAggregatedReport()
+    {
+        var correctOption = new Option
+        {
+            Id = 101,
+            QuestionId = 11,
+            OptionText = "Correct",
+            IsCorrect = true
+        };
+        var incorrectOption = new Option
+        {
+            Id = 102,
+            QuestionId = 11,
+            OptionText = "Incorrect",
+            IsCorrect = false
+        };
+        var question = new Question
+        {
+            Id = 11,
+            QuizId = 1,
+            QuestionText = "Question 1",
+            QuestionType = "MultipleChoice",
+            Position = 0
+        };
+        var firstParticipant = new SessionParticipant
+        {
+            Id = 21,
+            SessionId = 1,
+            StudentName = "An",
+            TotalScore = 1000
+        };
+        var secondParticipant = new SessionParticipant
+        {
+            Id = 22,
+            SessionId = 1,
+            StudentName = "Binh",
+            TotalScore = 0
+        };
+        firstParticipant.SessionAnswers.Add(new SessionAnswer
+        {
+            Id = 31,
+            SessionId = 1,
+            ParticipantId = firstParticipant.Id,
+            QuestionId = question.Id,
+            SelectedOptionId = correctOption.Id,
+            IsCorrect = true,
+            ScoreAwarded = 1000,
+            AnsweredAt = DateTime.UtcNow,
+            Question = question,
+            SelectedOption = correctOption
+        });
+        secondParticipant.SessionAnswers.Add(new SessionAnswer
+        {
+            Id = 32,
+            SessionId = 1,
+            ParticipantId = secondParticipant.Id,
+            QuestionId = question.Id,
+            SelectedOptionId = incorrectOption.Id,
+            IsCorrect = false,
+            ScoreAwarded = 0,
+            AnsweredAt = DateTime.UtcNow,
+            Question = question,
+            SelectedOption = incorrectOption
+        });
+
+        var session = MakeSession();
+        session.Status = "Ended";
+        session.Quiz = new Quiz
+        {
+            Id = 1,
+            DocumentId = 1,
+            Title = "Test quiz",
+            Status = "Published",
+            ActivityType = "Quiz"
+        };
+        session.Quiz.Questions.Add(question);
+        session.SessionParticipants.Add(firstParticipant);
+        session.SessionParticipants.Add(secondParticipant);
+        _repo.Setup(repository => repository.GetReportByIdAsync(1)).ReturnsAsync(session);
+
+        var result = await _sut.GetReportAsync(1, 10);
+
+        Assert.NotNull(result);
+        Assert.Equal(2, result!.TotalParticipants);
+        Assert.Equal(2, result.TotalAnswers);
+        Assert.Equal(1, result.CorrectAnswers);
+        Assert.Equal(50m, result.CorrectRate);
+        Assert.Equal(500m, result.AverageScore);
+        Assert.Equal("An", result.Participants[0].StudentName);
+        Assert.Equal(1, result.Participants[0].Rank);
+        Assert.Equal(2, result.Questions[0].AnsweredCount);
+        Assert.Equal(50m, result.Questions[0].CorrectRate);
+    }
+
+    [Fact]
+    public async Task GetReportAsync_WrongTeacher_ReturnsNull()
+    {
+        var session = MakeSession(teacherId: 99);
+        _repo.Setup(repository => repository.GetReportByIdAsync(1)).ReturnsAsync(session);
+
+        Assert.Null(await _sut.GetReportAsync(1, 10));
+    }
+
+    [Fact]
+    public async Task GetReportAsync_NoParticipants_ReturnsZeroMetrics()
+    {
+        var session = MakeSession();
+        session.Quiz = new Quiz
+        {
+            Id = 1,
+            DocumentId = 1,
+            Title = "Empty quiz",
+            Status = "Published",
+            ActivityType = "Quiz"
+        };
+        _repo.Setup(repository => repository.GetReportByIdAsync(1)).ReturnsAsync(session);
+
+        var result = await _sut.GetReportAsync(1, 10);
+
+        Assert.NotNull(result);
+        Assert.Equal(0, result!.CorrectRate);
+        Assert.Equal(0, result.AverageScore);
+        Assert.Empty(result.Participants);
     }
 }

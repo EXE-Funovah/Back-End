@@ -7,6 +7,7 @@ namespace Mascoteach.Service.Interfaces
         Task<IEnumerable<LiveSessionResponse>> GetAllAsync();
         Task<IEnumerable<LiveSessionResponse>> GetByTeacherIdAsync(int teacherId);
         Task<LiveSessionResponse?> GetByIdAsync(int id);
+        Task<LiveSessionReportResponse?> GetReportAsync(int id, int teacherId);
         Task<LiveSessionResponse?> GetByPinAsync(string pin);
         Task<LiveSessionResponse> CreateAsync(int teacherId, LiveSessionCreateRequest request);
         Task<bool> UpdateAsync(int id, int teacherId, LiveSessionUpdateRequest request);

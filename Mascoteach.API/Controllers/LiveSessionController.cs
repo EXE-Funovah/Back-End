@@ -17,6 +17,7 @@ namespace Mascoteach.API.Controllers
         }
 
         // GET: api/LiveSession
+        [Authorize(Roles = "Admin")]
         [HttpGet]
         public async Task<IActionResult> GetAll()
         {
@@ -25,6 +26,7 @@ namespace Mascoteach.API.Controllers
         }
 
         // GET: api/LiveSession/my
+        [Authorize(Roles = "Teacher")]
         [HttpGet("my")]
         public async Task<IActionResult> GetMySession()
         {
@@ -33,11 +35,30 @@ namespace Mascoteach.API.Controllers
         }
 
         // GET: api/LiveSession/{id}
+        [Authorize(Roles = "Teacher,Admin")]
         [HttpGet("{id}")]
         public async Task<IActionResult> GetById(int id)
         {
             var result = await _liveSessionService.GetByIdAsync(id);
             if (result == null) return NotFound("Live session does not exist.");
+            if (!string.Equals(CurrentUserRole, "Admin", StringComparison.OrdinalIgnoreCase)
+                && result.TeacherId != CurrentUserId)
+            {
+                return Forbid();
+            }
+
+            return Ok(result);
+        }
+
+        // GET: api/LiveSession/{id}/report
+        [Authorize(Roles = "Teacher")]
+        [HttpGet("{id:int}/report")]
+        public async Task<IActionResult> GetReport(int id)
+        {
+            var result = await _liveSessionService.GetReportAsync(id, CurrentUserId);
+            if (result == null)
+                return NotFound("Live session does not exist or you do not have permission.");
+
             return Ok(result);
         }
 
@@ -52,6 +73,7 @@ namespace Mascoteach.API.Controllers
         }
 
         // POST: api/LiveSession
+        [Authorize(Roles = "Teacher")]
         [HttpPost]
         public async Task<IActionResult> Create([FromBody] LiveSessionCreateRequest request)
         {
@@ -60,6 +82,7 @@ namespace Mascoteach.API.Controllers
         }
 
         // PUT: api/LiveSession/{id}
+        [Authorize(Roles = "Teacher")]
         [HttpPut("{id}")]
         public async Task<IActionResult> Update(int id, [FromBody] LiveSessionUpdateRequest request)
         {
@@ -69,6 +92,7 @@ namespace Mascoteach.API.Controllers
         }
 
         // DELETE: api/LiveSession/{id}
+        [Authorize(Roles = "Teacher")]
         [HttpDelete("{id}")]
         public async Task<IActionResult> Delete(int id)
         {
@@ -78,6 +102,7 @@ namespace Mascoteach.API.Controllers
         }
 
         // PATCH: api/LiveSession/{id}/toggle-delete
+        [Authorize(Roles = "Teacher")]
         [HttpPatch("{id}/toggle-delete")]
         public async Task<IActionResult> ToggleDelete(int id)
         {

@@ -6,6 +6,7 @@ namespace Mascoteach.Data.Interfaces
     {
         Task<LiveSession?> GetByPinAsync(string pin);
         Task<IEnumerable<LiveSession>> GetByTeacherIdAsync(int teacherId);
+        Task<LiveSession?> GetReportByIdAsync(int id);
         Task<LiveSession?> GetByIdIncludingDeletedAsync(int id);
     }
 }
