@@ -48,6 +48,7 @@ builder.Services.AddScoped<IAdminRepository, AdminRepository>();
 builder.Services.AddScoped<IAdminAuditLogRepository, AdminAuditLogRepository>();
 builder.Services.AddScoped<IAdminUserCommandRepository, AdminUserCommandRepository>();
 builder.Services.AddScoped<IAdminContentCommandRepository, AdminContentCommandRepository>();
+builder.Services.AddScoped<IAdminSessionCommandRepository, AdminSessionCommandRepository>();
 
 
 
@@ -76,6 +77,7 @@ builder.Services.AddScoped<IAdminAuditService>(provider => provider.GetRequiredS
 builder.Services.AddScoped<IAdminAuditWriter>(provider => provider.GetRequiredService<AdminAuditService>());
 builder.Services.AddScoped<IAdminUserCommandService, AdminUserCommandService>();
 builder.Services.AddScoped<IAdminContentCommandService, AdminContentCommandService>();
+builder.Services.AddScoped<IAdminSessionCommandService, AdminSessionCommandService>();
 builder.Services.AddScoped<IAuthenticatedAccountValidator, AuthenticatedAccountValidator>();
 builder.Services.AddSingleton(TimeProvider.System);
 builder.Services.AddDataProtection();
