@@ -9,11 +9,16 @@ namespace Mascoteach.Service.Implementations
     public class LiveSessionService : ILiveSessionService
     {
         private readonly ILiveSessionRepository _liveSessionRepository;
+        private readonly IQuizRepository _quizRepository;
         private readonly IMapper _mapper;
 
-        public LiveSessionService(ILiveSessionRepository liveSessionRepository, IMapper mapper)
+        public LiveSessionService(
+            ILiveSessionRepository liveSessionRepository,
+            IQuizRepository quizRepository,
+            IMapper mapper)
         {
             _liveSessionRepository = liveSessionRepository;
+            _quizRepository = quizRepository;
             _mapper = mapper;
         }
 
@@ -150,6 +155,14 @@ namespace Mascoteach.Service.Implementations
 
         public async Task<LiveSessionResponse> CreateAsync(int teacherId, LiveSessionCreateRequest request)
         {
+            ArgumentNullException.ThrowIfNull(request);
+
+            var quiz = await _quizRepository.GetOwnedVisibleByIdAsync(request.QuizId, teacherId);
+            if (quiz == null)
+                throw new ArgumentException("Quiz does not exist or you do not have permission.");
+            if (!string.Equals(quiz.ActivityType, "Quiz", StringComparison.Ordinal))
+                throw new ArgumentException("Flashcard activities cannot be used to create live games.");
+
             var gamePin = await GenerateUniquePinAsync();
 
             var session = _mapper.Map<LiveSession>(request);

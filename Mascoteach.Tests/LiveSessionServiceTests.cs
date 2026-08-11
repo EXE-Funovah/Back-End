@@ -11,12 +11,13 @@ namespace Mascoteach.Tests;
 public class LiveSessionServiceTests
 {
     private readonly Mock<ILiveSessionRepository> _repo = new();
+    private readonly Mock<IQuizRepository> _quizRepo = new();
     private readonly IMapper _mapper = TestHelper.CreateMapper();
     private readonly LiveSessionService _sut;
 
     public LiveSessionServiceTests()
     {
-        _sut = new LiveSessionService(_repo.Object, _mapper);
+        _sut = new LiveSessionService(_repo.Object, _quizRepo.Object, _mapper);
     }
 
     private LiveSession MakeSession(int teacherId = 10) => new()
@@ -24,6 +25,78 @@ public class LiveSessionServiceTests
         Id = 1, TeacherId = teacherId, QuizId = 1, TemplateId = 1,
         GamePin = "123456", Status = "Waiting", CreatedAt = DateTime.Now
     };
+
+    [Fact]
+    public async Task CreateAsync_OwnedQuiz_CreatesWaitingSession()
+    {
+        _quizRepo.Setup(repository => repository.GetOwnedVisibleByIdAsync(1, 10))
+            .ReturnsAsync(new Quiz
+            {
+                Id = 1,
+                DocumentId = 2,
+                Title = "Quiz",
+                Status = "Published",
+                ActivityType = "Quiz"
+            });
+        _repo.Setup(repository => repository.GetByPinAsync(It.IsAny<string>()))
+            .ReturnsAsync((LiveSession?)null);
+        _repo.Setup(repository => repository.SaveChangesAsync()).ReturnsAsync(1);
+
+        var result = await _sut.CreateAsync(10, new LiveSessionCreateRequest
+        {
+            QuizId = 1,
+            TemplateId = 3
+        });
+
+        Assert.Equal(10, result.TeacherId);
+        Assert.Equal("Waiting", result.Status);
+        _repo.Verify(repository => repository.AddAsync(It.Is<LiveSession>(session =>
+            session.QuizId == 1
+            && session.TemplateId == 3
+            && session.TeacherId == 10
+            && session.Status == "Waiting")), Times.Once);
+    }
+
+    [Fact]
+    public async Task CreateAsync_Flashcard_RejectsBeforeSessionPersistence()
+    {
+        _quizRepo.Setup(repository => repository.GetOwnedVisibleByIdAsync(1, 10))
+            .ReturnsAsync(new Quiz
+            {
+                Id = 1,
+                DocumentId = 2,
+                Title = "Cards",
+                Status = "Published",
+                ActivityType = "Flashcard"
+            });
+
+        var exception = await Assert.ThrowsAsync<ArgumentException>(() =>
+            _sut.CreateAsync(10, new LiveSessionCreateRequest
+            {
+                QuizId = 1,
+                TemplateId = 3
+            }));
+
+        Assert.Contains("Flashcard", exception.Message);
+        _repo.Verify(repository => repository.AddAsync(It.IsAny<LiveSession>()), Times.Never);
+        _repo.Verify(repository => repository.SaveChangesAsync(), Times.Never);
+    }
+
+    [Fact]
+    public async Task CreateAsync_QuizOutsideTeacherOwnership_RejectsBeforeSessionPersistence()
+    {
+        _quizRepo.Setup(repository => repository.GetOwnedVisibleByIdAsync(1, 10))
+            .ReturnsAsync((Quiz?)null);
+
+        await Assert.ThrowsAsync<ArgumentException>(() =>
+            _sut.CreateAsync(10, new LiveSessionCreateRequest
+            {
+                QuizId = 1,
+                TemplateId = 3
+            }));
+
+        _repo.Verify(repository => repository.AddAsync(It.IsAny<LiveSession>()), Times.Never);
+    }
 
     // ── UpdateAsync ──
 

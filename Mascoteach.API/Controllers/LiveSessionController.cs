@@ -77,8 +77,15 @@ namespace Mascoteach.API.Controllers
         [HttpPost]
         public async Task<IActionResult> Create([FromBody] LiveSessionCreateRequest request)
         {
-            var result = await _liveSessionService.CreateAsync(CurrentUserId, request);
-            return CreatedAtAction(nameof(GetById), new { id = result.Id }, result);
+            try
+            {
+                var result = await _liveSessionService.CreateAsync(CurrentUserId, request);
+                return CreatedAtAction(nameof(GetById), new { id = result.Id }, result);
+            }
+            catch (ArgumentException ex)
+            {
+                return BadRequest(ex.Message);
+            }
         }
 
         // PUT: api/LiveSession/{id}
