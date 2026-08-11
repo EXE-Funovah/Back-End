@@ -77,7 +77,7 @@ nhật trạng thái tích hợp; không đánh dấu backend hoàn thành chỉ
 1. [Hoàn tất 2026-07-15] `Admin_Audit_Logs` và API đọc audit.
 2. [Hoàn tất 2026-07-15] User role/subscription/status mutations có DTO riêng, reason và audit.
 3. [Document hoàn tất 2026-07-15] Tiếp tục Quiz/Flashcard hide-restore cho Admin có reason và audit.
-4. Admin end-session và Billing sync có audit, kiểm soát race/idempotency.
+4. [Admin end-session hoàn tất 2026-08-11] Có audit, SignalR broadcast và kiểm soát idempotency; Billing sync còn chờ.
 5. AI/content processing telemetry, retry và overview alerts.
 6. Quota overrides, Support Console và Settings sau khi product chốt contract.
 
@@ -1067,7 +1067,14 @@ Admin Dashboard nên mang cảm giác vận hành, rõ ràng, scan nhanh:
 - [x] Nối danh sách/detail session và participants với Admin API.
 - [x] Không gọi endpoint mock `/api/Admin/sessions/{id}/events`.
 - [ ] Nối search/PIN, status, teacherId, templateId, deletion, from và to thành query parameters thật.
-- [ ] Kết thúc session nếu backend hỗ trợ.
+- [x] Kết thúc session nếu backend hỗ trợ.
+  - Status: Completed (2026-08-11).
+  - `PATCH /api/Admin/sessions/{id}/end` chỉ cho Admin, yêu cầu `reason`, kết thúc phiên `Waiting|Active`, ghi audit
+    `Session.EndedByAdmin` trong cùng serializable transaction và phát `GameEnded` tới group PIN sau commit.
+  - Phiên `Ended` trả no-op idempotent, không ghi audit trùng nhưng vẫn phát lại `GameEnded` để phục hồi trường hợp lần gửi
+    realtime trước thất bại. Phiên bị soft-delete trả 404; trạng thái khác trả 409.
+  - Frontend Admin detail đã có modal xác nhận/lý do, trạng thái loading/error/success và tự tải lại dữ liệu.
+  - Verification: focused Admin Session tests `48/48`, full suite `333/333`, backend build và frontend production build pass.
 
 ### Giai đoạn 6 - Billing
 

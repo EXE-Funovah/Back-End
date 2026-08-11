@@ -283,6 +283,7 @@ PATCH /api/Admin/documents/{id}/restore
 GET /api/Admin/sessions?search=&teacherId=&templateId=&status=&deletion=Active&from=&to=&page=1&pageSize=20
 GET /api/Admin/sessions/{id}
 GET /api/Admin/sessions/{id}/participants?search=&deletion=Active&page=1&pageSize=20
+PATCH /api/Admin/sessions/{id}/end
 ```
 
 - All three endpoints are read-only and inherit `[Authorize(Roles = "Admin")]`.
@@ -300,8 +301,15 @@ GET /api/Admin/sessions/{id}/participants?search=&deletion=Active&page=1&pageSiz
 - Responses omit template JS/thumbnail URLs, quiz content, storage fields, and realtime data.
 - The schema has no `ended_at`, participant join timestamp/user id, or reconnect/event history. Do not infer
   duration, unique students, or realtime health.
-- No Admin end/delete/restore action exists yet. Add mutation endpoints only after `Admin_Audit_Logs`, dedicated
-  request DTOs, and a reason policy are designed.
+- Admin end-session accepts `{ "reason": "..." }` with a mandatory 500-character maximum reason. Only active,
+  non-deleted sessions in `Waiting` or `Active` can transition to `Ended`.
+- The status change and `Session.EndedByAdmin` (`High`) audit row commit in one serializable transaction. The audit
+  before/after JSON contains only session status.
+- An already `Ended` session is an HTTP 200 no-op without a duplicate audit row. The API still clears cached question
+  state and rebroadcasts `GameEnded`, allowing a retry to recover from a post-commit SignalR send failure.
+- A successful Admin end broadcasts the existing `GameEnded` event to the game-PIN group, keeping the teacher and
+  guest-player frontend contract unchanged. The schema still has no `ended_at` column.
+- Admin delete/restore actions do not exist yet.
 
 ### Billing monitoring
 
