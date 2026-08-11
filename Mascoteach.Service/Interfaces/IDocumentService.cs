@@ -12,6 +12,7 @@ namespace Mascoteach.Service.Interfaces
     {
         Task<IEnumerable<DocumentResponse>> GetAllDocumentsAsync();
         Task<IEnumerable<DocumentResponse>> GetMyDocumentsAsync(int ownerId);
+        Task<IEnumerable<DocumentResponse>> GetMyDeletedDocumentsAsync(int ownerId);
         Task<DocumentResponse?> GetDocumentByIdAsync(int id);
         Task<DocumentResponse> UploadDocumentAsync(int ownerId, DocumentCreateRequest request);
         Task<bool> UpdateDocumentAsync(int id, int ownerId, string newS3Key);

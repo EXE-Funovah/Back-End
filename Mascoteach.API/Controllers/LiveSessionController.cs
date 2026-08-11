@@ -50,6 +50,18 @@ namespace Mascoteach.API.Controllers
             return Ok(result);
         }
 
+        // GET: api/LiveSession/{id}/report
+        [Authorize(Roles = "Teacher")]
+        [HttpGet("{id:int}/report")]
+        public async Task<IActionResult> GetReport(int id)
+        {
+            var result = await _liveSessionService.GetReportAsync(id, CurrentUserId);
+            if (result == null)
+                return NotFound("Live session does not exist or you do not have permission.");
+
+            return Ok(result);
+        }
+
         // GET: api/LiveSession/pin/{pin}
         [AllowAnonymous]
         [HttpGet("pin/{pin}")]

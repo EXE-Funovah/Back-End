@@ -161,6 +161,19 @@ public class DocumentService : IDocumentService
         return responses;
     }
 
+    public async Task<IEnumerable<DocumentResponse>> GetMyDeletedDocumentsAsync(int ownerId)
+    {
+        var deletedDocuments = await _documentRepository.GetDeletedByOwnerIdAsync(ownerId);
+        var responses = _mapper.Map<IEnumerable<DocumentResponse>>(deletedDocuments).ToList();
+
+        foreach (var response in responses)
+        {
+            response.PresignedUrl = await _s3Service.GeneratePresignedDownloadUrlAsync(response.S3Key);
+        }
+
+        return responses;
+    }
+
     public async Task<DocumentResponse?> GetDocumentByIdAsync(int id)
     {
         var doc = await _documentRepository.GetByIdAsync(id);

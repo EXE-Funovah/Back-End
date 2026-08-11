@@ -49,6 +49,14 @@ namespace Mascoteach.API.Controllers
             return Ok(result);
         }
 
+        // GET: api/Document/me/trash
+        [HttpGet("me/trash")]
+        public async Task<IActionResult> GetMyDeletedDocuments()
+        {
+            var result = await _documentService.GetMyDeletedDocumentsAsync(CurrentUserId);
+            return Ok(result);
+        }
+
         // GET: api/Document/{id}
         [HttpGet("{id}")]
         public async Task<IActionResult> GetById(int id)
@@ -108,9 +116,16 @@ namespace Mascoteach.API.Controllers
         [HttpPatch("{id}/toggle-delete")]
         public async Task<IActionResult> ToggleDelete(int id)
         {
-            var result = await _documentService.ToggleDeleteAsync(id, CurrentUserId);
-            if (result == null) return Forbid("Document does not exist or you do not have permission to perform this action.");
-            return Ok(result);
+            try
+            {
+                var result = await _documentService.ToggleDeleteAsync(id, CurrentUserId);
+                if (result == null) return Forbid("Document does not exist or you do not have permission to perform this action.");
+                return Ok(result);
+            }
+            catch (InvalidOperationException ex)
+            {
+                return BadRequest(ex.Message);
+            }
         }
     }
 }

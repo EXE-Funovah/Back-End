@@ -268,6 +268,8 @@ public class DocumentServiceTests
 
         await Assert.ThrowsAsync<InvalidOperationException>(
             () => _sut.ToggleDeleteAsync(1, 10));
+        _docRepo.Verify(r => r.Update(It.IsAny<Document>()), Times.Never);
+        _docRepo.Verify(r => r.SaveChangesAsync(), Times.Never);
     }
 
     [Fact]
@@ -291,5 +293,23 @@ public class DocumentServiceTests
 
         Assert.NotNull(result);
         Assert.Equal("https://download-url", result!.PresignedUrl);
+    }
+
+    [Fact]
+    public async Task GetMyDeletedDocumentsAsync_ReturnsOwnedTrashWithPresignedUrls()
+    {
+        var deletedDocument = MakeDoc(isDeleted: true);
+        deletedDocument.FileName = "deleted.pdf";
+        _docRepo.Setup(repository => repository.GetDeletedByOwnerIdAsync(10))
+            .ReturnsAsync(new[] { deletedDocument });
+        _s3Service.Setup(service => service.GeneratePresignedDownloadUrlAsync(deletedDocument.FileUrl))
+            .ReturnsAsync("https://deleted-download-url");
+
+        var result = (await _sut.GetMyDeletedDocumentsAsync(10)).ToList();
+
+        Assert.Single(result);
+        Assert.True(result[0].IsDeleted);
+        Assert.Equal("deleted.pdf", result[0].FileName);
+        Assert.Equal("https://deleted-download-url", result[0].PresignedUrl);
     }
 }
