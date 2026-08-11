@@ -17,6 +17,8 @@ public partial class Question
 
     public int Position { get; set; }
 
+    public virtual ICollection<FlashcardStudyProgress> FlashcardStudyProgresses { get; set; } = new List<FlashcardStudyProgress>();
+
     public virtual ICollection<Option> Options { get; set; } = new List<Option>();
 
     public virtual Quiz Quiz { get; set; } = null!;

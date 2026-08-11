@@ -21,6 +21,8 @@ public partial class Quiz
 
     public virtual Document Document { get; set; } = null!;
 
+    public virtual ICollection<FlashcardAssignment> FlashcardAssignments { get; set; } = new List<FlashcardAssignment>();
+
     public virtual ICollection<LiveSession> LiveSessions { get; set; } = new List<LiveSession>();
 
     public virtual ICollection<Question> Questions { get; set; } = new List<Question>();

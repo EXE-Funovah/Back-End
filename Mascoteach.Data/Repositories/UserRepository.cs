@@ -102,6 +102,43 @@ namespace Mascoteach.Data.Repositories
                 .ToList();
             var paymentOrders = user.PaymentOrders.ToList();
 
+            // Classroom/flashcard relations must be removed before their users,
+            // quizzes, and questions because rollout foreign keys use NO ACTION.
+            var ownedQuizIds = quizzes.Select(quiz => quiz.Id).ToArray();
+            var ownedQuestionIds = questions.Select(question => question.Id).ToArray();
+            var ownedClasses = _context.Classes
+                .Where(classroom => classroom.TeacherId == user.Id)
+                .ToList();
+            var ownedClassIds = ownedClasses.Select(classroom => classroom.Id).ToArray();
+            var flashcardAssignments = _context.FlashcardAssignments
+                .Where(assignment =>
+                    assignment.AssignedBy == user.Id
+                    || ownedClassIds.Contains(assignment.ClassId)
+                    || ownedQuizIds.Contains(assignment.QuizId))
+                .ToList();
+            var assignmentIds = flashcardAssignments
+                .Select(assignment => assignment.Id)
+                .ToArray();
+            var flashcardProgress = _context.FlashcardStudyProgresses
+                .Where(progress =>
+                    progress.StudentId == user.Id
+                    || assignmentIds.Contains(progress.AssignmentId)
+                    || ownedQuestionIds.Contains(progress.QuestionId))
+                .ToList();
+            var classMembers = _context.ClassMembers
+                .Where(member =>
+                    member.StudentId == user.Id
+                    || ownedClassIds.Contains(member.ClassId))
+                .ToList();
+
+            if (flashcardProgress.Count > 0)
+                _context.FlashcardStudyProgresses.RemoveRange(flashcardProgress);
+            if (classMembers.Count > 0)
+                _context.ClassMembers.RemoveRange(classMembers);
+            if (flashcardAssignments.Count > 0)
+                _context.FlashcardAssignments.RemoveRange(flashcardAssignments);
+            if (ownedClasses.Count > 0)
+                _context.Classes.RemoveRange(ownedClasses);
             if (options.Count > 0)
                 _context.Options.RemoveRange(options);
             if (questions.Count > 0)
