@@ -7,6 +7,7 @@ public interface IFlashcardClassService
     Task<ClassResponse> CreateClassAsync(int teacherId, ClassCreateRequest request);
     Task<IReadOnlyList<ClassResponse>> GetTeacherClassesAsync(int teacherId);
     Task<ClassDetailResponse?> GetTeacherClassAsync(int classId, int teacherId);
+    Task<IReadOnlyList<ClassSearchResponse>> SearchClassesAsync(string query);
     Task<ClassResponse> JoinClassAsync(int studentId, ClassJoinRequest request);
     Task<IReadOnlyList<ClassResponse>> GetStudentClassesAsync(int studentId);
     Task<bool> RemoveMemberAsync(int classId, int studentId, int teacherId);

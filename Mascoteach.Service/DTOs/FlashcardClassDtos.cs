@@ -7,21 +7,35 @@ public sealed class ClassCreateRequest
     [Required, StringLength(255, MinimumLength = 1)]
     public string Name { get; set; } = null!;
 
+    [Required, StringLength(72, MinimumLength = 6)]
+    public string Password { get; set; } = null!;
+
     [StringLength(1000)]
     public string? Description { get; set; }
 }
 
 public sealed class ClassJoinRequest
 {
-    [Required, StringLength(12, MinimumLength = 1)]
-    public string ClassCode { get; set; } = null!;
+    [Range(1, int.MaxValue)]
+    public int ClassId { get; set; }
+
+    [Required, StringLength(72, MinimumLength = 1)]
+    public string Password { get; set; } = null!;
+}
+
+public sealed class ClassSearchResponse
+{
+    public int Id { get; set; }
+    public string Name { get; set; } = null!;
+    public string? Description { get; set; }
+    public string TeacherName { get; set; } = null!;
+    public int MemberCount { get; set; }
 }
 
 public class ClassResponse
 {
     public int Id { get; set; }
     public string Name { get; set; } = null!;
-    public string ClassCode { get; set; } = null!;
     public string? Description { get; set; }
     public int TeacherId { get; set; }
     public string TeacherName { get; set; } = null!;

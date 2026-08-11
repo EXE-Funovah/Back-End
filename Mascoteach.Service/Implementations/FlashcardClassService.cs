@@ -26,6 +26,8 @@ public sealed class FlashcardClassService : IFlashcardClassService
         var name = request.Name.Trim();
         if (name.Length == 0)
             throw new ArgumentException("Class name is required.");
+        if (string.IsNullOrWhiteSpace(request.Password) || request.Password.Length < 6)
+            throw new ArgumentException("Class password must contain at least 6 characters.");
 
         var now = UtcNow();
         var classroom = new Class
@@ -34,6 +36,7 @@ public sealed class FlashcardClassService : IFlashcardClassService
             Name = name,
             Description = NormalizeOptional(request.Description),
             ClassCode = await GenerateClassCodeAsync(),
+            JoinPasswordHash = BCrypt.Net.BCrypt.HashPassword(request.Password),
             CreatedAt = now,
             UpdatedAt = now,
             IsDeleted = false
@@ -60,7 +63,6 @@ public sealed class FlashcardClassService : IFlashcardClassService
         {
             Id = classroom.Id,
             Name = classroom.Name,
-            ClassCode = classroom.ClassCode,
             Description = classroom.Description,
             TeacherId = classroom.TeacherId,
             TeacherName = classroom.Teacher.FullName,
@@ -82,9 +84,11 @@ public sealed class FlashcardClassService : IFlashcardClassService
 
     public async Task<ClassResponse> JoinClassAsync(int studentId, ClassJoinRequest request)
     {
-        var classCode = request.ClassCode.Trim().ToUpperInvariant();
-        var classroom = await _repository.GetActiveClassByCodeAsync(classCode)
-            ?? throw new KeyNotFoundException("Class code does not exist.");
+        var classroom = await _repository.GetActiveClassByIdAsync(request.ClassId)
+            ?? throw new InvalidOperationException("Class does not exist or the password is incorrect.");
+        if (string.IsNullOrWhiteSpace(classroom.JoinPasswordHash)
+            || !BCrypt.Net.BCrypt.Verify(request.Password, classroom.JoinPasswordHash))
+            throw new InvalidOperationException("Class does not exist or the password is incorrect.");
 
         var member = await _repository.GetMemberIncludingDeletedAsync(classroom.Id, studentId);
         if (member != null && !member.IsDeleted)
@@ -108,6 +112,26 @@ public sealed class FlashcardClassService : IFlashcardClassService
 
         await _repository.SaveChangesAsync();
         return MapClass(classroom, memberCountOverride: classroom.ClassMembers.Count + 1);
+    }
+
+    public async Task<IReadOnlyList<ClassSearchResponse>> SearchClassesAsync(string query)
+    {
+        var normalized = query?.Trim() ?? string.Empty;
+        if (normalized.Length < 2)
+            throw new ArgumentException("Search term must contain at least 2 characters.");
+        if (normalized.Length > 100)
+            throw new ArgumentException("Search term is too long.");
+
+        return (await _repository.SearchActiveClassesAsync(normalized, 20))
+            .Select(classroom => new ClassSearchResponse
+            {
+                Id = classroom.Id,
+                Name = classroom.Name,
+                Description = classroom.Description,
+                TeacherName = classroom.Teacher.FullName,
+                MemberCount = classroom.ClassMembers.Count
+            })
+            .ToList();
     }
 
     public async Task<IReadOnlyList<ClassResponse>> GetStudentClassesAsync(int studentId) =>
@@ -298,7 +322,6 @@ public sealed class FlashcardClassService : IFlashcardClassService
     {
         Id = classroom.Id,
         Name = classroom.Name,
-        ClassCode = classroom.ClassCode,
         Description = classroom.Description,
         TeacherId = classroom.TeacherId,
         TeacherName = teacherName ?? classroom.Teacher?.FullName ?? string.Empty,

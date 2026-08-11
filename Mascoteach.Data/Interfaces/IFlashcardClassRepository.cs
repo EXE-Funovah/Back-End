@@ -8,7 +8,8 @@ public interface IFlashcardClassRepository
     Task AddClassAsync(Class classroom);
     Task<IReadOnlyList<Class>> GetTeacherClassesAsync(int teacherId);
     Task<Class?> GetOwnedClassAsync(int classId, int teacherId);
-    Task<Class?> GetActiveClassByCodeAsync(string classCode);
+    Task<IReadOnlyList<Class>> SearchActiveClassesAsync(string query, int limit);
+    Task<Class?> GetActiveClassByIdAsync(int classId);
     Task<ClassMember?> GetMemberIncludingDeletedAsync(int classId, int studentId);
     Task AddMemberAsync(ClassMember member);
     Task<IReadOnlyList<Class>> GetStudentClassesAsync(int studentId);

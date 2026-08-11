@@ -44,6 +44,20 @@ public sealed class ClassesController : BaseController
     }
 
     [Authorize(Roles = "Student")]
+    [HttpGet("search")]
+    public async Task<IActionResult> Search([FromQuery] string q)
+    {
+        try
+        {
+            return Ok(await _service.SearchClassesAsync(q));
+        }
+        catch (ArgumentException exception)
+        {
+            return BadRequest(exception.Message);
+        }
+    }
+
+    [Authorize(Roles = "Student")]
     [HttpPost("join")]
     public async Task<IActionResult> Join([FromBody] ClassJoinRequest request)
     {
@@ -51,9 +65,9 @@ public sealed class ClassesController : BaseController
         {
             return Ok(await _service.JoinClassAsync(CurrentUserId, request));
         }
-        catch (KeyNotFoundException exception)
+        catch (InvalidOperationException exception)
         {
-            return NotFound(exception.Message);
+            return BadRequest(exception.Message);
         }
     }
 

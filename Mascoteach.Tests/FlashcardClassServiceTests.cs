@@ -31,7 +31,8 @@ public sealed class FlashcardClassServiceTests
         var result = await _service.CreateClassAsync(10, new ClassCreateRequest
         {
             Name = "  Lớp 10A  ",
-            Description = "  Ôn tập  "
+            Description = "  Ôn tập  ",
+            Password = "secret123"
         });
 
         Assert.NotNull(saved);
@@ -40,7 +41,9 @@ public sealed class FlashcardClassServiceTests
         Assert.Equal("Ôn tập", saved.Description);
         Assert.Matches("^[0-9]{6}$", saved.ClassCode);
         Assert.Equal(Now.UtcDateTime, saved.CreatedAt);
-        Assert.Equal(saved.ClassCode, result.ClassCode);
+        Assert.Equal(saved.Name, result.Name);
+        Assert.NotEqual("secret123", saved.JoinPasswordHash);
+        Assert.True(BCrypt.Net.BCrypt.Verify("secret123", saved.JoinPasswordHash));
     }
 
     [Fact]
@@ -54,16 +57,56 @@ public sealed class FlashcardClassServiceTests
             StudentId = 20,
             IsDeleted = true
         };
-        _repository.Setup(item => item.GetActiveClassByCodeAsync("123456"))
+        classroom.JoinPasswordHash = BCrypt.Net.BCrypt.HashPassword("secret123");
+        _repository.Setup(item => item.GetActiveClassByIdAsync(1))
             .ReturnsAsync(classroom);
         _repository.Setup(item => item.GetMemberIncludingDeletedAsync(1, 20))
             .ReturnsAsync(member);
 
-        await _service.JoinClassAsync(20, new ClassJoinRequest { ClassCode = " 123456 " });
+        await _service.JoinClassAsync(20, new ClassJoinRequest
+        {
+            ClassId = 1,
+            Password = "secret123"
+        });
 
         Assert.False(member.IsDeleted);
         Assert.Equal(Now.UtcDateTime, member.JoinedAt);
         _repository.Verify(item => item.AddMemberAsync(It.IsAny<ClassMember>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task JoinClassAsync_WrongPassword_RejectsWithoutPersistence()
+    {
+        var classroom = MakeClass();
+        classroom.JoinPasswordHash = BCrypt.Net.BCrypt.HashPassword("secret123");
+        _repository.Setup(item => item.GetActiveClassByIdAsync(1)).ReturnsAsync(classroom);
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            _service.JoinClassAsync(20, new ClassJoinRequest
+            {
+                ClassId = 1,
+                Password = "wrong-password"
+            }));
+
+        _repository.Verify(item => item.GetMemberIncludingDeletedAsync(It.IsAny<int>(), It.IsAny<int>()), Times.Never);
+        _repository.Verify(item => item.SaveChangesAsync(), Times.Never);
+    }
+
+    [Fact]
+    public async Task SearchClassesAsync_ReturnsMinimalSearchResults()
+    {
+        var classroom = MakeClass();
+        classroom.ClassMembers.Add(new ClassMember { ClassId = 1, StudentId = 20, IsDeleted = false });
+        _repository.Setup(item => item.SearchActiveClassesAsync("10A", 20))
+            .ReturnsAsync([classroom]);
+
+        var result = await _service.SearchClassesAsync(" 10A ");
+
+        var item = Assert.Single(result);
+        Assert.Equal(1, item.Id);
+        Assert.Equal("10A", item.Name);
+        Assert.Equal("Teacher", item.TeacherName);
+        Assert.Equal(1, item.MemberCount);
     }
 
     [Fact]

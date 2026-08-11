@@ -28,8 +28,22 @@ public sealed class FlashcardClassRepository : IFlashcardClassRepository
     public Task<Class?> GetOwnedClassAsync(int classId, int teacherId) =>
         ClassQuery().FirstOrDefaultAsync(item => item.Id == classId && item.TeacherId == teacherId);
 
-    public Task<Class?> GetActiveClassByCodeAsync(string classCode) =>
-        ClassQuery().FirstOrDefaultAsync(item => item.ClassCode == classCode);
+    public async Task<IReadOnlyList<Class>> SearchActiveClassesAsync(string query, int limit)
+    {
+        var normalized = query.Trim();
+        return await ClassQuery()
+            .Where(item =>
+                item.JoinPasswordHash != null
+                && (item.Name.Contains(normalized)
+                    || item.Teacher.FullName.Contains(normalized)))
+            .OrderBy(item => item.Name)
+            .ThenBy(item => item.Teacher.FullName)
+            .Take(limit)
+            .ToListAsync();
+    }
+
+    public Task<Class?> GetActiveClassByIdAsync(int classId) =>
+        ClassQuery().FirstOrDefaultAsync(item => item.Id == classId && item.JoinPasswordHash != null);
 
     public Task<ClassMember?> GetMemberIncludingDeletedAsync(int classId, int studentId) =>
         _context.ClassMembers.FirstOrDefaultAsync(item =>

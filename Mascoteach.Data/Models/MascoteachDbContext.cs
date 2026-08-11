@@ -105,6 +105,8 @@ public partial class MascoteachDbContext : DbContext
 
         modelBuilder.Entity<Class>(entity =>
         {
+            entity.HasIndex(e => new { e.Name, e.IsDeleted }, "IX_Classes_Name_Deleted");
+
             entity.HasIndex(e => new { e.TeacherId, e.IsDeleted }, "IX_Classes_Teacher_Deleted");
 
             entity.HasIndex(e => e.ClassCode, "UQ_Classes_ClassCode").IsUnique();
@@ -122,6 +124,9 @@ public partial class MascoteachDbContext : DbContext
                 .HasMaxLength(1000)
                 .HasColumnName("description");
             entity.Property(e => e.IsDeleted).HasColumnName("is_deleted");
+            entity.Property(e => e.JoinPasswordHash)
+                .HasMaxLength(100)
+                .HasColumnName("join_password_hash");
             entity.Property(e => e.Name)
                 .HasMaxLength(255)
                 .HasColumnName("name");
