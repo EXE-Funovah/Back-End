@@ -13,7 +13,15 @@ public partial class MascoteachDbContext : DbContext
 
     public virtual DbSet<AdminAuditLog> AdminAuditLogs { get; set; }
 
+    public virtual DbSet<Class> Classes { get; set; }
+
+    public virtual DbSet<ClassMember> ClassMembers { get; set; }
+
     public virtual DbSet<Document> Documents { get; set; }
+
+    public virtual DbSet<FlashcardAssignment> FlashcardAssignments { get; set; }
+
+    public virtual DbSet<FlashcardStudyProgress> FlashcardStudyProgresses { get; set; }
 
     public virtual DbSet<GameTemplate> GameTemplates { get; set; }
 
@@ -95,6 +103,73 @@ public partial class MascoteachDbContext : DbContext
                 .HasConstraintName("FK_AdminAuditLogs_Users_Actor");
         });
 
+        modelBuilder.Entity<Class>(entity =>
+        {
+            entity.HasIndex(e => new { e.Name, e.IsDeleted }, "IX_Classes_Name_Deleted");
+
+            entity.HasIndex(e => new { e.TeacherId, e.IsDeleted }, "IX_Classes_Teacher_Deleted");
+
+            entity.HasIndex(e => e.ClassCode, "UQ_Classes_ClassCode").IsUnique();
+
+            entity.Property(e => e.Id).HasColumnName("id");
+            entity.Property(e => e.ClassCode)
+                .HasMaxLength(12)
+                .IsUnicode(false)
+                .HasColumnName("class_code");
+            entity.Property(e => e.CreatedAt)
+                .HasPrecision(3)
+                .HasDefaultValueSql("(sysutcdatetime())")
+                .HasColumnName("created_at");
+            entity.Property(e => e.Description)
+                .HasMaxLength(1000)
+                .HasColumnName("description");
+            entity.Property(e => e.IsDeleted).HasColumnName("is_deleted");
+            entity.Property(e => e.JoinPasswordHash)
+                .HasMaxLength(100)
+                .HasColumnName("join_password_hash");
+            entity.Property(e => e.Name)
+                .HasMaxLength(255)
+                .HasColumnName("name");
+            entity.Property(e => e.TeacherId).HasColumnName("teacher_id");
+            entity.Property(e => e.UpdatedAt)
+                .HasPrecision(3)
+                .HasDefaultValueSql("(sysutcdatetime())")
+                .HasColumnName("updated_at");
+
+            entity.HasOne(d => d.Teacher).WithMany(p => p.Classes)
+                .HasForeignKey(d => d.TeacherId)
+                .OnDelete(DeleteBehavior.ClientSetNull)
+                .HasConstraintName("FK_Classes_Users_Teacher");
+        });
+
+        modelBuilder.Entity<ClassMember>(entity =>
+        {
+            entity.ToTable("Class_Members");
+
+            entity.HasIndex(e => new { e.StudentId, e.IsDeleted }, "IX_ClassMembers_Student_Deleted");
+
+            entity.HasIndex(e => new { e.ClassId, e.StudentId }, "UQ_ClassMembers_Class_Student").IsUnique();
+
+            entity.Property(e => e.Id).HasColumnName("id");
+            entity.Property(e => e.ClassId).HasColumnName("class_id");
+            entity.Property(e => e.IsDeleted).HasColumnName("is_deleted");
+            entity.Property(e => e.JoinedAt)
+                .HasPrecision(3)
+                .HasDefaultValueSql("(sysutcdatetime())")
+                .HasColumnName("joined_at");
+            entity.Property(e => e.StudentId).HasColumnName("student_id");
+
+            entity.HasOne(d => d.Class).WithMany(p => p.ClassMembers)
+                .HasForeignKey(d => d.ClassId)
+                .OnDelete(DeleteBehavior.ClientSetNull)
+                .HasConstraintName("FK_ClassMembers_Classes");
+
+            entity.HasOne(d => d.Student).WithMany(p => p.ClassMembers)
+                .HasForeignKey(d => d.StudentId)
+                .OnDelete(DeleteBehavior.ClientSetNull)
+                .HasConstraintName("FK_ClassMembers_Users_Student");
+        });
+
         modelBuilder.Entity<Document>(entity =>
         {
             entity.HasKey(e => e.Id).HasName("PK__Document__3213E83F80515809");
@@ -117,6 +192,94 @@ public partial class MascoteachDbContext : DbContext
                 .HasForeignKey(d => d.OwnerId)
                 .OnDelete(DeleteBehavior.ClientSetNull)
                 .HasConstraintName("FK_Documents_Users");
+        });
+
+        modelBuilder.Entity<FlashcardAssignment>(entity =>
+        {
+            entity.ToTable("Flashcard_Assignments");
+
+            entity.HasIndex(e => new { e.QuizId, e.IsDeleted }, "IX_FlashcardAssignments_Quiz_Deleted");
+
+            entity.HasIndex(e => new { e.ClassId, e.QuizId }, "UX_FlashcardAssignments_Class_Quiz_Active")
+                .IsUnique()
+                .HasFilter("([is_deleted]=(0))");
+
+            entity.Property(e => e.Id).HasColumnName("id");
+            entity.Property(e => e.AssignedAt)
+                .HasPrecision(3)
+                .HasDefaultValueSql("(sysutcdatetime())")
+                .HasColumnName("assigned_at");
+            entity.Property(e => e.AssignedBy).HasColumnName("assigned_by");
+            entity.Property(e => e.ClassId).HasColumnName("class_id");
+            entity.Property(e => e.DueAt)
+                .HasPrecision(3)
+                .HasColumnName("due_at");
+            entity.Property(e => e.Instructions)
+                .HasMaxLength(1000)
+                .HasColumnName("instructions");
+            entity.Property(e => e.IsDeleted).HasColumnName("is_deleted");
+            entity.Property(e => e.QuizId).HasColumnName("quiz_id");
+
+            entity.HasOne(d => d.AssignedByNavigation).WithMany(p => p.FlashcardAssignments)
+                .HasForeignKey(d => d.AssignedBy)
+                .OnDelete(DeleteBehavior.ClientSetNull)
+                .HasConstraintName("FK_FlashcardAssignments_Users_AssignedBy");
+
+            entity.HasOne(d => d.Class).WithMany(p => p.FlashcardAssignments)
+                .HasForeignKey(d => d.ClassId)
+                .OnDelete(DeleteBehavior.ClientSetNull)
+                .HasConstraintName("FK_FlashcardAssignments_Classes");
+
+            entity.HasOne(d => d.Quiz).WithMany(p => p.FlashcardAssignments)
+                .HasForeignKey(d => d.QuizId)
+                .OnDelete(DeleteBehavior.ClientSetNull)
+                .HasConstraintName("FK_FlashcardAssignments_Quizzes");
+        });
+
+        modelBuilder.Entity<FlashcardStudyProgress>(entity =>
+        {
+            entity.ToTable("Flashcard_Study_Progress");
+
+            entity.HasIndex(e => new { e.StudentId, e.Status }, "IX_FlashcardStudyProgress_Student_Status");
+
+            entity.HasIndex(e => new { e.AssignmentId, e.StudentId, e.QuestionId }, "UQ_FlashcardStudyProgress_Assignment_Student_Question").IsUnique();
+
+            entity.Property(e => e.Id).HasColumnName("id");
+            entity.Property(e => e.AssignmentId).HasColumnName("assignment_id");
+            entity.Property(e => e.KnownCount).HasColumnName("known_count");
+            entity.Property(e => e.LastReviewedAt)
+                .HasPrecision(3)
+                .HasColumnName("last_reviewed_at");
+            entity.Property(e => e.MasteredAt)
+                .HasPrecision(3)
+                .HasColumnName("mastered_at");
+            entity.Property(e => e.QuestionId).HasColumnName("question_id");
+            entity.Property(e => e.ReviewCount).HasColumnName("review_count");
+            entity.Property(e => e.Status)
+                .HasMaxLength(20)
+                .IsUnicode(false)
+                .HasDefaultValue("Learning")
+                .HasColumnName("status");
+            entity.Property(e => e.StudentId).HasColumnName("student_id");
+            entity.Property(e => e.UpdatedAt)
+                .HasPrecision(3)
+                .HasDefaultValueSql("(sysutcdatetime())")
+                .HasColumnName("updated_at");
+
+            entity.HasOne(d => d.Assignment).WithMany(p => p.FlashcardStudyProgresses)
+                .HasForeignKey(d => d.AssignmentId)
+                .OnDelete(DeleteBehavior.ClientSetNull)
+                .HasConstraintName("FK_FlashcardStudyProgress_Assignments");
+
+            entity.HasOne(d => d.Question).WithMany(p => p.FlashcardStudyProgresses)
+                .HasForeignKey(d => d.QuestionId)
+                .OnDelete(DeleteBehavior.ClientSetNull)
+                .HasConstraintName("FK_FlashcardStudyProgress_Questions");
+
+            entity.HasOne(d => d.Student).WithMany(p => p.FlashcardStudyProgresses)
+                .HasForeignKey(d => d.StudentId)
+                .OnDelete(DeleteBehavior.ClientSetNull)
+                .HasConstraintName("FK_FlashcardStudyProgress_Users_Student");
         });
 
         modelBuilder.Entity<GameTemplate>(entity =>

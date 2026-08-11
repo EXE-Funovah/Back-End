@@ -45,7 +45,15 @@ public partial class User
 
     public virtual ICollection<AdminAuditLog> AdminAuditLogs { get; set; } = new List<AdminAuditLog>();
 
+    public virtual ICollection<ClassMember> ClassMembers { get; set; } = new List<ClassMember>();
+
+    public virtual ICollection<Class> Classes { get; set; } = new List<Class>();
+
     public virtual ICollection<Document> Documents { get; set; } = new List<Document>();
+
+    public virtual ICollection<FlashcardAssignment> FlashcardAssignments { get; set; } = new List<FlashcardAssignment>();
+
+    public virtual ICollection<FlashcardStudyProgress> FlashcardStudyProgresses { get; set; } = new List<FlashcardStudyProgress>();
 
     public virtual ICollection<LiveSession> LiveSessions { get; set; } = new List<LiveSession>();
 

@@ -46,6 +46,17 @@ namespace Mascoteach.Data.Repositories
                 .ToListAsync();
         }
 
+        public Task<Quiz?> GetOwnedVisibleByIdAsync(int id, int ownerId)
+        {
+            return _context.Quizzes
+                .AsNoTracking()
+                .FirstOrDefaultAsync(q => q.Id == id
+                    && q.IsDeleted == false
+                    && q.Document.IsDeleted == false
+                    && q.Document.Owner.IsDeleted == false
+                    && q.Document.OwnerId == ownerId);
+        }
+
         public async Task<Quiz?> GetDetailByIdAsync(int id, int ownerId)
         {
             return await _context.Quizzes
