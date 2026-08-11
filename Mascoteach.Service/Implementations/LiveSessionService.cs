@@ -63,6 +63,11 @@ namespace Mascoteach.Service.Implementations
             var session = await _liveSessionRepository.GetByIdAsync(id);
             if (session == null || session.TeacherId != teacherId) return false;
 
+            if (!CanTransition(session.Status, request.Status)) return false;
+
+            if (string.Equals(session.Status, request.Status, StringComparison.OrdinalIgnoreCase))
+                return true;
+
             session.Status = request.Status;
 
             _liveSessionRepository.Update(session);
@@ -94,6 +99,11 @@ namespace Mascoteach.Service.Implementations
             var session = await _liveSessionRepository.GetByPinAsync(gamePin);
             if (session == null) return false;
 
+            if (!CanTransition(session.Status, status)) return false;
+
+            if (string.Equals(session.Status, status, StringComparison.OrdinalIgnoreCase))
+                return true;
+
             session.Status = status;
             _liveSessionRepository.Update(session);
             return await _liveSessionRepository.SaveChangesAsync() > 0;
@@ -109,6 +119,17 @@ namespace Mascoteach.Service.Implementations
             }
             while (await _liveSessionRepository.GetByPinAsync(pin) != null);
             return pin;
+        }
+
+        private static bool CanTransition(string currentStatus, string nextStatus)
+        {
+            if (string.Equals(currentStatus, nextStatus, StringComparison.OrdinalIgnoreCase))
+                return true;
+
+            return (string.Equals(currentStatus, "Waiting", StringComparison.OrdinalIgnoreCase)
+                    && string.Equals(nextStatus, "Active", StringComparison.OrdinalIgnoreCase))
+                || (string.Equals(currentStatus, "Active", StringComparison.OrdinalIgnoreCase)
+                    && string.Equals(nextStatus, "Ended", StringComparison.OrdinalIgnoreCase));
         }
     }
 }

@@ -1,172 +1,208 @@
-﻿using Microsoft.AspNetCore.SignalR;
-using Microsoft.Extensions.Caching.Memory;
-using Mascoteach.Service.Interfaces;
 using Mascoteach.Service.DTOs;
+using Mascoteach.Service.Interfaces;
+using Mascoteach.API.Services;
+using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.SignalR;
+using Microsoft.Extensions.Caching.Memory;
+using System.Security.Claims;
 
-namespace Mascoteach.API.Hubs
+namespace Mascoteach.API.Hubs;
+
+public class GameHub : Hub
 {
-    public class GameHub : Hub
+    private readonly IMemoryCache _cache;
+    private readonly ILiveSessionService _sessionService;
+    private readonly ISessionParticipantService _participantService;
+    private readonly ISessionAnswerService _answerService;
+    private readonly ILiveGameQuestionService _gameQuestionService;
+    private readonly IGuestGameTokenService _guestGameTokenService;
+
+    private static string QuestionKey(string pin) => $"game:question:{pin}";
+    private static string CurrentQuestionIdKey(string pin) => $"game:question-id:{pin}";
+
+    public GameHub(
+        IMemoryCache cache,
+        ILiveSessionService sessionService,
+        ISessionParticipantService participantService,
+        ISessionAnswerService answerService,
+        ILiveGameQuestionService gameQuestionService,
+        IGuestGameTokenService guestGameTokenService)
     {
-        private readonly IMemoryCache _cache;
-        private readonly ILiveSessionService _sessionService;
-        private readonly ISessionParticipantService _participantService;
+        _cache = cache;
+        _sessionService = sessionService;
+        _participantService = participantService;
+        _answerService = answerService;
+        _gameQuestionService = gameQuestionService;
+        _guestGameTokenService = guestGameTokenService;
+    }
 
-        // Cache keys
-        private static string QuestionKey(string pin) => $"game:question:{pin}";
-        private static string CorrectOptionKey(string pin) => $"game:correct:{pin}";
+    [Authorize(Roles = "Teacher")]
+    public async Task JoinAsHost(string gamePin)
+    {
+        await EnsureSessionOwnerAsync(gamePin);
+        await Groups.AddToGroupAsync(Context.ConnectionId, gamePin);
+        await Clients.Caller.SendAsync("HostJoined", gamePin);
+    }
 
-        public GameHub(
-            IMemoryCache cache,
-            ILiveSessionService sessionService,
-            ISessionParticipantService participantService)
+    public async Task JoinAsStudent(string gamePin, int participantId, string joinToken)
+    {
+        var session = await _sessionService.GetByPinAsync(gamePin);
+        var participant = await _participantService.GetByIdAsync(participantId);
+
+        if (session == null
+            || participant == null
+            || participant.SessionId != session.Id
+            || !IsValidGuestIdentity(joinToken, participant.Id, session.Id))
         {
-            _cache = cache;
-            _sessionService = sessionService;
-            _participantService = participantService;
+            throw new HubException("Participant does not belong to this live session.");
         }
 
-        // ── Teacher join ──
-        public async Task JoinAsHost(string gamePin)
+        await Groups.AddToGroupAsync(Context.ConnectionId, gamePin);
+        await Clients.Group(gamePin).SendAsync("PlayerJoined", new
         {
-            await Groups.AddToGroupAsync(Context.ConnectionId, gamePin);
-            await Clients.Caller.SendAsync("HostJoined", gamePin);
-        }
+            participantId = participant.Id,
+            studentName = participant.StudentName,
+            connectionId = Context.ConnectionId
+        });
+    }
 
-        // ── Student join ──
-        public async Task JoinAsStudent(string gamePin, string studentName)
+    [Authorize(Roles = "Teacher")]
+    public async Task StartGame(string gamePin)
+    {
+        await EnsureSessionOwnerAsync(gamePin);
+
+        if (!await _sessionService.UpdateStatusByPinAsync(gamePin, "Active"))
+            throw new HubException("Unable to start this live session.");
+
+        await Clients.Group(gamePin).SendAsync("GameStarted");
+    }
+
+    [Authorize(Roles = "Teacher")]
+    public async Task SendQuestion(string gamePin, int questionId)
+    {
+        await EnsureSessionOwnerAsync(gamePin);
+
+        var questionData = await _gameQuestionService.GetForSessionAsync(gamePin, questionId);
+        if (questionData == null)
+            throw new HubException("Question does not belong to the active live session.");
+
+        var cacheOptions = new MemoryCacheEntryOptions()
+            .SetAbsoluteExpiration(TimeSpan.FromHours(2));
+
+        // Only the sanitized question is cached and sent to students.
+        _cache.Set(QuestionKey(gamePin), questionData, cacheOptions);
+        _cache.Set(CurrentQuestionIdKey(gamePin), questionData.QuestionId, cacheOptions);
+
+        await Clients.Group(gamePin).SendAsync("NewQuestion", questionData);
+    }
+
+    public async Task RequestCurrentQuestion(string gamePin)
+    {
+        if (_cache.TryGetValue(QuestionKey(gamePin), out LiveGameQuestionResponse? currentQuestion)
+            && currentQuestion != null)
         {
-            await Groups.AddToGroupAsync(Context.ConnectionId, gamePin);
-            await Clients.Group(gamePin).SendAsync("PlayerJoined", new
+            await Clients.Caller.SendAsync("NewQuestion", currentQuestion);
+        }
+    }
+
+    public async Task SubmitAnswer(
+        string gamePin,
+        int participantId,
+        string joinToken,
+        int questionId,
+        int optionId)
+    {
+        var session = await _sessionService.GetByPinAsync(gamePin);
+        if (session == null || !IsValidGuestIdentity(joinToken, participantId, session.Id))
+        {
+            await Clients.Caller.SendAsync("AnswerResult", new SubmitSessionAnswerResult
             {
-                studentName,
-                connectionId = Context.ConnectionId
+                ErrorCode = "INVALID_PARTICIPANT_TOKEN",
+                Message = "Participant token is invalid or expired."
             });
+            return;
         }
 
-        // ── Teacher start game ──
-        public async Task StartGame(string gamePin)
+        if (!_cache.TryGetValue(CurrentQuestionIdKey(gamePin), out int currentQuestionId)
+            || currentQuestionId != questionId)
         {
-            // Update status → Active trong DB
-            await _sessionService.UpdateStatusByPinAsync(gamePin, "Active");
-            await Clients.Group(gamePin).SendAsync("GameStarted");
-        }
-
-        // ── Teacher gửi câu hỏi ──
-        public async Task SendQuestion(string gamePin, object questionData)
-        {
-            // Lưu câu hỏi hiện tại vào cache (TTL 2 giờ)
-            var cacheOptions = new MemoryCacheEntryOptions()
-                .SetAbsoluteExpiration(TimeSpan.FromHours(2));
-
-            _cache.Set(QuestionKey(gamePin), questionData, cacheOptions);
-
-            // Lưu correctOptionIndex nếu teacher gửi kèm
-            if (questionData is System.Text.Json.JsonElement json &&
-                json.TryGetProperty("correctOptionIndex", out var correctProp))
+            await Clients.Caller.SendAsync("AnswerResult", new SubmitSessionAnswerResult
             {
-                _cache.Set(CorrectOptionKey(gamePin), correctProp.GetInt32(), cacheOptions);
-            }
-
-            await Clients.Group(gamePin).SendAsync("NewQuestion", questionData);
+                ErrorCode = "QUESTION_NOT_ACTIVE",
+                Message = "This question is not currently accepting answers."
+            });
+            return;
         }
 
-        // ── Student join muộn, lấy câu hỏi đang hiển thị ──
-        public async Task RequestCurrentQuestion(string gamePin)
+        var result = await _answerService.SubmitAsync(new SubmitSessionAnswerRequest
         {
-            if (_cache.TryGetValue(QuestionKey(gamePin), out var currentQuestion)
-                && currentQuestion != null)
-            {
-                await Clients.Caller.SendAsync("NewQuestion", currentQuestion);
-            }
-        }
+            GamePin = gamePin,
+            ParticipantId = participantId,
+            QuestionId = questionId,
+            SelectedOptionId = optionId
+        });
 
-        // ── Student submit đáp án ──
-        public async Task SubmitAnswer(string gamePin, string studentName,
-                                        int questionId, int optionId)
+        await Clients.Caller.SendAsync("AnswerResult", result);
+
+        if (result.Accepted)
         {
-            // Tính isCorrect dựa trên cache
-            bool isCorrect = false;
-            if (_cache.TryGetValue(CorrectOptionKey(gamePin), out int correctOptionId))
-            {
-                isCorrect = optionId == correctOptionId;
-            }
-
-            // Broadcast cho host biết có người trả lời
             await Clients.OthersInGroup(gamePin).SendAsync("AnswerSubmitted", new
             {
-                studentName,
+                participantId,
+                studentName = result.StudentName,
                 questionId,
-                optionId,
-                isCorrect,
-                timestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()
+                isCorrect = result.IsCorrect,
+                timestamp = result.AnsweredAt
             });
-
-            // Nếu đúng → cộng điểm vào DB
-            if (isCorrect)
-            {
-                try
-                {
-                    var session = await _sessionService.GetByPinAsync(gamePin);
-                    if (session != null)
-                    {
-                        var participants = await _participantService
-                            .GetBySessionIdAsync(session.Id);
-
-                        var participant = participants
-                            .FirstOrDefault(p => p.StudentName == studentName);
-
-                        if (participant != null)
-                        {
-                            var newScore = (participant.TotalScore ?? 0) + 1000;
-                            await _participantService.UpdateAsync(participant.Id,
-                                new SessionParticipantUpdateRequest
-                                {
-                                    StudentName = studentName,
-                                    TotalScore = newScore
-                                });
-                        }
-                    }
-                }
-                catch (Exception ex)
-                {
-                    // Không để lỗi DB crash SignalR connection
-                    Console.WriteLine($"[GameHub] SubmitAnswer score update error: {ex.Message}");
-                }
-            }
         }
+    }
 
-        // ── Teacher đóng câu hỏi ──
-        public async Task CloseQuestion(string gamePin)
-        {
-            _cache.Remove(QuestionKey(gamePin));
-            _cache.Remove(CorrectOptionKey(gamePin));
-            await Clients.Group(gamePin).SendAsync("QuestionClosed");
-        }
+    [Authorize(Roles = "Teacher")]
+    public async Task CloseQuestion(string gamePin)
+    {
+        await EnsureSessionOwnerAsync(gamePin);
+        _cache.Remove(QuestionKey(gamePin));
+        _cache.Remove(CurrentQuestionIdKey(gamePin));
+        await Clients.Group(gamePin).SendAsync("QuestionClosed");
+    }
 
-        // ── Host broadcast leaderboard ──
-        public async Task BroadcastScores(string gamePin, object scores)
-        {
-            await Clients.Group(gamePin).SendAsync("ScoresUpdated", scores);
-        }
+    [Authorize(Roles = "Teacher")]
+    public async Task BroadcastScores(string gamePin, object scores)
+    {
+        await EnsureSessionOwnerAsync(gamePin);
+        await Clients.Group(gamePin).SendAsync("ScoresUpdated", scores);
+    }
 
-        // ── Kết thúc game ──
-        public async Task EndGame(string gamePin)
-        {
-            // Dọn cache
-            _cache.Remove(QuestionKey(gamePin));
-            _cache.Remove(CorrectOptionKey(gamePin));
+    [Authorize(Roles = "Teacher")]
+    public async Task EndGame(string gamePin)
+    {
+        await EnsureSessionOwnerAsync(gamePin);
+        _cache.Remove(QuestionKey(gamePin));
+        _cache.Remove(CurrentQuestionIdKey(gamePin));
 
-            // Update status → Ended trong DB
-            try
-            {
-                await _sessionService.UpdateStatusByPinAsync(gamePin, "Ended");
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine($"[GameHub] EndGame DB update error: {ex.Message}");
-            }
+        if (!await _sessionService.UpdateStatusByPinAsync(gamePin, "Ended"))
+            throw new HubException("Unable to end this live session.");
 
-            await Clients.Group(gamePin).SendAsync("GameEnded");
-        }
+        await Clients.Group(gamePin).SendAsync("GameEnded");
+    }
+
+    private async Task EnsureSessionOwnerAsync(string gamePin)
+    {
+        var userIdValue = Context.User?.FindFirst("UserId")?.Value
+            ?? Context.User?.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+
+        if (!int.TryParse(userIdValue, out var userId))
+            throw new HubException("Authenticated teacher identity is missing.");
+
+        var session = await _sessionService.GetByPinAsync(gamePin);
+        if (session == null || session.TeacherId != userId)
+            throw new HubException("You do not own this live session.");
+    }
+
+    private bool IsValidGuestIdentity(string token, int participantId, int sessionId)
+    {
+        return _guestGameTokenService.TryValidate(token, out var identity)
+            && identity.ParticipantId == participantId
+            && identity.SessionId == sessionId;
     }
 }

@@ -116,6 +116,30 @@ public class LiveSessionServiceTests
         Assert.False(await _sut.UpdateStatusByPinAsync("000000", "Active"));
     }
 
+    [Fact]
+    public async Task UpdateStatusByPinAsync_CannotReturnActiveSessionToWaiting()
+    {
+        var session = MakeSession();
+        session.Status = "Active";
+        _repo.Setup(r => r.GetByPinAsync("123456")).ReturnsAsync(session);
+
+        Assert.False(await _sut.UpdateStatusByPinAsync("123456", "Waiting"));
+        Assert.Equal("Active", session.Status);
+        _repo.Verify(r => r.SaveChangesAsync(), Times.Never);
+    }
+
+    [Fact]
+    public async Task UpdateStatusByPinAsync_ActiveSessionCanEnd()
+    {
+        var session = MakeSession();
+        session.Status = "Active";
+        _repo.Setup(r => r.GetByPinAsync("123456")).ReturnsAsync(session);
+        _repo.Setup(r => r.SaveChangesAsync()).ReturnsAsync(1);
+
+        Assert.True(await _sut.UpdateStatusByPinAsync("123456", "Ended"));
+        Assert.Equal("Ended", session.Status);
+    }
+
     // ── GetByPinAsync ──
 
     [Fact]

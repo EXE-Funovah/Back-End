@@ -16,4 +16,6 @@ public partial class Option
     public bool IsDeleted { get; set; }
 
     public virtual Question Question { get; set; } = null!;
+
+    public virtual ICollection<SessionAnswer> SessionAnswers { get; set; } = new List<SessionAnswer>();
 }

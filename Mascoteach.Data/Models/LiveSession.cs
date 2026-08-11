@@ -23,6 +23,8 @@ public partial class LiveSession
 
     public virtual Quiz Quiz { get; set; } = null!;
 
+    public virtual ICollection<SessionAnswer> SessionAnswers { get; set; } = new List<SessionAnswer>();
+
     public virtual ICollection<SessionParticipant> SessionParticipants { get; set; } = new List<SessionParticipant>();
 
     public virtual User Teacher { get; set; } = null!;
