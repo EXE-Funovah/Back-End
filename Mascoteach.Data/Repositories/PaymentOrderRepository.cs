@@ -89,6 +89,19 @@ public class PaymentOrderRepository : GenericRepository<PaymentOrder>, IPaymentO
         return updatedRows == 1;
     }
 
+    public async Task<bool> TryMarkExpiredAsync(int orderId, DateTime updatedAt)
+    {
+        var updatedRows = await _context.PaymentOrders
+            .Where(o => o.Id == orderId
+                && o.Status == "Pending"
+                && o.IsDeleted == false)
+            .ExecuteUpdateAsync(setters => setters
+                .SetProperty(o => o.Status, "Expired")
+                .SetProperty(o => o.UpdatedAt, updatedAt));
+
+        return updatedRows == 1;
+    }
+
     public async Task<bool> TryMarkPaidAsync(
         int orderId,
         DateTime paidAt,

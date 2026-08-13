@@ -102,6 +102,31 @@ public class AdminBillingCommandServiceTests
         _users.Verify(repository => repository.SaveChangesAsync(), Times.Never);
     }
 
+    [Fact]
+    public async Task ReconcileOrderAsync_ExpiredProviderOrder_MarksPendingOrderExpired()
+    {
+        var order = CreateOrder("Pending");
+        _orders.SetupSequence(repository => repository.GetByIdForReconciliationAsync(order.Id))
+            .ReturnsAsync(order)
+            .ReturnsAsync(order);
+        _payOs.Setup(client => client.GetPaymentInfoAsync(order.OrderCode))
+            .ReturnsAsync(CreateProviderResult("EXPIRED"));
+        _orders.Setup(repository => repository.TryMarkExpiredAsync(
+                order.Id,
+                It.IsAny<DateTime>()))
+            .ReturnsAsync(true);
+
+        var result = await _service.ReconcileOrderAsync(order.Id, CreateActor());
+
+        Assert.NotNull(result);
+        Assert.True(result!.Changed);
+        Assert.False(result.SubscriptionActivated);
+        Assert.Equal("Expired", result.Status);
+        Assert.Equal("EXPIRED", result.ProviderStatus);
+        _users.Verify(repository => repository.GetByIdAsync(It.IsAny<int>()), Times.Never);
+        _transaction.Verify(transaction => transaction.CommitAsync(default), Times.Once);
+    }
+
     private static PaymentOrder CreateOrder(string status) => new()
     {
         Id = 2001,

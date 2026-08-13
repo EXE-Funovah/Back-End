@@ -91,6 +91,11 @@ public sealed class AdminBillingCommandService : IAdminBillingCommandService
                 changed = await _orderRepository.TryMarkCancelledAsync(current.Id, now);
                 if (changed) resultingStatus = "Cancelled";
             }
+            else if (providerStatus == "EXPIRED")
+            {
+                changed = await _orderRepository.TryMarkExpiredAsync(current.Id, now);
+                if (changed) resultingStatus = "Expired";
+            }
             else if (providerStatus is not ("PENDING" or "PROCESSING"))
             {
                 throw new InvalidOperationException(

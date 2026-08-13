@@ -14,6 +14,7 @@ public interface IPaymentOrderRepository : IGenericRepository<PaymentOrder>
         int limit);
     Task<int> ExpirePendingOrdersAsync(int userId, string planCode, DateTime createdBefore, DateTime updatedAt);
     Task<bool> TryMarkCancelledAsync(int orderId, DateTime cancelledAt);
+    Task<bool> TryMarkExpiredAsync(int orderId, DateTime updatedAt);
     Task<bool> TryMarkPaidAsync(
         int orderId,
         DateTime paidAt,
