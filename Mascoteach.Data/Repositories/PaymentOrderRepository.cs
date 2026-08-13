@@ -22,6 +22,13 @@ public class PaymentOrderRepository : GenericRepository<PaymentOrder>, IPaymentO
             .FirstOrDefaultAsync(o => o.OrderCode == orderCode && o.IsDeleted == false);
     }
 
+    public async Task<PaymentOrder?> GetByIdForReconciliationAsync(int orderId)
+    {
+        return await _context.PaymentOrders
+            .AsNoTracking()
+            .FirstOrDefaultAsync(o => o.Id == orderId && o.IsDeleted == false);
+    }
+
     public async Task<PaymentOrder?> GetReusablePendingOrderAsync(int userId, string planCode, DateTime createdAfter)
     {
         return await _context.PaymentOrders

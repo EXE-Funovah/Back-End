@@ -79,6 +79,7 @@ builder.Services.AddScoped<IAdminAuditWriter>(provider => provider.GetRequiredSe
 builder.Services.AddScoped<IAdminUserCommandService, AdminUserCommandService>();
 builder.Services.AddScoped<IAdminContentCommandService, AdminContentCommandService>();
 builder.Services.AddScoped<IAdminSessionCommandService, AdminSessionCommandService>();
+builder.Services.AddScoped<IAdminBillingCommandService, AdminBillingCommandService>();
 builder.Services.AddScoped<IFlashcardClassService, FlashcardClassService>();
 builder.Services.AddScoped<IAuthenticatedAccountValidator, AuthenticatedAccountValidator>();
 builder.Services.AddSingleton(TimeProvider.System);
