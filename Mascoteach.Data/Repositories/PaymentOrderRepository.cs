@@ -22,6 +22,13 @@ public class PaymentOrderRepository : GenericRepository<PaymentOrder>, IPaymentO
             .FirstOrDefaultAsync(o => o.OrderCode == orderCode && o.IsDeleted == false);
     }
 
+    public async Task<PaymentOrder?> GetByIdForReconciliationAsync(int orderId)
+    {
+        return await _context.PaymentOrders
+            .AsNoTracking()
+            .FirstOrDefaultAsync(o => o.Id == orderId && o.IsDeleted == false);
+    }
+
     public async Task<PaymentOrder?> GetReusablePendingOrderAsync(int userId, string planCode, DateTime createdAfter)
     {
         return await _context.PaymentOrders
@@ -78,6 +85,19 @@ public class PaymentOrderRepository : GenericRepository<PaymentOrder>, IPaymentO
                 .SetProperty(o => o.Status, "Cancelled")
                 .SetProperty(o => o.CancelledAt, cancelledAt)
                 .SetProperty(o => o.UpdatedAt, cancelledAt));
+
+        return updatedRows == 1;
+    }
+
+    public async Task<bool> TryMarkExpiredAsync(int orderId, DateTime updatedAt)
+    {
+        var updatedRows = await _context.PaymentOrders
+            .Where(o => o.Id == orderId
+                && o.Status == "Pending"
+                && o.IsDeleted == false)
+            .ExecuteUpdateAsync(setters => setters
+                .SetProperty(o => o.Status, "Expired")
+                .SetProperty(o => o.UpdatedAt, updatedAt));
 
         return updatedRows == 1;
     }

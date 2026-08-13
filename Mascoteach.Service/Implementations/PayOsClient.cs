@@ -103,6 +103,52 @@ public class PayOsClient : IPayOsClient
         };
     }
 
+    public async Task<PayOsPaymentInfoResult> GetPaymentInfoAsync(long orderCode)
+    {
+        var clientId = _configuration["PayOS:ClientId"];
+        var apiKey = _configuration["PayOS:ApiKey"];
+        var baseUrl = _configuration["PayOS:BaseUrl"] ?? "https://api-merchant.payos.vn";
+
+        if (string.IsNullOrWhiteSpace(clientId) || string.IsNullOrWhiteSpace(apiKey))
+            throw new InvalidOperationException("PayOS client id or api key is not configured.");
+
+        using var httpRequest = new HttpRequestMessage(
+            HttpMethod.Get,
+            $"{baseUrl.TrimEnd('/')}/v2/payment-requests/{orderCode}");
+        httpRequest.Headers.Add("x-client-id", clientId);
+        httpRequest.Headers.Add("x-api-key", apiKey);
+
+        using var response = await _httpClient.SendAsync(httpRequest);
+        var body = await response.Content.ReadAsStringAsync();
+
+        if (!response.IsSuccessStatusCode)
+            throw new InvalidOperationException(
+                $"PayOS get payment information failed: {(int)response.StatusCode} {body}");
+
+        var payOsResponse = JsonSerializer.Deserialize<PayOsApiResponse<PayOsPaymentInfoData>>(
+                body,
+                JsonOptions)
+            ?? throw new InvalidOperationException("PayOS returned an empty payment information response.");
+
+        if (payOsResponse.Code != "00" || payOsResponse.Data == null)
+            throw new InvalidOperationException(
+                $"PayOS get payment information failed: {payOsResponse.Desc}");
+
+        var data = payOsResponse.Data;
+        return new PayOsPaymentInfoResult
+        {
+            PaymentLinkId = data.Id,
+            OrderCode = data.OrderCode,
+            Amount = data.Amount,
+            AmountPaid = data.AmountPaid,
+            AmountRemaining = data.AmountRemaining,
+            Status = data.Status,
+            Reference = data.Transactions?
+                .LastOrDefault(transaction => !string.IsNullOrWhiteSpace(transaction.Reference))
+                ?.Reference
+        };
+    }
+
     private class PayOsApiResponse<T>
     {
         [JsonPropertyName("code")]
@@ -128,6 +174,36 @@ public class PayOsClient : IPayOsClient
 
         [JsonPropertyName("status")]
         public string Status { get; set; } = null!;
+    }
+
+    private class PayOsPaymentInfoData
+    {
+        [JsonPropertyName("id")]
+        public string Id { get; set; } = null!;
+
+        [JsonPropertyName("orderCode")]
+        public long OrderCode { get; set; }
+
+        [JsonPropertyName("amount")]
+        public int Amount { get; set; }
+
+        [JsonPropertyName("amountPaid")]
+        public int AmountPaid { get; set; }
+
+        [JsonPropertyName("amountRemaining")]
+        public int AmountRemaining { get; set; }
+
+        [JsonPropertyName("status")]
+        public string Status { get; set; } = null!;
+
+        [JsonPropertyName("transactions")]
+        public List<PayOsPaymentTransactionData>? Transactions { get; set; }
+    }
+
+    private class PayOsPaymentTransactionData
+    {
+        [JsonPropertyName("reference")]
+        public string? Reference { get; set; }
     }
 
     private class PayOsCancelPaymentLinkData
