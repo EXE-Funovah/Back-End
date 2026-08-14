@@ -83,6 +83,7 @@ namespace Mascoteach.Service.Implementations
                     return new LiveSessionParticipantReportResponse
                     {
                         ParticipantId = participant.Id,
+                        StudentId = participant.StudentId,
                         StudentName = participant.StudentName,
                         TotalScore = participant.TotalScore ?? participantAnswers.Sum(answer => answer.ScoreAwarded),
                         AnsweredCount = participantAnswers.Count,

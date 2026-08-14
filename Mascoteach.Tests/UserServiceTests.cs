@@ -181,4 +181,70 @@ public class UserServiceTests
         Assert.True(result);
         transaction.Verify(t => t.CommitAsync(It.IsAny<CancellationToken>()), Times.Once);
     }
+
+    [Fact]
+    public async Task DeleteAsync_TeacherTransfersOwnedClassesBeforeHardDelete()
+    {
+        var transaction = new Mock<IDbContextTransaction>();
+        var teacher = new User
+        {
+            Id = 10,
+            FullName = "Teacher",
+            Email = "teacher@test.com",
+            Role = "Teacher"
+        };
+        _userRepo.Setup(r => r.GetAccountDeletionGraphAsync(10)).ReturnsAsync(teacher);
+        _userRepo.Setup(r => r.BeginTransactionAsync()).ReturnsAsync(transaction.Object);
+        _userRepo.Setup(r => r.TransferOwnedClassesBeforeDeactivationAsync(10)).ReturnsAsync(true);
+        _userRepo.Setup(r => r.SaveChangesAsync()).ReturnsAsync(1);
+
+        var result = await _sut.DeleteAsync(10);
+
+        Assert.True(result);
+        _userRepo.Verify(r => r.TransferOwnedClassesBeforeDeactivationAsync(10), Times.Once);
+        _userRepo.Verify(r => r.SaveChangesAsync(), Times.Exactly(2));
+        _userRepo.Verify(r => r.HardDeleteAccountGraph(teacher), Times.Once);
+    }
+
+    [Fact]
+    public async Task ToggleDeleteAsync_TeacherWithSuccessors_TransfersClassesBeforeDisabling()
+    {
+        var teacher = new User
+        {
+            Id = 10,
+            FullName = "Teacher",
+            Email = "teacher@test.com",
+            Role = "Teacher",
+            IsDeleted = false
+        };
+        _userRepo.Setup(r => r.GetByIdIncludingDeletedAsync(10)).ReturnsAsync(teacher);
+        _userRepo.Setup(r => r.TransferOwnedClassesBeforeDeactivationAsync(10)).ReturnsAsync(true);
+        _userRepo.Setup(r => r.SaveChangesAsync()).ReturnsAsync(1);
+
+        var result = await _sut.ToggleDeleteAsync(10);
+
+        Assert.NotNull(result);
+        Assert.True(teacher.IsDeleted);
+        _userRepo.Verify(r => r.TransferOwnedClassesBeforeDeactivationAsync(10), Times.Once);
+    }
+
+    [Fact]
+    public async Task ToggleDeleteAsync_TeacherWithoutSuccessor_RejectsDeactivation()
+    {
+        var teacher = new User
+        {
+            Id = 10,
+            FullName = "Teacher",
+            Email = "teacher@test.com",
+            Role = "Teacher",
+            IsDeleted = false
+        };
+        _userRepo.Setup(r => r.GetByIdIncludingDeletedAsync(10)).ReturnsAsync(teacher);
+        _userRepo.Setup(r => r.TransferOwnedClassesBeforeDeactivationAsync(10)).ReturnsAsync(false);
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() => _sut.ToggleDeleteAsync(10));
+
+        Assert.False(teacher.IsDeleted);
+        _userRepo.Verify(r => r.SaveChangesAsync(), Times.Never);
+    }
 }

@@ -12,6 +12,7 @@ namespace Mascoteach.Data.Interfaces
         Task<User?> GetByEmailVerificationTokenHashAsync(string emailVerificationTokenHash);
         Task<User?> GetByIdIncludingDeletedAsync(int id);
         Task<User?> GetAccountDeletionGraphAsync(int id);
+        Task<bool> TransferOwnedClassesBeforeDeactivationAsync(int teacherId);
         void HardDeleteAccountGraph(User user);
     }
 }

@@ -89,9 +89,16 @@ namespace Mascoteach.API.Controllers
             if (CurrentUserId != id && CurrentUserRole != "Admin")
                 return Forbid("You do not have permission to delete this user.");
 
-            var success = await _userService.DeleteAsync(id);
-            if (!success) return NotFound("User does not exist.");
-            return NoContent();
+            try
+            {
+                var success = await _userService.DeleteAsync(id);
+                if (!success) return NotFound("User does not exist.");
+                return NoContent();
+            }
+            catch (InvalidOperationException exception)
+            {
+                return Conflict(exception.Message);
+            }
         }
 
         // PATCH: api/User/{id}/toggle-delete — admin only
@@ -101,9 +108,16 @@ namespace Mascoteach.API.Controllers
             if (CurrentUserRole != "Admin")
                 return Forbid("Only admin can toggle-delete users.");
 
-            var result = await _userService.ToggleDeleteAsync(id);
-            if (result == null) return NotFound("User does not exist.");
-            return Ok(result);
+            try
+            {
+                var result = await _userService.ToggleDeleteAsync(id);
+                if (result == null) return NotFound("User does not exist.");
+                return Ok(result);
+            }
+            catch (InvalidOperationException exception)
+            {
+                return Conflict(exception.Message);
+            }
         }
     }
 }

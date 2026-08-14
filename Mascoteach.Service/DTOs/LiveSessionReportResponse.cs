@@ -24,6 +24,7 @@ public sealed class LiveSessionParticipantReportResponse
 {
     public int Rank { get; set; }
     public int ParticipantId { get; set; }
+    public int? StudentId { get; set; }
     public string StudentName { get; set; } = null!;
     public int TotalScore { get; set; }
     public int AnsweredCount { get; set; }

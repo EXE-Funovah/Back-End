@@ -9,6 +9,8 @@ public partial class SessionParticipant
 
     public int SessionId { get; set; }
 
+    public int? StudentId { get; set; }
+
     public string StudentName { get; set; } = null!;
 
     public int? TotalScore { get; set; }
@@ -16,6 +18,8 @@ public partial class SessionParticipant
     public bool IsDeleted { get; set; }
 
     public virtual LiveSession Session { get; set; } = null!;
+
+    public virtual User? Student { get; set; }
 
     public virtual ICollection<SessionAnswer> SessionAnswers { get; set; } = new List<SessionAnswer>();
 }

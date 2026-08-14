@@ -41,7 +41,11 @@ public sealed class FlashcardClassServiceTests
         Assert.Equal("Ôn tập", saved.Description);
         Assert.Matches("^[0-9]{6}$", saved.ClassCode);
         Assert.Equal(Now.UtcDateTime, saved.CreatedAt);
+        var ownerMembership = Assert.Single(saved.ClassTeachers);
+        Assert.Equal(10, ownerMembership.TeacherId);
+        Assert.Equal("Owner", ownerMembership.Role);
         Assert.Equal(saved.Name, result.Name);
+        Assert.True(result.IsOwner);
         Assert.NotEqual("secret123", saved.JoinPasswordHash);
         Assert.True(BCrypt.Net.BCrypt.Verify("secret123", saved.JoinPasswordHash));
     }
@@ -115,7 +119,7 @@ public sealed class FlashcardClassServiceTests
         var classroom = MakeClass();
         var flashcard = MakeFlashcard();
         FlashcardAssignment? saved = null;
-        _repository.Setup(item => item.GetOwnedClassAsync(1, 10)).ReturnsAsync(classroom);
+        _repository.Setup(item => item.GetAccessibleClassAsync(1, 10)).ReturnsAsync(classroom);
         _repository.Setup(item => item.GetOwnedPublishedFlashcardAsync(2, 10)).ReturnsAsync(flashcard);
         _repository.Setup(item => item.GetActiveAssignmentAsync(1, 2))
             .ReturnsAsync((FlashcardAssignment?)null);
@@ -153,13 +157,163 @@ public sealed class FlashcardClassServiceTests
             OptionText = "Extra",
             IsCorrect = false
         });
-        _repository.Setup(item => item.GetOwnedClassAsync(1, 10)).ReturnsAsync(MakeClass());
+        _repository.Setup(item => item.GetAccessibleClassAsync(1, 10)).ReturnsAsync(MakeClass());
         _repository.Setup(item => item.GetOwnedPublishedFlashcardAsync(2, 10)).ReturnsAsync(flashcard);
 
         await Assert.ThrowsAsync<ArgumentException>(() =>
             _service.AssignFlashcardAsync(1, 10, new FlashcardAssignmentCreateRequest { QuizId = 2 }));
 
         _repository.Verify(item => item.AddAssignmentAsync(It.IsAny<FlashcardAssignment>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task AssignFlashcardAsync_CollaboratingTeacher_CanAssignOwnedFlashcard()
+    {
+        var classroom = MakeClass();
+        var collaborator = new User
+        {
+            Id = 11,
+            FullName = "Teacher Two",
+            Email = "teacher2@test.local",
+            Role = "Teacher"
+        };
+        classroom.ClassTeachers.Add(new ClassTeacher
+        {
+            ClassId = classroom.Id,
+            TeacherId = collaborator.Id,
+            Teacher = collaborator,
+            Role = "Teacher"
+        });
+        var flashcard = MakeFlashcard();
+        _repository.Setup(item => item.GetAccessibleClassAsync(1, 11)).ReturnsAsync(classroom);
+        _repository.Setup(item => item.GetOwnedPublishedFlashcardAsync(2, 11)).ReturnsAsync(flashcard);
+        _repository.Setup(item => item.GetActiveAssignmentAsync(1, 2))
+            .ReturnsAsync((FlashcardAssignment?)null);
+
+        var result = await _service.AssignFlashcardAsync(
+            1,
+            11,
+            new FlashcardAssignmentCreateRequest { QuizId = 2 });
+
+        Assert.Equal(11, result.AssignedById);
+        Assert.Equal("Teacher Two", result.AssignedByName);
+        _repository.Verify(item => item.AddAssignmentAsync(
+            It.Is<FlashcardAssignment>(assignment => assignment.AssignedBy == 11)), Times.Once);
+    }
+
+    [Fact]
+    public async Task AddTeacherAsync_OwnerAddsActiveTeacherByEmail()
+    {
+        var classroom = MakeClass();
+        var teacher = new User
+        {
+            Id = 11,
+            FullName = "Teacher Two",
+            Email = "teacher2@test.local",
+            Role = "Teacher"
+        };
+        ClassTeacher? saved = null;
+        _repository.Setup(item => item.GetOwnedClassAsync(1, 10)).ReturnsAsync(classroom);
+        _repository.Setup(item => item.GetActiveTeacherByEmailAsync("teacher2@test.local"))
+            .ReturnsAsync(teacher);
+        _repository.Setup(item => item.GetClassTeacherIncludingDeletedAsync(1, 11))
+            .ReturnsAsync((ClassTeacher?)null);
+        _repository.Setup(item => item.AddClassTeacherAsync(It.IsAny<ClassTeacher>()))
+            .Callback<ClassTeacher>(membership => saved = membership)
+            .Returns(Task.CompletedTask);
+
+        var result = await _service.AddTeacherAsync(
+            1,
+            10,
+            new ClassTeacherAddRequest { Email = " Teacher2@Test.Local " });
+
+        Assert.NotNull(saved);
+        Assert.Equal(11, saved!.TeacherId);
+        Assert.Equal("Teacher", saved.Role);
+        Assert.Equal("Teacher Two", result.FullName);
+    }
+
+    [Fact]
+    public async Task AddTeacherAsync_NonOwnerCannotManageTeachers()
+    {
+        _repository.Setup(item => item.GetOwnedClassAsync(1, 11))
+            .ReturnsAsync((Class?)null);
+
+        await Assert.ThrowsAsync<KeyNotFoundException>(() => _service.AddTeacherAsync(
+            1,
+            11,
+            new ClassTeacherAddRequest { Email = "teacher2@test.local" }));
+
+        _repository.Verify(item => item.GetActiveTeacherByEmailAsync(It.IsAny<string>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task TransferOwnershipAsync_ChangesOwnerAndKeepsPreviousOwnerAsTeacher()
+    {
+        var classroom = MakeClass();
+        var nextOwner = new User
+        {
+            Id = 11,
+            FullName = "Teacher Two",
+            Email = "teacher2@test.local",
+            Role = "Teacher"
+        };
+        classroom.ClassTeachers.Add(new ClassTeacher
+        {
+            ClassId = 1,
+            TeacherId = 11,
+            Teacher = nextOwner,
+            Role = "Teacher"
+        });
+        _repository.Setup(item => item.GetOwnedClassForUpdateAsync(1, 10)).ReturnsAsync(classroom);
+
+        var result = await _service.TransferOwnershipAsync(
+            1,
+            10,
+            new ClassOwnershipTransferRequest { TeacherId = 11 });
+
+        Assert.Equal(11, classroom.TeacherId);
+        Assert.Equal("Teacher", classroom.ClassTeachers.Single(item => item.TeacherId == 10).Role);
+        Assert.Equal("Owner", classroom.ClassTeachers.Single(item => item.TeacherId == 11).Role);
+        Assert.Equal("Owner", result.Role);
+    }
+
+    [Fact]
+    public async Task LeaveClassAsTeacherAsync_OwnerCannotLeaveBeforeTransfer()
+    {
+        _repository.Setup(item => item.GetAccessibleClassAsync(1, 10)).ReturnsAsync(MakeClass());
+
+        var result = await _service.LeaveClassAsTeacherAsync(1, 10);
+
+        Assert.False(result);
+        _repository.Verify(item => item.SaveChangesAsync(), Times.Never);
+    }
+
+    [Fact]
+    public async Task LeaveClassAsStudentAsync_ActiveMemberSoftDeletesMembership()
+    {
+        var member = new ClassMember { ClassId = 1, StudentId = 20, IsDeleted = false };
+        _repository.Setup(item => item.GetMemberIncludingDeletedAsync(1, 20)).ReturnsAsync(member);
+
+        var result = await _service.LeaveClassAsStudentAsync(1, 20);
+
+        Assert.True(result);
+        Assert.True(member.IsDeleted);
+    }
+
+    [Fact]
+    public async Task RemoveFlashcardAssignmentAsync_AssigningTeacherCanWithdrawOwnAssignment()
+    {
+        var classroom = MakeClass();
+        var assignment = MakeAssignment();
+        assignment.AssignedBy = 11;
+        _repository.Setup(item => item.GetAccessibleClassAsync(1, 11)).ReturnsAsync(classroom);
+        _repository.Setup(item => item.GetActiveAssignmentByIdAsync(1, 7)).ReturnsAsync(assignment);
+
+        var result = await _service.RemoveFlashcardAssignmentAsync(1, 7, 11);
+
+        Assert.True(result);
+        Assert.True(assignment.IsDeleted);
     }
 
     [Fact]
@@ -244,7 +398,17 @@ public sealed class FlashcardClassServiceTests
         TeacherId = 10,
         Name = "10A",
         ClassCode = "123456",
-        Teacher = new User { Id = 10, FullName = "Teacher", Email = "teacher@test.local" }
+        Teacher = new User { Id = 10, FullName = "Teacher", Email = "teacher@test.local", Role = "Teacher" },
+        ClassTeachers =
+        [
+            new ClassTeacher
+            {
+                ClassId = 1,
+                TeacherId = 10,
+                Role = "Owner",
+                Teacher = new User { Id = 10, FullName = "Teacher", Email = "teacher@test.local", Role = "Teacher" }
+            }
+        ]
     };
 
     private static Quiz MakeFlashcard() => new()

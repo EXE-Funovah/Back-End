@@ -17,6 +17,8 @@ public partial class MascoteachDbContext : DbContext
 
     public virtual DbSet<ClassMember> ClassMembers { get; set; }
 
+    public virtual DbSet<ClassTeacher> ClassTeachers { get; set; }
+
     public virtual DbSet<Document> Documents { get; set; }
 
     public virtual DbSet<FlashcardAssignment> FlashcardAssignments { get; set; }
@@ -585,9 +587,14 @@ public partial class MascoteachDbContext : DbContext
 
             entity.ToTable("Session_Participants");
 
+            entity.HasIndex(e => new { e.SessionId, e.StudentId }, "UX_SessionParticipants_Session_Student_Active")
+                .IsUnique()
+                .HasFilter("([student_id] IS NOT NULL AND [is_deleted]=(0))");
+
             entity.Property(e => e.Id).HasColumnName("id");
             entity.Property(e => e.IsDeleted).HasColumnName("is_deleted");
             entity.Property(e => e.SessionId).HasColumnName("session_id");
+            entity.Property(e => e.StudentId).HasColumnName("student_id");
             entity.Property(e => e.StudentName)
                 .HasMaxLength(255)
                 .HasColumnName("student_name");
@@ -599,6 +606,45 @@ public partial class MascoteachDbContext : DbContext
                 .HasForeignKey(d => d.SessionId)
                 .OnDelete(DeleteBehavior.ClientSetNull)
                 .HasConstraintName("FK_Participants_LiveSessions");
+
+            entity.HasOne(d => d.Student).WithMany(p => p.JoinedSessionParticipants)
+                .HasForeignKey(d => d.StudentId)
+                .OnDelete(DeleteBehavior.SetNull)
+                .HasConstraintName("FK_SessionParticipants_Users_Student");
+        });
+
+        modelBuilder.Entity<ClassTeacher>(entity =>
+        {
+            entity.ToTable("Class_Teachers");
+
+            entity.HasIndex(e => new { e.TeacherId, e.IsDeleted }, "IX_ClassTeachers_Teacher_Deleted");
+
+            entity.HasIndex(e => new { e.ClassId, e.TeacherId }, "UQ_ClassTeachers_Class_Teacher")
+                .IsUnique();
+
+            entity.Property(e => e.Id).HasColumnName("id");
+            entity.Property(e => e.ClassId).HasColumnName("class_id");
+            entity.Property(e => e.TeacherId).HasColumnName("teacher_id");
+            entity.Property(e => e.Role)
+                .HasMaxLength(20)
+                .IsUnicode(false)
+                .HasDefaultValue("Teacher")
+                .HasColumnName("role");
+            entity.Property(e => e.JoinedAt)
+                .HasPrecision(3)
+                .HasDefaultValueSql("(sysutcdatetime())")
+                .HasColumnName("joined_at");
+            entity.Property(e => e.IsDeleted).HasColumnName("is_deleted");
+
+            entity.HasOne(d => d.Class).WithMany(p => p.ClassTeachers)
+                .HasForeignKey(d => d.ClassId)
+                .OnDelete(DeleteBehavior.ClientSetNull)
+                .HasConstraintName("FK_ClassTeachers_Classes");
+
+            entity.HasOne(d => d.Teacher).WithMany(p => p.ClassTeacherMemberships)
+                .HasForeignKey(d => d.TeacherId)
+                .OnDelete(DeleteBehavior.ClientSetNull)
+                .HasConstraintName("FK_ClassTeachers_Users_Teacher");
         });
 
         modelBuilder.Entity<User>(entity =>

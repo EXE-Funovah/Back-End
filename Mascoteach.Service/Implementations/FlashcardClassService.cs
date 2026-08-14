@@ -39,23 +39,33 @@ public sealed class FlashcardClassService : IFlashcardClassService
             JoinPasswordHash = BCrypt.Net.BCrypt.HashPassword(request.Password),
             CreatedAt = now,
             UpdatedAt = now,
-            IsDeleted = false
+            IsDeleted = false,
+            ClassTeachers =
+            [
+                new ClassTeacher
+                {
+                    TeacherId = teacherId,
+                    Role = "Owner",
+                    JoinedAt = now,
+                    IsDeleted = false
+                }
+            ]
         };
 
         await _repository.AddClassAsync(classroom);
         await _repository.SaveChangesAsync();
 
-        return MapClass(classroom, teacherName: string.Empty);
+        return MapClass(classroom, currentTeacherId: teacherId, teacherName: string.Empty);
     }
 
     public async Task<IReadOnlyList<ClassResponse>> GetTeacherClassesAsync(int teacherId) =>
         (await _repository.GetTeacherClassesAsync(teacherId))
-            .Select(classroom => MapClass(classroom))
+            .Select(classroom => MapClass(classroom, teacherId))
             .ToList();
 
     public async Task<ClassDetailResponse?> GetTeacherClassAsync(int classId, int teacherId)
     {
-        var classroom = await _repository.GetOwnedClassAsync(classId, teacherId);
+        var classroom = await _repository.GetAccessibleClassAsync(classId, teacherId);
         if (classroom == null)
             return null;
 
@@ -66,9 +76,23 @@ public sealed class FlashcardClassService : IFlashcardClassService
             Description = classroom.Description,
             TeacherId = classroom.TeacherId,
             TeacherName = classroom.Teacher.FullName,
+            IsOwner = classroom.TeacherId == teacherId,
+            TeacherCount = classroom.ClassTeachers.Count,
             MemberCount = classroom.ClassMembers.Count,
             FlashcardAssignmentCount = classroom.FlashcardAssignments.Count,
             CreatedAt = classroom.CreatedAt,
+            Teachers = classroom.ClassTeachers
+                .OrderBy(membership => membership.Role == "Owner" ? 0 : 1)
+                .ThenBy(membership => membership.Teacher.FullName)
+                .Select(membership => new ClassTeacherResponse
+                {
+                    TeacherId = membership.TeacherId,
+                    FullName = membership.Teacher.FullName,
+                    Email = membership.Teacher.Email,
+                    Role = membership.Role,
+                    JoinedAt = membership.JoinedAt
+                })
+                .ToList(),
             Members = classroom.ClassMembers
                 .OrderBy(member => member.Student.FullName)
                 .Select(member => new ClassMemberResponse
@@ -80,6 +104,137 @@ public sealed class FlashcardClassService : IFlashcardClassService
                 })
                 .ToList()
         };
+    }
+
+    public async Task<ClassResponse> UpdateClassAsync(
+        int classId,
+        int ownerTeacherId,
+        ClassUpdateRequest request)
+    {
+        var classroom = await _repository.GetOwnedClassForUpdateAsync(classId, ownerTeacherId)
+            ?? throw new KeyNotFoundException("Class does not exist or is not owned by the current teacher.");
+        var name = request.Name.Trim();
+        if (name.Length == 0)
+            throw new ArgumentException("Class name is required.");
+        if (request.Password != null && request.Password.Length < 6)
+            throw new ArgumentException("Class password must contain at least 6 characters.");
+
+        classroom.Name = name;
+        classroom.Description = NormalizeOptional(request.Description);
+        if (!string.IsNullOrWhiteSpace(request.Password))
+            classroom.JoinPasswordHash = BCrypt.Net.BCrypt.HashPassword(request.Password);
+        classroom.UpdatedAt = UtcNow();
+
+        await _repository.SaveChangesAsync();
+        return MapClass(classroom, ownerTeacherId);
+    }
+
+    public async Task<ClassTeacherResponse> AddTeacherAsync(
+        int classId,
+        int ownerTeacherId,
+        ClassTeacherAddRequest request)
+    {
+        var classroom = await _repository.GetOwnedClassAsync(classId, ownerTeacherId)
+            ?? throw new KeyNotFoundException("Class does not exist or is not owned by the current teacher.");
+        var normalizedEmail = request.Email.Trim().ToLowerInvariant();
+        var teacher = await _repository.GetActiveTeacherByEmailAsync(normalizedEmail)
+            ?? throw new KeyNotFoundException("No active teacher account uses this email address.");
+
+        if (teacher.Id == classroom.TeacherId)
+            throw new InvalidOperationException("The class owner is already a teacher in this class.");
+
+        var membership = await _repository.GetClassTeacherIncludingDeletedAsync(classId, teacher.Id);
+        if (membership != null && !membership.IsDeleted)
+            throw new InvalidOperationException("This teacher is already in the class.");
+
+        var now = UtcNow();
+        if (membership == null)
+        {
+            membership = new ClassTeacher
+            {
+                ClassId = classId,
+                TeacherId = teacher.Id,
+                Teacher = teacher,
+                Role = "Teacher",
+                JoinedAt = now,
+                IsDeleted = false
+            };
+            await _repository.AddClassTeacherAsync(membership);
+        }
+        else
+        {
+            membership.IsDeleted = false;
+            membership.Role = "Teacher";
+            membership.JoinedAt = now;
+            membership.Teacher = teacher;
+        }
+
+        await _repository.SaveChangesAsync();
+        return MapTeacher(membership);
+    }
+
+    public async Task<bool> RemoveTeacherAsync(
+        int classId,
+        int teacherId,
+        int ownerTeacherId)
+    {
+        var classroom = await _repository.GetOwnedClassAsync(classId, ownerTeacherId);
+        if (classroom == null || teacherId == classroom.TeacherId)
+            return false;
+
+        var membership = await _repository.GetClassTeacherIncludingDeletedAsync(classId, teacherId);
+        if (membership == null || membership.IsDeleted || membership.Role == "Owner")
+            return false;
+
+        membership.IsDeleted = true;
+        await _repository.SaveChangesAsync();
+        return true;
+    }
+
+    public async Task<ClassTeacherResponse> TransferOwnershipAsync(
+        int classId,
+        int ownerTeacherId,
+        ClassOwnershipTransferRequest request)
+    {
+        var classroom = await _repository.GetOwnedClassForUpdateAsync(classId, ownerTeacherId)
+            ?? throw new KeyNotFoundException("Class does not exist or is not owned by the current teacher.");
+        if (request.TeacherId == ownerTeacherId)
+            throw new InvalidOperationException("The selected teacher already owns this class.");
+
+        var currentOwner = classroom.ClassTeachers.FirstOrDefault(membership =>
+            membership.TeacherId == ownerTeacherId && !membership.IsDeleted);
+        var nextOwner = classroom.ClassTeachers.FirstOrDefault(membership =>
+            membership.TeacherId == request.TeacherId
+            && !membership.IsDeleted
+            && !membership.Teacher.IsDeleted
+            && membership.Teacher.Role == "Teacher");
+        if (nextOwner == null)
+            throw new KeyNotFoundException("The selected teacher is not an active teacher in this class.");
+
+        if (currentOwner != null)
+            currentOwner.Role = "Teacher";
+        nextOwner.Role = "Owner";
+        classroom.TeacherId = nextOwner.TeacherId;
+        classroom.Teacher = nextOwner.Teacher;
+        classroom.UpdatedAt = UtcNow();
+
+        await _repository.SaveChangesAsync();
+        return MapTeacher(nextOwner);
+    }
+
+    public async Task<bool> LeaveClassAsTeacherAsync(int classId, int teacherId)
+    {
+        var classroom = await _repository.GetAccessibleClassAsync(classId, teacherId);
+        if (classroom == null || classroom.TeacherId == teacherId)
+            return false;
+
+        var membership = await _repository.GetClassTeacherIncludingDeletedAsync(classId, teacherId);
+        if (membership == null || membership.IsDeleted)
+            return false;
+
+        membership.IsDeleted = true;
+        await _repository.SaveChangesAsync();
+        return true;
     }
 
     public async Task<ClassResponse> JoinClassAsync(int studentId, ClassJoinRequest request)
@@ -139,6 +294,17 @@ public sealed class FlashcardClassService : IFlashcardClassService
             .Select(classroom => MapClass(classroom))
             .ToList();
 
+    public async Task<bool> LeaveClassAsStudentAsync(int classId, int studentId)
+    {
+        var member = await _repository.GetMemberIncludingDeletedAsync(classId, studentId);
+        if (member == null || member.IsDeleted)
+            return false;
+
+        member.IsDeleted = true;
+        await _repository.SaveChangesAsync();
+        return true;
+    }
+
     public async Task<bool> RemoveMemberAsync(int classId, int studentId, int teacherId)
     {
         var classroom = await _repository.GetOwnedClassAsync(classId, teacherId);
@@ -159,8 +325,8 @@ public sealed class FlashcardClassService : IFlashcardClassService
         int teacherId,
         FlashcardAssignmentCreateRequest request)
     {
-        var classroom = await _repository.GetOwnedClassAsync(classId, teacherId)
-            ?? throw new KeyNotFoundException("Class does not exist or is not owned by the current teacher.");
+        var classroom = await _repository.GetAccessibleClassAsync(classId, teacherId)
+            ?? throw new KeyNotFoundException("Class does not exist or is not available to the current teacher.");
         var flashcard = await _repository.GetOwnedPublishedFlashcardAsync(request.QuizId, teacherId)
             ?? throw new KeyNotFoundException("Published flashcard does not exist or is not owned by the current teacher.");
 
@@ -185,19 +351,50 @@ public sealed class FlashcardClassService : IFlashcardClassService
         await _repository.SaveChangesAsync();
         assignment.Class = classroom;
         assignment.Quiz = flashcard;
-        return MapAssignment(assignment, studentId: null);
+        assignment.AssignedByNavigation = classroom.ClassTeachers
+            .FirstOrDefault(membership => membership.TeacherId == teacherId)?.Teacher
+            ?? classroom.Teacher;
+        return MapAssignment(
+            assignment,
+            studentId: null,
+            managerId: teacherId,
+            ownerId: classroom.TeacherId);
     }
 
     public async Task<IReadOnlyList<FlashcardAssignmentResponse>> GetClassAssignmentsAsync(
         int classId,
         int teacherId)
     {
-        if (await _repository.GetOwnedClassAsync(classId, teacherId) == null)
-            throw new KeyNotFoundException("Class does not exist or is not owned by the current teacher.");
+        var classroom = await _repository.GetAccessibleClassAsync(classId, teacherId);
+        if (classroom == null)
+            throw new KeyNotFoundException("Class does not exist or is not available to the current teacher.");
 
         return (await _repository.GetClassAssignmentsAsync(classId))
-            .Select(assignment => MapAssignment(assignment, studentId: null))
+            .Select(assignment => MapAssignment(
+                assignment,
+                studentId: null,
+                managerId: teacherId,
+                ownerId: classroom.TeacherId))
             .ToList();
+    }
+
+    public async Task<bool> RemoveFlashcardAssignmentAsync(
+        int classId,
+        int assignmentId,
+        int teacherId)
+    {
+        var classroom = await _repository.GetAccessibleClassAsync(classId, teacherId);
+        if (classroom == null)
+            return false;
+
+        var assignment = await _repository.GetActiveAssignmentByIdAsync(classId, assignmentId);
+        if (assignment == null
+            || (classroom.TeacherId != teacherId && assignment.AssignedBy != teacherId))
+            return false;
+
+        assignment.IsDeleted = true;
+        await _repository.SaveChangesAsync();
+        return true;
     }
 
     public async Task<IReadOnlyList<FlashcardAssignmentResponse>> GetStudentAssignmentsAsync(int studentId) =>
@@ -317,6 +514,7 @@ public sealed class FlashcardClassService : IFlashcardClassService
 
     private static ClassResponse MapClass(
         Class classroom,
+        int? currentTeacherId = null,
         string? teacherName = null,
         int? memberCountOverride = null) => new()
     {
@@ -325,6 +523,8 @@ public sealed class FlashcardClassService : IFlashcardClassService
         Description = classroom.Description,
         TeacherId = classroom.TeacherId,
         TeacherName = teacherName ?? classroom.Teacher?.FullName ?? string.Empty,
+        IsOwner = currentTeacherId.HasValue && classroom.TeacherId == currentTeacherId.Value,
+        TeacherCount = classroom.ClassTeachers.Count(membership => !membership.IsDeleted),
         MemberCount = memberCountOverride ?? classroom.ClassMembers.Count,
         FlashcardAssignmentCount = classroom.FlashcardAssignments.Count,
         CreatedAt = classroom.CreatedAt
@@ -332,7 +532,9 @@ public sealed class FlashcardClassService : IFlashcardClassService
 
     private static FlashcardAssignmentResponse MapAssignment(
         FlashcardAssignment assignment,
-        int? studentId)
+        int? studentId,
+        int? managerId = null,
+        int? ownerId = null)
     {
         var progress = studentId.HasValue
             ? assignment.FlashcardStudyProgresses.Where(item => item.StudentId == studentId.Value)
@@ -344,14 +546,27 @@ public sealed class FlashcardClassService : IFlashcardClassService
             ClassId = assignment.ClassId,
             ClassName = assignment.Class.Name,
             QuizId = assignment.QuizId,
+            AssignedById = assignment.AssignedBy,
+            AssignedByName = assignment.AssignedByNavigation?.FullName ?? string.Empty,
             Title = assignment.Quiz.Title,
             Instructions = assignment.Instructions,
             AssignedAt = assignment.AssignedAt,
             DueAt = assignment.DueAt,
             CardCount = assignment.Quiz.Questions.Count,
-            MasteredCount = progress.Count(item => item.Status == MasteredStatus)
+            MasteredCount = progress.Count(item => item.Status == MasteredStatus),
+            CanManage = managerId.HasValue
+                && (assignment.AssignedBy == managerId.Value || ownerId == managerId.Value)
         };
     }
+
+    private static ClassTeacherResponse MapTeacher(ClassTeacher membership) => new()
+    {
+        TeacherId = membership.TeacherId,
+        FullName = membership.Teacher.FullName,
+        Email = membership.Teacher.Email,
+        Role = membership.Role,
+        JoinedAt = membership.JoinedAt
+    };
 
     private static FlashcardStudyCardResponse MapCard(
         Question question,

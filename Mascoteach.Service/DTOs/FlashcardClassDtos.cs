@@ -39,6 +39,8 @@ public class ClassResponse
     public string? Description { get; set; }
     public int TeacherId { get; set; }
     public string TeacherName { get; set; } = null!;
+    public bool IsOwner { get; set; }
+    public int TeacherCount { get; set; }
     public int MemberCount { get; set; }
     public int FlashcardAssignmentCount { get; set; }
     public DateTime CreatedAt { get; set; }
@@ -47,6 +49,40 @@ public class ClassResponse
 public sealed class ClassDetailResponse : ClassResponse
 {
     public IReadOnlyList<ClassMemberResponse> Members { get; set; } = [];
+    public IReadOnlyList<ClassTeacherResponse> Teachers { get; set; } = [];
+}
+
+public sealed class ClassUpdateRequest
+{
+    [Required, StringLength(255, MinimumLength = 1)]
+    public string Name { get; set; } = null!;
+
+    [StringLength(1000)]
+    public string? Description { get; set; }
+
+    [StringLength(72, MinimumLength = 6)]
+    public string? Password { get; set; }
+}
+
+public sealed class ClassOwnershipTransferRequest
+{
+    [Range(1, int.MaxValue)]
+    public int TeacherId { get; set; }
+}
+
+public sealed class ClassTeacherAddRequest
+{
+    [Required, EmailAddress, StringLength(255)]
+    public string Email { get; set; } = null!;
+}
+
+public sealed class ClassTeacherResponse
+{
+    public int TeacherId { get; set; }
+    public string FullName { get; set; } = null!;
+    public string Email { get; set; } = null!;
+    public string Role { get; set; } = null!;
+    public DateTime JoinedAt { get; set; }
 }
 
 public sealed class ClassMemberResponse
@@ -74,12 +110,15 @@ public class FlashcardAssignmentResponse
     public int ClassId { get; set; }
     public string ClassName { get; set; } = null!;
     public int QuizId { get; set; }
+    public int AssignedById { get; set; }
+    public string AssignedByName { get; set; } = null!;
     public string Title { get; set; } = null!;
     public string? Instructions { get; set; }
     public DateTime AssignedAt { get; set; }
     public DateTime? DueAt { get; set; }
     public int CardCount { get; set; }
     public int MasteredCount { get; set; }
+    public bool CanManage { get; set; }
 }
 
 public sealed class FlashcardStudyResponse : FlashcardAssignmentResponse

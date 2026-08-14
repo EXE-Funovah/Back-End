@@ -43,6 +43,80 @@ public sealed class ClassesController : BaseController
         return result == null ? NotFound("Class does not exist.") : Ok(result);
     }
 
+    [Authorize(Roles = "Teacher")]
+    [HttpPut("{classId:int}")]
+    public async Task<IActionResult> Update(int classId, [FromBody] ClassUpdateRequest request)
+    {
+        try
+        {
+            return Ok(await _service.UpdateClassAsync(classId, CurrentUserId, request));
+        }
+        catch (KeyNotFoundException exception)
+        {
+            return NotFound(exception.Message);
+        }
+        catch (ArgumentException exception)
+        {
+            return BadRequest(exception.Message);
+        }
+    }
+
+    [Authorize(Roles = "Teacher")]
+    [HttpPost("{classId:int}/teachers")]
+    public async Task<IActionResult> AddTeacher(
+        int classId,
+        [FromBody] ClassTeacherAddRequest request)
+    {
+        try
+        {
+            return Ok(await _service.AddTeacherAsync(classId, CurrentUserId, request));
+        }
+        catch (KeyNotFoundException exception)
+        {
+            return NotFound(exception.Message);
+        }
+        catch (InvalidOperationException exception)
+        {
+            return Conflict(exception.Message);
+        }
+    }
+
+    [Authorize(Roles = "Teacher")]
+    [HttpDelete("{classId:int}/teachers/{teacherId:int}")]
+    public async Task<IActionResult> RemoveTeacher(int classId, int teacherId)
+    {
+        var removed = await _service.RemoveTeacherAsync(classId, teacherId, CurrentUserId);
+        return removed ? NoContent() : NotFound("Teacher membership does not exist or cannot be removed.");
+    }
+
+    [Authorize(Roles = "Teacher")]
+    [HttpPut("{classId:int}/owner")]
+    public async Task<IActionResult> TransferOwnership(
+        int classId,
+        [FromBody] ClassOwnershipTransferRequest request)
+    {
+        try
+        {
+            return Ok(await _service.TransferOwnershipAsync(classId, CurrentUserId, request));
+        }
+        catch (KeyNotFoundException exception)
+        {
+            return NotFound(exception.Message);
+        }
+        catch (InvalidOperationException exception)
+        {
+            return Conflict(exception.Message);
+        }
+    }
+
+    [Authorize(Roles = "Teacher")]
+    [HttpDelete("{classId:int}/teachers/me")]
+    public async Task<IActionResult> LeaveAsTeacher(int classId)
+    {
+        var removed = await _service.LeaveClassAsTeacherAsync(classId, CurrentUserId);
+        return removed ? NoContent() : Conflict("The class owner must transfer ownership before leaving.");
+    }
+
     [Authorize(Roles = "Student")]
     [HttpGet("search")]
     public async Task<IActionResult> Search([FromQuery] string q)
@@ -75,6 +149,14 @@ public sealed class ClassesController : BaseController
     [HttpGet("enrolled")]
     public async Task<IActionResult> GetEnrolled() =>
         Ok(await _service.GetStudentClassesAsync(CurrentUserId));
+
+    [Authorize(Roles = "Student")]
+    [HttpDelete("{classId:int}/leave")]
+    public async Task<IActionResult> LeaveAsStudent(int classId)
+    {
+        var removed = await _service.LeaveClassAsStudentAsync(classId, CurrentUserId);
+        return removed ? NoContent() : NotFound("Class membership does not exist.");
+    }
 
     [Authorize(Roles = "Teacher")]
     [HttpDelete("{classId:int}/members/{studentId:int}")]
@@ -120,5 +202,16 @@ public sealed class ClassesController : BaseController
         {
             return NotFound(exception.Message);
         }
+    }
+
+    [Authorize(Roles = "Teacher")]
+    [HttpDelete("{classId:int}/flashcards/{assignmentId:int}")]
+    public async Task<IActionResult> RemoveFlashcard(int classId, int assignmentId)
+    {
+        var removed = await _service.RemoveFlashcardAssignmentAsync(
+            classId,
+            assignmentId,
+            CurrentUserId);
+        return removed ? NoContent() : NotFound("Flashcard assignment does not exist or cannot be managed.");
     }
 }

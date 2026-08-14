@@ -21,12 +21,46 @@ public sealed class FlashcardClassRepository : IFlashcardClassRepository
 
     public async Task<IReadOnlyList<Class>> GetTeacherClassesAsync(int teacherId) =>
         await ClassQuery()
-            .Where(item => item.TeacherId == teacherId)
+            .Where(item => item.TeacherId == teacherId
+                || item.ClassTeachers.Any(membership =>
+                    membership.TeacherId == teacherId && !membership.IsDeleted))
             .OrderByDescending(item => item.CreatedAt)
             .ToListAsync();
 
     public Task<Class?> GetOwnedClassAsync(int classId, int teacherId) =>
         ClassQuery().FirstOrDefaultAsync(item => item.Id == classId && item.TeacherId == teacherId);
+
+    public Task<Class?> GetOwnedClassForUpdateAsync(int classId, int teacherId) =>
+        _context.Classes
+            .Include(item => item.Teacher)
+            .Include(item => item.ClassTeachers)
+                .ThenInclude(membership => membership.Teacher)
+            .Include(item => item.ClassMembers.Where(member => !member.IsDeleted))
+            .Include(item => item.FlashcardAssignments.Where(assignment => !assignment.IsDeleted))
+            .FirstOrDefaultAsync(item =>
+                item.Id == classId && item.TeacherId == teacherId && !item.IsDeleted);
+
+    public Task<Class?> GetAccessibleClassAsync(int classId, int teacherId) =>
+        ClassQuery().FirstOrDefaultAsync(item =>
+            item.Id == classId
+            && (item.TeacherId == teacherId
+                || item.ClassTeachers.Any(membership =>
+                    membership.TeacherId == teacherId && !membership.IsDeleted)));
+
+    public Task<User?> GetActiveTeacherByEmailAsync(string email) =>
+        _context.Users.FirstOrDefaultAsync(user =>
+            !user.IsDeleted
+            && user.Role == "Teacher"
+            && user.Email == email);
+
+    public Task<ClassTeacher?> GetClassTeacherIncludingDeletedAsync(int classId, int teacherId) =>
+        _context.ClassTeachers
+            .Include(membership => membership.Teacher)
+            .FirstOrDefaultAsync(membership =>
+                membership.ClassId == classId && membership.TeacherId == teacherId);
+
+    public Task AddClassTeacherAsync(ClassTeacher classTeacher) =>
+        _context.ClassTeachers.AddAsync(classTeacher).AsTask();
 
     public async Task<IReadOnlyList<Class>> SearchActiveClassesAsync(string query, int limit)
     {
@@ -35,7 +69,10 @@ public sealed class FlashcardClassRepository : IFlashcardClassRepository
             .Where(item =>
                 item.JoinPasswordHash != null
                 && (item.Name.Contains(normalized)
-                    || item.Teacher.FullName.Contains(normalized)))
+                    || item.Teacher.FullName.Contains(normalized)
+                    || item.ClassTeachers.Any(membership =>
+                        !membership.IsDeleted
+                        && membership.Teacher.FullName.Contains(normalized))))
             .OrderBy(item => item.Name)
             .ThenBy(item => item.Teacher.FullName)
             .Take(limit)
@@ -75,6 +112,10 @@ public sealed class FlashcardClassRepository : IFlashcardClassRepository
     public Task<FlashcardAssignment?> GetActiveAssignmentAsync(int classId, int quizId) =>
         _context.FlashcardAssignments.FirstOrDefaultAsync(item =>
             item.ClassId == classId && item.QuizId == quizId && !item.IsDeleted);
+
+    public Task<FlashcardAssignment?> GetActiveAssignmentByIdAsync(int classId, int assignmentId) =>
+        _context.FlashcardAssignments.FirstOrDefaultAsync(item =>
+            item.Id == assignmentId && item.ClassId == classId && !item.IsDeleted);
 
     public Task AddAssignmentAsync(FlashcardAssignment assignment) =>
         _context.FlashcardAssignments.AddAsync(assignment).AsTask();
@@ -117,6 +158,9 @@ public sealed class FlashcardClassRepository : IFlashcardClassRepository
             .AsNoTracking()
             .Where(item => !item.IsDeleted && !item.Teacher.IsDeleted)
             .Include(item => item.Teacher)
+            .Include(item => item.ClassTeachers.Where(membership =>
+                !membership.IsDeleted && !membership.Teacher.IsDeleted))
+                .ThenInclude(membership => membership.Teacher)
             .Include(item => item.ClassMembers.Where(member =>
                 !member.IsDeleted && !member.Student.IsDeleted))
                 .ThenInclude(member => member.Student)
@@ -133,6 +177,7 @@ public sealed class FlashcardClassRepository : IFlashcardClassRepository
                 && !item.Quiz.Document.IsDeleted)
             .Include(item => item.Class)
                 .ThenInclude(classroom => classroom.ClassMembers.Where(member => !member.IsDeleted))
+            .Include(item => item.AssignedByNavigation)
             .Include(item => item.Quiz)
                 .ThenInclude(quiz => quiz.Questions.Where(question => !question.IsDeleted))
                     .ThenInclude(question => question.Options.Where(option => !option.IsDeleted));

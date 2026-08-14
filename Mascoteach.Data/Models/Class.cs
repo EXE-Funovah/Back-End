@@ -25,6 +25,8 @@ public partial class Class
 
     public virtual ICollection<ClassMember> ClassMembers { get; set; } = new List<ClassMember>();
 
+    public virtual ICollection<ClassTeacher> ClassTeachers { get; set; } = new List<ClassTeacher>();
+
     public virtual ICollection<FlashcardAssignment> FlashcardAssignments { get; set; } = new List<FlashcardAssignment>();
 
     public virtual User Teacher { get; set; } = null!;

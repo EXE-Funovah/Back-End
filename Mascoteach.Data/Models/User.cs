@@ -47,6 +47,8 @@ public partial class User
 
     public virtual ICollection<ClassMember> ClassMembers { get; set; } = new List<ClassMember>();
 
+    public virtual ICollection<ClassTeacher> ClassTeacherMemberships { get; set; } = new List<ClassTeacher>();
+
     public virtual ICollection<Class> Classes { get; set; } = new List<Class>();
 
     public virtual ICollection<Document> Documents { get; set; } = new List<Document>();
@@ -56,6 +58,8 @@ public partial class User
     public virtual ICollection<FlashcardStudyProgress> FlashcardStudyProgresses { get; set; } = new List<FlashcardStudyProgress>();
 
     public virtual ICollection<LiveSession> LiveSessions { get; set; } = new List<LiveSession>();
+
+    public virtual ICollection<SessionParticipant> JoinedSessionParticipants { get; set; } = new List<SessionParticipant>();
 
     public virtual ICollection<PaymentOrder> PaymentOrders { get; set; } = new List<PaymentOrder>();
 

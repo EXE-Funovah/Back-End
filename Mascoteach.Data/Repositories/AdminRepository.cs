@@ -448,6 +448,7 @@ public class AdminRepository : IAdminRepository
             {
                 Id = participant.Id,
                 SessionId = participant.SessionId,
+                StudentId = participant.StudentId,
                 StudentName = participant.StudentName,
                 TotalScore = participant.TotalScore,
                 IsDeleted = participant.IsDeleted

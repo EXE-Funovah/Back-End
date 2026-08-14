@@ -93,6 +93,19 @@ namespace Mascoteach.Service.Implementations
 
             try
             {
+                if (user.Role == "Teacher")
+                {
+                    if (!await _userRepository.TransferOwnedClassesBeforeDeactivationAsync(id))
+                    {
+                        throw new InvalidOperationException(
+                            "Every owned class must have an active collaborating teacher before this account can be deleted.");
+                    }
+
+                    // Persist ownership changes first so the hard-delete graph no longer
+                    // treats transferred classes as belonging to the deleted teacher.
+                    await _userRepository.SaveChangesAsync();
+                }
+
                 _userRepository.HardDeleteAccountGraph(user);
                 var changed = await _userRepository.SaveChangesAsync() > 0;
                 await transaction.CommitAsync();
@@ -119,6 +132,13 @@ namespace Mascoteach.Service.Implementations
         {
             var user = await _userRepository.GetByIdIncludingDeletedAsync(id);
             if (user == null) return null;
+
+            if (!user.IsDeleted && user.Role == "Teacher"
+                && !await _userRepository.TransferOwnedClassesBeforeDeactivationAsync(id))
+            {
+                throw new InvalidOperationException(
+                    "Every owned class must have an active collaborating teacher before this account can be disabled.");
+            }
 
             user.IsDeleted = !user.IsDeleted;
             _userRepository.Update(user);

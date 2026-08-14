@@ -73,6 +73,49 @@ namespace Mascoteach.Data.Repositories
                 .FirstOrDefaultAsync(u => u.Id == id && u.IsDeleted == false);
         }
 
+        public async Task<bool> TransferOwnedClassesBeforeDeactivationAsync(int teacherId)
+        {
+            var ownedClasses = await _context.Classes
+                .Where(classroom => classroom.TeacherId == teacherId && !classroom.IsDeleted)
+                .Include(classroom => classroom.ClassTeachers)
+                    .ThenInclude(membership => membership.Teacher)
+                .ToListAsync();
+
+            var transfers = ownedClasses
+                .Select(classroom => new
+                {
+                    Classroom = classroom,
+                    NextOwner = classroom.ClassTeachers
+                        .Where(membership =>
+                            membership.TeacherId != teacherId
+                            && !membership.IsDeleted
+                            && !membership.Teacher.IsDeleted
+                            && membership.Teacher.Role == "Teacher")
+                        .OrderBy(membership => membership.JoinedAt)
+                        .ThenBy(membership => membership.Id)
+                        .FirstOrDefault()
+                })
+                .ToList();
+
+            if (transfers.Any(item => item.NextOwner == null))
+                return false;
+
+            var now = DateTime.UtcNow;
+            foreach (var transfer in transfers)
+            {
+                var currentOwner = transfer.Classroom.ClassTeachers.FirstOrDefault(membership =>
+                    membership.TeacherId == teacherId && !membership.IsDeleted);
+                if (currentOwner != null)
+                    currentOwner.Role = "Teacher";
+
+                transfer.NextOwner!.Role = "Owner";
+                transfer.Classroom.TeacherId = transfer.NextOwner.TeacherId;
+                transfer.Classroom.UpdatedAt = now;
+            }
+
+            return true;
+        }
+
         public void HardDeleteAccountGraph(User user)
         {
             var documents = user.Documents.ToList();
@@ -130,11 +173,18 @@ namespace Mascoteach.Data.Repositories
                     member.StudentId == user.Id
                     || ownedClassIds.Contains(member.ClassId))
                 .ToList();
+            var classTeachers = _context.ClassTeachers
+                .Where(membership =>
+                    membership.TeacherId == user.Id
+                    || ownedClassIds.Contains(membership.ClassId))
+                .ToList();
 
             if (flashcardProgress.Count > 0)
                 _context.FlashcardStudyProgresses.RemoveRange(flashcardProgress);
             if (classMembers.Count > 0)
                 _context.ClassMembers.RemoveRange(classMembers);
+            if (classTeachers.Count > 0)
+                _context.ClassTeachers.RemoveRange(classTeachers);
             if (flashcardAssignments.Count > 0)
                 _context.FlashcardAssignments.RemoveRange(flashcardAssignments);
             if (ownedClasses.Count > 0)

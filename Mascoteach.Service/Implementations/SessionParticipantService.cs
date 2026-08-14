@@ -35,9 +35,12 @@ namespace Mascoteach.Service.Implementations
             return _mapper.Map<SessionParticipantResponse>(participant);
         }
 
-        public async Task<SessionParticipantResponse> CreateAsync(SessionParticipantCreateRequest request)
+        public async Task<SessionParticipantResponse> CreateAsync(
+            SessionParticipantCreateRequest request,
+            int? studentId = null)
         {
             var participant = _mapper.Map<SessionParticipant>(request);
+            participant.StudentId = studentId;
             await _sessionParticipantRepository.AddAsync(participant);
             await _sessionParticipantRepository.SaveChangesAsync();
             return _mapper.Map<SessionParticipantResponse>(participant);

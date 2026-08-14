@@ -64,6 +64,20 @@ namespace Mascoteach.API.Controllers
 
             request.StudentName = request.StudentName.Trim();
             var existingParticipants = await _sessionParticipantService.GetBySessionIdAsync(request.SessionId);
+            var studentId = string.Equals(
+                CurrentUserRole,
+                "Student",
+                StringComparison.OrdinalIgnoreCase)
+                && CurrentUserId > 0
+                    ? CurrentUserId
+                    : (int?)null;
+
+            if (studentId.HasValue && existingParticipants.Any(participant =>
+                participant.StudentId == studentId.Value))
+            {
+                return Conflict("Your student account has already joined this live session.");
+            }
+
             if (existingParticipants.Any(participant =>
                 string.Equals(
                     participant.StudentName.Trim(),
@@ -73,11 +87,12 @@ namespace Mascoteach.API.Controllers
                 return Conflict("Student name is already in use in this live session.");
             }
 
-            var result = await _sessionParticipantService.CreateAsync(request);
+            var result = await _sessionParticipantService.CreateAsync(request, studentId);
             var response = new SessionParticipantJoinResponse
             {
                 Id = result.Id,
                 SessionId = result.SessionId,
+                StudentId = result.StudentId,
                 StudentName = result.StudentName,
                 TotalScore = result.TotalScore,
                 JoinToken = _guestGameTokenService.Create(result.Id, result.SessionId)
