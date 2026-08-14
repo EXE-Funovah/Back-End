@@ -658,16 +658,16 @@ public class AdminService : IAdminService
             Status = order.Status,
             Provider = order.Provider,
             PayosReference = order.PayosReference,
-            PaidAt = order.PaidAt,
-            CancelledAt = order.CancelledAt,
-            CreatedAt = order.CreatedAt,
-            UpdatedAt = order.UpdatedAt,
+            PaidAt = EnsureUtc(order.PaidAt),
+            CancelledAt = EnsureUtc(order.CancelledAt),
+            CreatedAt = EnsureUtc(order.CreatedAt),
+            UpdatedAt = EnsureUtc(order.UpdatedAt),
             IsDeleted = order.IsDeleted,
             UserName = order.UserName,
             UserEmail = order.UserEmail,
             UserIsDeleted = order.UserIsDeleted,
             SubscriptionTier = order.SubscriptionTier,
-            PremiumExpiresAt = order.PremiumExpiresAt,
+            PremiumExpiresAt = EnsureUtc(order.PremiumExpiresAt),
             IsPremiumActive =
                 order.SubscriptionTier == "Premium"
                 && order.PremiumExpiresAt != null
@@ -682,7 +682,7 @@ public class AdminService : IAdminService
             Provider = webhook.Provider,
             OrderCode = webhook.OrderCode,
             Reference = webhook.Reference,
-            ProcessedAt = webhook.ProcessedAt,
+            ProcessedAt = EnsureUtc(webhook.ProcessedAt),
             IsProcessed = webhook.IsProcessed,
             ProcessingError = webhook.ProcessingError
         };
@@ -712,6 +712,16 @@ public class AdminService : IAdminService
         };
         return utc.ToString("O", CultureInfo.InvariantCulture);
     }
+
+    private static DateTime EnsureUtc(DateTime value) => value.Kind switch
+    {
+        DateTimeKind.Utc => value,
+        DateTimeKind.Local => value.ToUniversalTime(),
+        _ => DateTime.SpecifyKind(value, DateTimeKind.Utc)
+    };
+
+    private static DateTime? EnsureUtc(DateTime? value) =>
+        value.HasValue ? EnsureUtc(value.Value) : null;
 
     private static DateTimeOffset AsUtcOffset(DateTime value)
     {

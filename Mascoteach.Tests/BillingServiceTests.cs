@@ -293,6 +293,21 @@ public class BillingServiceTests
     }
 
     [Fact]
+    public async Task GetMyOrdersAsync_MarksDatabaseTimestampsAsUtc()
+    {
+        var order = MakeOrder(userId: 10, planCode: "PRO_MONTHLY", amount: 119000);
+        order.CreatedAt = new DateTime(2026, 8, 14, 5, 0, 0, DateTimeKind.Unspecified);
+        order.PaidAt = new DateTime(2026, 8, 14, 6, 9, 0, DateTimeKind.Unspecified);
+        order.Status = "Paid";
+        _orderRepo.Setup(r => r.GetByUserIdAsync(10)).ReturnsAsync([order]);
+
+        var result = (await _sut.GetMyOrdersAsync(10)).Single();
+
+        Assert.Equal(DateTimeKind.Utc, result.CreatedAt.Kind);
+        Assert.Equal(DateTimeKind.Utc, result.PaidAt!.Value.Kind);
+    }
+
+    [Fact]
     public async Task CreatePaymentLinkAsync_ExpiredPendingOrder_MarksItExpiredAndCreatesNewLink()
     {
         var user = MakeUser();
