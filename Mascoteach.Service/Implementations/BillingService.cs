@@ -194,7 +194,7 @@ public class BillingService : IBillingService
         {
             SubscriptionTier = isPremiumActive ? "Premium" : "Freemium",
             IsPremiumActive = isPremiumActive,
-            PremiumExpiresAt = user.PremiumExpiresAt,
+            PremiumExpiresAt = EnsureUtc(user.PremiumExpiresAt),
             DaysRemaining = daysRemaining
         };
     }
@@ -446,9 +446,19 @@ public class BillingService : IBillingService
         Status = order.Status,
         Provider = order.Provider,
         CheckoutUrl = order.CheckoutUrl,
-        PaidAt = order.PaidAt,
-        CreatedAt = order.CreatedAt
+        PaidAt = EnsureUtc(order.PaidAt),
+        CreatedAt = EnsureUtc(order.CreatedAt)
     };
+
+    private static DateTime EnsureUtc(DateTime value) => value.Kind switch
+    {
+        DateTimeKind.Utc => value,
+        DateTimeKind.Local => value.ToUniversalTime(),
+        _ => DateTime.SpecifyKind(value, DateTimeKind.Utc)
+    };
+
+    private static DateTime? EnsureUtc(DateTime? value) =>
+        value.HasValue ? EnsureUtc(value.Value) : null;
 
     private static long GetRequiredLong(JsonElement data, string propertyName)
     {

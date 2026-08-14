@@ -101,6 +101,8 @@ public class AdminBillingServiceTests
     public async Task GetBillingOrdersAsync_MapsSafeMetadataAndPremiumStatus()
     {
         var projection = CreateOrderProjection();
+        projection.PaidAt = DateTime.SpecifyKind(projection.PaidAt!.Value, DateTimeKind.Unspecified);
+        projection.CreatedAt = DateTime.SpecifyKind(projection.CreatedAt, DateTimeKind.Unspecified);
         _repo.Setup(repository => repository.GetPaymentOrdersPageAsync(
                 null, null, null, null, "Active", null, null, 1, 20))
             .ReturnsAsync((new List<AdminPaymentOrderProjection> { projection }, 1));
@@ -113,6 +115,8 @@ public class AdminBillingServiceTests
         Assert.Equal(projection.PayosReference, item.PayosReference);
         Assert.Equal(projection.UserEmail, item.UserEmail);
         Assert.True(item.IsPremiumActive);
+        Assert.Equal(DateTimeKind.Utc, item.PaidAt!.Value.Kind);
+        Assert.Equal(DateTimeKind.Utc, item.CreatedAt.Kind);
         AssertNoSensitiveProperties(typeof(AdminPaymentOrderItemDto));
     }
 
