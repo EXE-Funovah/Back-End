@@ -16,6 +16,7 @@ public class AdminRepository : IAdminRepository
     public async Task<AdminOverviewProjection> GetOverviewAsync(DateTime from, DateTime to)
     {
         var activeUsers = ActiveUsers.AsNoTracking();
+        var previousFrom = from - (to - from);
         var roleCounts = await activeUsers
             .GroupBy(user => user.Role)
             .Select(group => new { Role = group.Key, Count = group.Count() })
@@ -42,6 +43,8 @@ public class AdminRepository : IAdminRepository
             TotalUsers = await activeUsers.CountAsync(),
             NewUsers = await activeUsers.CountAsync(user =>
                 user.CreatedAt != null && user.CreatedAt >= from && user.CreatedAt < to),
+            PreviousNewUsers = await activeUsers.CountAsync(user =>
+                user.CreatedAt != null && user.CreatedAt >= previousFrom && user.CreatedAt < from),
             ActiveUsers = await _ctx.UserStats
                 .AsNoTracking()
                 .CountAsync(stat =>
@@ -90,6 +93,16 @@ public class AdminRepository : IAdminRepository
                     && order.PaidAt != null
                     && order.PaidAt >= from
                     && order.PaidAt < to)
+                .SumAsync(order => (long)order.Amount),
+            PreviousPaidRevenueInRange = await _ctx.PaymentOrders
+                .AsNoTracking()
+                .Where(order =>
+                    !order.IsDeleted
+                    && !order.User.IsDeleted
+                    && order.Status == "Paid"
+                    && order.PaidAt != null
+                    && order.PaidAt >= previousFrom
+                    && order.PaidAt < from)
                 .SumAsync(order => (long)order.Amount)
         };
     }
