@@ -4,6 +4,7 @@ public class AdminOverviewProjection
 {
     public int TotalUsers { get; set; }
     public int NewUsers { get; set; }
+    public int PreviousNewUsers { get; set; }
     public int ActiveUsers { get; set; }
     public int TeacherCount { get; set; }
     public int StudentCount { get; set; }
@@ -23,4 +24,5 @@ public class AdminOverviewProjection
     public int ExpiredPaymentCount { get; set; }
     public int FailedPaymentCount { get; set; }
     public long PaidRevenueInRange { get; set; }
+    public long PreviousPaidRevenueInRange { get; set; }
 }

@@ -71,10 +71,12 @@ public class AdminOverviewServiceTests
 
         var result = await _sut.GetOverviewAsync("30d");
 
+        Assert.Equal(3, result.Kpis.Count);
         Assert.Equal(100, FindValue(result.Kpis, "Tổng tài khoản"));
         Assert.Equal(12, FindValue(result.Kpis, "Tài khoản mới"));
-        Assert.Equal(40, FindValue(result.Kpis, "Hoạt động trong kỳ"));
         Assert.Equal(1_500_000, FindValue(result.Kpis, "Doanh thu đã thanh toán"));
+        Assert.Equal(50, FindKpi(result.Kpis, "newUsers").DeltaPercent);
+        Assert.Equal(50, FindKpi(result.Kpis, "paidRevenue").DeltaPercent);
 
         Assert.Equal(60, FindValue(result.UserDistribution, "Giáo viên"));
         Assert.Equal(25, FindValue(result.UserDistribution, "Học sinh"));
@@ -116,6 +118,7 @@ public class AdminOverviewServiceTests
     {
         TotalUsers = 100,
         NewUsers = 12,
+        PreviousNewUsers = 8,
         ActiveUsers = 40,
         TeacherCount = 60,
         StudentCount = 25,
@@ -134,6 +137,11 @@ public class AdminOverviewServiceTests
         CancelledPaymentCount = 2,
         ExpiredPaymentCount = 4,
         FailedPaymentCount = 1,
-        PaidRevenueInRange = 1_500_000
+        PaidRevenueInRange = 1_500_000,
+        PreviousPaidRevenueInRange = 1_000_000
     };
+
+    private static Mascoteach.Service.DTOs.Admin.AdminKpiDto FindKpi(
+        IEnumerable<Mascoteach.Service.DTOs.Admin.AdminKpiDto> items,
+        string key) => items.Single(item => item.Key == key);
 }

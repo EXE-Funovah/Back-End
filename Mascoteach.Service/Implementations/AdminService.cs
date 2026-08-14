@@ -41,13 +41,18 @@ public class AdminService : IAdminService
         var userDelta = usersBeforeRange > 0
             ? (double)overview.NewUsers / usersBeforeRange * 100
             : overview.NewUsers > 0 ? 100 : 0;
+        var newUserDelta = CalculateDeltaPercent(
+            overview.NewUsers,
+            overview.PreviousNewUsers);
+        var revenueDelta = CalculateDeltaPercent(
+            overview.PaidRevenueInRange,
+            overview.PreviousPaidRevenueInRange);
 
         var kpis = new List<AdminKpiDto>
         {
             new() { Key = "totalUsers", Label = "Tổng tài khoản", Value = overview.TotalUsers, Format = "int", DeltaPercent = Math.Round(userDelta, 1), Up = userDelta >= 0 },
-            new() { Key = "newUsers", Label = "Tài khoản mới", Value = overview.NewUsers, Format = "int", Up = overview.NewUsers >= 0 },
-            new() { Key = "activeUsers", Label = "Hoạt động trong kỳ", Value = overview.ActiveUsers, Format = "int", Up = overview.ActiveUsers >= 0 },
-            new() { Key = "paidRevenue", Label = "Doanh thu đã thanh toán", Value = overview.PaidRevenueInRange, Format = "currency", Up = overview.PaidRevenueInRange >= 0 }
+            new() { Key = "newUsers", Label = "Tài khoản mới", Value = overview.NewUsers, Format = "int", DeltaPercent = Math.Round(newUserDelta, 1), Up = newUserDelta >= 0 },
+            new() { Key = "paidRevenue", Label = "Doanh thu đã thanh toán", Value = overview.PaidRevenueInRange, Format = "currency", DeltaPercent = Math.Round(revenueDelta, 1), Up = revenueDelta >= 0 }
         };
 
         return new AdminOverviewResponse
@@ -752,6 +757,14 @@ public class AdminService : IAdminService
             return normalized;
 
         throw new ArgumentException("Range must be one of: 7d, 30d, 12m.");
+    }
+
+    private static double CalculateDeltaPercent(long current, long previous)
+    {
+        if (previous > 0)
+            return (double)(current - previous) / previous * 100;
+
+        return current > 0 ? 100 : 0;
     }
 
     private static AdminUserListItemDto ToUserListItem(
